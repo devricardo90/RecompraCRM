@@ -1,27 +1,15 @@
 # TASK-01 — Validation Evidence
 
-## Baseline
+Verified head: `218df9eb9a6a7d17af6accdd83b7e41df303fa33`
 
-- Base branch: `main`
-- Baseline commit: `4a536ce7fcaee813ee9c41ce5e312df7b61eac07`
-- Execution branch: `feat/TASK-01-project-foundation`
+- npm run lint — PASS
+- npm run typecheck — PASS
+- npm run build — PASS
+- Runtime local GET / — PASS
+- GitHub Actions Validate run 31039356612 — PASS
 
-## Scope
+Findings repaired:
+1. TypeScript 7 incompatibility; pinned TypeScript 6.0.3.
+2. ESLint 10 plugin incompatibility; pinned ESLint 9.
 
-Foundation only: Next.js, React, TypeScript, Tailwind CSS, ESLint, initial page, documentation and CI.
-
-## Required gates
-
-- [ ] dependency installation
-- [ ] lint
-- [ ] typecheck
-- [ ] build
-- [ ] independent diff review
-
-## E2E decision
-
-Playwright ephemeral is not required for TASK-01 because no product workflow exists yet. The initial page must be inspected after the deterministic gates pass; persistent E2E tests are not added.
-
-## Status
-
-`PENDING_CI`
+Playwright was not required because TASK-01 introduced no product workflow. Review: APPROVED.
