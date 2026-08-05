@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+.rick/tmp/*
+!.rick/tmp/.gitkeep
+.rick/locks/*
+!.rick/locks/.gitkeep
+test-results/
+playwright-report/
+blob-report/
+*.log
