@@ -1,15 +1,17 @@
 # Recompra CRM — Roadmap Executável MVP-01
 
-status: APPROVED_FOR_BOOTSTRAP
+status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 
 ## Política
 
 Uma task por loop. A próxima task só inicia após baseline verde, validação determinística, revisão, handoff, lessons quando aplicável e atualização do state.
 
-- [ ] TASK-01 — Fundação do projeto
+- [x] TASK-01 — Fundação do projeto
   - depends_on: none
   - done_when: Next.js + TypeScript + Tailwind iniciam; lint, typecheck e build passam.
+  - verified_head: 218df9eb9a6a7d17af6accdd83b7e41df303fa33
+  - evidence: docs/evidence/TASK-01-validation.md
 - [ ] TASK-02 — Banco e Prisma
   - depends_on: TASK-01
   - done_when: PostgreSQL e Prisma configurados; migração inicial reproduzível.
