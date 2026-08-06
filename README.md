@@ -49,8 +49,14 @@ npm run db:generate    # gera o Prisma Client
 npm run db:validate    # valida prisma/schema.prisma
 npm run db:migrate     # aplica migrações existentes sem gerar novas
 npm run db:health      # executa SELECT 1 usando uma conexão real
+npm run test:customer  # valida persistência e constraints do Customer
 npm run db:down        # para o container, preservando o volume local
 ```
+
+O modelo `Customer` exige `name`. O campo `phone` é opcional e possui unicidade
+somente quando informado, conforme o contrato do SDD. A migração do modelo é
+versionada em `prisma/migrations/` e o teste de persistência usa o PostgreSQL
+local configurado por `DATABASE_URL`.
 
 Para recriar o banco local do zero durante uma validação, use `docker compose down -v` e depois `npm run db:setup`. Esse comando remove apenas o volume local do Compose e não deve ser usado contra ambientes compartilhados.
 

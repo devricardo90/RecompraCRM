@@ -62,3 +62,37 @@ early_detection: "Confirmar system requirements e executar prisma generate, migr
 limits: "Revalidar quando a aplicação adotar um runtime serverless/edge ou decidir migrar para Prisma 7+."
 evidence: "TASK-02: Prisma Client 6.19.0 gerado, migração 20260806084446 aplicada duas vezes em banco limpo e SELECT 1 aprovado."
 ```
+
+### LESSON-RCRM-0004 — Modelar unicidade condicional para telefone opcional
+
+```yaml
+id: LESSON-RCRM-0004
+status: validated
+type: data_model
+severity: medium
+source_task: TASK-03
+symptom: "O contrato exige telefone único quando informado, mas não exige telefone para todo cliente."
+root_cause: "Uma constraint de unicidade deve rejeitar duplicatas não nulas e preservar a ausência válida do campo."
+fix: "Usar phone como String? @unique no Prisma/PostgreSQL e cobrir duplicata informada e múltiplos NULL no teste de persistência."
+prevention: "Traduzir qualificadores do SDD (quando informado, quando aplicável) em nullability, índices e testes explícitos."
+early_detection: "Inspecionar information_schema/pg_indexes e executar casos com telefone repetido e ausente contra PostgreSQL real."
+limits: "Revalidar se o contrato passar a exigir normalização de telefone, unicidade por empresa ou preenchimento obrigatório."
+evidence: "TASK-03: Customer_phone_key rejeitou telefone duplicado e dois Customers sem phone foram persistidos no banco limpo."
+```
+
+### LESSON-RCRM-0005 — Auditar migrações incrementais após marcador técnico
+
+```yaml
+id: LESSON-RCRM-0005
+status: validated
+type: database_migration
+severity: medium
+source_task: TASK-03
+symptom: "Prisma Migrate gerou uma alteração redundante da sequência de DatabaseMarker ao criar a migração de Customer."
+root_cause: "A migração incremental comparou o marcador técnico já materializado com a representação esperada e incluiu uma recriação de sequência que colidia com a migração inicial."
+fix: "Preservar a migração inicial, remover somente o bloco redundante da migração nova e provar migrate deploy em banco limpo."
+prevention: "Inspecionar cada SQL gerado antes de aplicá-lo e validar a cadeia completa após qualquer ajuste de migração."
+early_detection: "Executar migrate dev em banco controlado, revisar o SQL e consultar o histórico _prisma_migrations antes de registrar o resultado."
+limits: "Revalidar ao alterar o modelo técnico inicial ou atualizar a versão major do Prisma."
+evidence: "TASK-03: migração 20260806151419_add_customer aplicada após correção auditada, em banco existente e em recriação limpa."
+```

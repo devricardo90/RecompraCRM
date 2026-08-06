@@ -15,3 +15,11 @@ model DatabaseMarker {
 
   @@map("_database_marker")
 }
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
