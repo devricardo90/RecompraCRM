@@ -96,3 +96,20 @@ early_detection: "Executar migrate dev em banco controlado, revisar o SQL e cons
 limits: "Revalidar ao alterar o modelo técnico inicial ou atualizar a versão major do Prisma."
 evidence: "TASK-03: migração 20260806151419_add_customer aplicada após correção auditada, em banco existente e em recriação limpa."
 ```
+
+### LESSON-RCRM-0006 — Persistir invariantes de conteúdo no banco
+
+```yaml
+id: LESSON-RCRM-0006
+status: validated
+type: data_model
+severity: high
+source_task: TASK-03-P2-FIX
+symptom: "Customer.name rejeitava NULL, mas aceitava string vazia e whitespace sem conteúdo."
+root_cause: "Nullability não expressa a regra semântica de que o nome deve conter ao menos um caractere não whitespace."
+fix: "Adicionar constraint PostgreSQL Customer_name_not_blank usando expressão POSIX [^[:space:]] e cobrir casos inválidos no teste de persistência."
+prevention: "Para invariantes de conteúdo, combinar validação de entrada futura com constraint persistente e teste contra PostgreSQL real."
+early_detection: "Testar vazio, espaços, tabs e quebras de linha, não apenas NULL, durante a primeira modelagem da entidade."
+limits: "Revalidar se a regra passar a exigir normalização, trim automático, comprimento mínimo ou política de nomes diferente."
+evidence: "TASK-03 P2: migração 20260806204721_enforce_customer_name aplicada em banco vazio; npm test rejeitou os quatro formatos sem conteúdo."
+```
