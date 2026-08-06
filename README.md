@@ -9,6 +9,8 @@ Aplicação mobile-first para pequenos negócios acompanharem clientes recorrent
 - TypeScript estrito
 - Tailwind CSS 4
 - ESLint
+- Prisma 6.19.0
+- PostgreSQL 16 via Docker Compose
 
 ## Desenvolvimento local
 
@@ -20,6 +22,39 @@ npm run dev
 ```
 
 A aplicação ficará disponível em `http://localhost:3000`.
+
+## Banco local
+
+Requisitos: Docker Desktop com Docker Compose v2 e Node.js 20.9 ou superior.
+
+Crie o arquivo local de ambiente a partir do exemplo (o arquivo `.env` não é versionado):
+
+```bash
+cp .env.example .env
+```
+
+No PowerShell, use `Copy-Item .env.example .env`.
+
+Inicie o PostgreSQL, gere o cliente Prisma, aplique as migrações versionadas e valide a conexão:
+
+```bash
+npm run db:setup
+```
+
+Os comandos individuais são:
+
+```bash
+npm run db:up          # inicia PostgreSQL e aguarda o health check
+npm run db:generate    # gera o Prisma Client
+npm run db:validate    # valida prisma/schema.prisma
+npm run db:migrate     # aplica migrações existentes sem gerar novas
+npm run db:health      # executa SELECT 1 usando uma conexão real
+npm run db:down        # para o container, preservando o volume local
+```
+
+Para recriar o banco local do zero durante uma validação, use `docker compose down -v` e depois `npm run db:setup`. Esse comando remove apenas o volume local do Compose e não deve ser usado contra ambientes compartilhados.
+
+`DATABASE_URL` e os parâmetros do PostgreSQL estão documentados em `.env.example`. A senha do exemplo é exclusiva para desenvolvimento local e não representa uma credencial real.
 
 ## Gates de qualidade
 

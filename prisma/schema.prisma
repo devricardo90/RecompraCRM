@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Technical marker only: TASK-02 needs a real, repeatable migration without
+// introducing Customer, Product, Sale, or other domain models prematurely.
+model DatabaseMarker {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  @@map("_database_marker")
+}

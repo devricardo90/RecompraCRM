@@ -9,6 +9,23 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://recompra:recompra_ci_only@localhost:5432/recompra?schema=public
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: recompra
+          POSTGRES_PASSWORD: recompra_ci_only
+          POSTGRES_DB: recompra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recompra -d recompra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -22,6 +39,18 @@ jobs:
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Validate Prisma schema
+        run: npm run db:validate
+
+      - name: Apply database migrations
+        run: npm run db:migrate
+
+      - name: Verify database connection
+        run: npm run db:health
 
       - name: Lint
         run: npm run lint
