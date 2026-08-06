@@ -9,6 +9,7 @@ Branch: `feat/TASK-02-database-prisma`
 - PostgreSQL: `16-alpine` via Docker Compose.
 - Schema técnico: `DatabaseMarker`, mapeado para `_database_marker`; nenhum modelo de negócio foi criado.
 - Migração: `prisma/migrations/20260806084446_init/migration.sql`.
+- Lock de migrações: `prisma/migrations/migration_lock.toml`.
 - Cliente reutilizável: `lib/prisma.ts`, com singleton para desenvolvimento.
 - Health check: `scripts/db-healthcheck.mjs`, executa `SELECT 1` sem imprimir credenciais.
 - CI: service container PostgreSQL local, `DATABASE_URL` de job e gates Prisma adicionados ao workflow existente.
