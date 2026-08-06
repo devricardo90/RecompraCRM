@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 8
+state_version: 9
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -12,26 +12,26 @@ completed_tasks:
   - TASK-02
 last_completed_task: TASK-02
 current_task: TASK-03
-current_task_status: implemented_and_validated_pending_pilot_audit
+current_task_status: remote_review_pass_awaiting_merge
 next_eligible_task: PILOT_AUDIT
 attempt: 1
 max_attempts: 3
 branch: feat/TASK-03-customer-model
 baseline_head: 712aae5f193e61cea6508b01d165480f3abe8e74
-current_head: cd80bd6
-working_tree: clean_after_local_commits
+implementation_head: cd80bd6
+reviewed_remote_head: 3bebde46ff5c19d4cea1acba173a1906d43bab2e
+working_tree: clean_at_pushed_head
 baseline_status: VERIFIED_GREEN
 validation_status: PASS
-review_status: PENDING_HUMAN_PILOT_AUDIT
-ci_run: null
+review_status: APPROVED_INDEPENDENT
+ci_run: 31116541370
 ci_status: PASS
-pr_number: null
-pr_review: NOT_REQUESTED_LOCAL_ONLY
+pr_number: 6
+pr_review: APPROVED_TECHNICAL
 remote_branch: feat/TASK-03-customer-model
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
-previous_ci_run: 31112180901
-previous_pr_number: 5
 blockers:
+  - TASK_03_MERGE_REQUIRED
   - HUMAN_PILOT_AUDIT_REQUIRED
 blocked_tasks:
   - TASK-04
@@ -41,10 +41,10 @@ lessons_validated:
   - LESSON-RCRM-0003
   - LESSON-RCRM-0004
   - LESSON-RCRM-0005
-next_action: HUMAN_AUDIT_PILOT
-next_action_authorized: false
-updated_at: "2026-08-06T17:22:12+02:00"
+next_action: MERGE_TASK_03_THEN_RUN_PILOT_AUDIT
+next_action_authorized: true
+updated_at: "2026-08-06T17:37:00+02:00"
 updated_by: ChatGPT
 ```
 
-TASK-01 e TASK-02 permanecem concluídas; TASK-02 foi integrada em `main` no merge `712aae5f193e61cea6508b01d165480f3abe8e74`, com PR #5 aprovado e CI remoto `31112180901` PASS. TASK-03 foi implementada e validada localmente no commit `cd80bd6`, mas aguarda auditoria humana final do piloto. A próxima ação elegível é `PILOT_AUDIT`; TASK-04 permanece bloqueada. O modo continua `SUPERVISED_PILOT`.
+TASK-01 e TASK-02 permanecem concluídas. TASK-03 foi implementada, publicada no PR #6, revisada tecnicamente e validada no CI remoto `31116541370`. Ela aguarda apenas o CI do fechamento documental e o merge. Depois do merge, a única ação elegível é `PILOT_AUDIT`; TASK-04 continua bloqueada e o modo permanece `SUPERVISED_PILOT`.
