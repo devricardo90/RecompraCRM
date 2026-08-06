@@ -43,4 +43,9 @@ Branch: `feat/TASK-02-database-prisma`
 
 - Alterados somente infraestrutura de banco, scripts, documentação operacional, evidência, state/handoff/lessons e CI de validação.
 - Nenhum Customer, Product, Sale ou funcionalidade futura foi implementado.
-- Nenhum merge ou push foi realizado.
+- Branch publicada: `feat/TASK-02-database-prisma`.
+- Pull request: `#5`.
+- HEAD revisado antes deste fechamento documental: `60af2a5f9043460124fae53df3059b1e0468d2e5`.
+- Revisão técnica independente: aprovada.
+- CI remoto: run `31112180901` — PASS.
+- O novo push deste fechamento deverá gerar novo CI; TASK-02 permanece aberta até esse CI e o merge.
