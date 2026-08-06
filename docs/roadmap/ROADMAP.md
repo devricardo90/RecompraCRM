@@ -15,9 +15,12 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
 - [ ] TASK-02 — Banco e Prisma
   - depends_on: TASK-01
   - done_when: PostgreSQL e Prisma configurados; migração inicial reproduzível.
+  - review: PR #5 aprovado tecnicamente; CI remoto 31112180901 PASS.
+  - pending: fechamento documental, novo CI pós-push e merge; não concluída neste commit.
 - [ ] TASK-03 — Modelo Customer
   - depends_on: TASK-02
   - done_when: CRUD e validações de cliente passam.
+  - blocked_until: TASK-02 mergeada e fechamento final confirmado.
 - [ ] TASK-04 — Interface de clientes
   - depends_on: TASK-03
   - done_when: lista, cadastro, edição, busca e empty state validados no navegador.

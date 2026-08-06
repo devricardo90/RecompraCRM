@@ -45,3 +45,20 @@ early_detection: "Executar npm run lint em um arquivo React mínimo durante a fu
 limits: "Reavaliar quando eslint-config-next e eslint-plugin-react declararem suporte ao ESLint 10."
 evidence: "lint local PASS e CI Validate run 31039356612 no HEAD 218df9e."
 ```
+
+### LESSON-RCRM-0003 — Fixar a major do Prisma conforme o modelo de conexão
+
+```yaml
+id: LESSON-RCRM-0003
+status: validated
+type: tooling
+severity: medium
+source_task: TASK-02
+symptom: "Prisma 7.9.1 já estava disponível, mas a documentação atual exige driver adapter para conexões diretas."
+root_cause: "A stack inicial ainda usa o fluxo Prisma Client clássico com PostgreSQL local e não precisa de adapter nesta task."
+fix: "Fixar prisma e @prisma/client em 6.19.0, validar geração, migração e conexão real."
+prevention: "Reavaliar a major do Prisma junto com o modelo de runtime e os adapters antes de atualizar."
+early_detection: "Confirmar system requirements e executar prisma generate, migrate deploy e health check contra PostgreSQL limpo."
+limits: "Revalidar quando a aplicação adotar um runtime serverless/edge ou decidir migrar para Prisma 7+."
+evidence: "TASK-02: Prisma Client 6.19.0 gerado, migração 20260806084446 aplicada duas vezes em banco limpo e SELECT 1 aprovado."
+```
