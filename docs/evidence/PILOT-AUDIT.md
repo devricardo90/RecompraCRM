@@ -1,0 +1,192 @@
+# Rick Autonomous Roadmap Loop — Auditoria Formal do Piloto
+
+Data da auditoria: 2026-08-06
+Modo preservado: `SUPERVISED_PILOT`
+Veredito: **PILOT_BLOCKED**
+
+## Escopo
+
+Esta auditoria verificou a recuperação do repositório, a cadeia de merges, PRs,
+CI remoto, documentos operacionais, evidências, lessons, migrações PostgreSQL,
+gates locais e o mecanismo de bloqueio do Rick Loop para TASK-01, TASK-02 e
+TASK-03. Nenhuma funcionalidade de produto foi implementada e TASK-04 não foi
+iniciada.
+
+## Baseline e recuperação
+
+- Branch local: `main`.
+- `HEAD`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
+- `origin/main`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
+- Working tree: limpo; `main` está `0 ahead / 0 behind` de `origin/main`.
+- `git fetch --all --prune`: PASS.
+- Branches remotas TASK-01, TASK-02 e TASK-03 existem.
+- A árvore da branch remota TASK-03 é equivalente à `main`; os commits da
+  branch não são ancestrais porque os PRs foram integrados por commits de
+  squash, não por merge commit tradicional.
+- Não há alterações locais, arquivos não rastreados ou funcionalidade
+  interrompida. As referências históricas das branches permanecem no remoto,
+  mas não representam conteúdo divergente da `main`.
+
+## Commits, merges, PRs e CI
+
+| Task | PR/merge | Cabeça da branch | CI relevante | Resultado |
+|---|---|---|---|---|
+| TASK-01 | PR #4, merge `42784f0c70c3cd7a4a4e58abd8aa4343cacfdff5` | `2a98a2615dbd717af5e4466c52af915e9e98cc5a` | run `31039795434` | Merge concluído; CI success |
+| TASK-02 | PR #5, merge `712aae5f193e61cea6508b01d165480f3abe8e74` | `018153fd9cd9fae7f4d3bd5481102c2c3bd50330` | runs `31112180901` e `31113356008` | Merge concluído; CI success |
+| TASK-03 | PR #6, merge `b3d2f30ed9941c24b973c9addd7578e789d0730b` | `f6118b830ad68970baf59b5fac83a5177ea7c595` | PR run `31116844373` success; main run `31117339641` failure | Merge concluído; CI da main não verde |
+
+PRs auditados:
+
+- [PR #4](https://github.com/devricardo90/RecompraCRM/pull/4): fechado e mergeado em 2026-08-05.
+- [PR #5](https://github.com/devricardo90/RecompraCRM/pull/5): fechado e mergeado em 2026-08-06; comentário humano registrou aprovação técnica.
+- [PR #6](https://github.com/devricardo90/RecompraCRM/pull/6): fechado e mergeado em 2026-08-06.
+
+O histórico de `main` é:
+
+```text
+4a536ce chore: bootstrap Rick Loop operational foundation
+42784f0 feat(TASK-01): establish Next.js project foundation
+712aae5 feat(TASK-02): configure PostgreSQL and Prisma
+b3d2f30 feat(TASK-03): add Customer persistence model
+```
+
+## Matriz das tasks
+
+| Critério | TASK-01 | TASK-02 | TASK-03 |
+|---|---|---|---|
+| Baseline | `4a536ce` | `42784f0` | `712aae5` |
+| Escopo | Fundação Next/TS/Tailwind | PostgreSQL/Prisma | Modelo Customer |
+| Conteúdo em `main` | Sim | Sim | Sim |
+| Evidência | `TASK-01-validation.md` | `TASK-02-validation.md` | `TASK-03-validation.md` |
+| Lessons | `0001`, `0002` | `0003` | `0004`, `0005` |
+| CI remoto | PASS | PASS | PR PASS; merge em main FAIL |
+| UI/Playwright | Não aplicável | Não requerido | Não requerido |
+| Antecipação futura | Não observada | Não observada | Não observada |
+
+### TASK-01
+
+A fundação foi integrada no merge `42784f0`; evidência registra lint,
+typecheck, build e runtime. As correções de TypeScript/ESLint foram preservadas
+nas lessons `0001` e `0002`.
+
+### TASK-02
+
+PostgreSQL via Compose, Prisma 6.19.0, cliente singleton, health check e
+migração inicial estão presentes. A revisão humana no PR #5 registrou aprovação
+técnica em comentário; a API do GitHub classifica esse review como `COMMENTED`,
+não `APPROVED`. O CI do PR e o CI do merge passaram.
+
+### TASK-03
+
+`Customer`, a segunda migração, teste determinístico, documentação e CI estão
+presentes no commit de merge `b3d2f30`. O PR run `31116844373` passou, mas o
+workflow disparado pelo push da merge em `main` (`31117339641`) falhou ainda no
+passo `Set up job`; nenhum gate de código chegou a executar nesse run.
+
+## Validação local na `main`
+
+Todos os comandos solicitados foram executados na `main` atual:
+
+- `npm install --no-audit --no-fund` — PASS.
+- `npm run db:generate` — PASS; Prisma Client 6.19.0.
+- `npm run db:validate` — PASS.
+- `docker compose config` com `POSTGRES_PORT=55433` — PASS.
+- PostgreSQL `16-alpine` iniciou em porta isolada; containers externos não foram interrompidos.
+- Volume exclusivo `recompracrm_postgres_data` foi recriado.
+- `npm run db:migrate` em banco vazio — PASS; aplicou `20260806084446_init` e `20260806151419_add_customer`.
+- `npm run db:health` — PASS.
+- `npm test` — PASS.
+- `npm run lint` — PASS; a primeira janela de 60s expirou sem erro, e a execução isolada terminou em 76s.
+- `npm run typecheck` — PASS.
+- `npm run build` — PASS.
+- `git diff --check` — PASS.
+- Scan de segredos — PASS.
+- `prisma migrate status` — PASS; schema atualizado.
+- Inspeção SQL — PASS; `Customer`, `Customer_phone_key`, `name NOT NULL`, `phone NULL` e as duas migrações foram confirmados.
+
+O build emitiu somente o warning conhecido de múltiplos lockfiles, com
+`C:\Users\ricardodev\pnpm-lock.yaml` acima do projeto.
+
+## Análise do mecanismo do loop
+
+| Capacidade | Resultado da auditoria |
+|---|---|
+| Identificar próxima task | Parcialmente PASS: ROADMAP indica `PILOT_AUDIT`, mas STATE/HANDOFF ainda descrevem TASK-03 aguardando merge. |
+| Bloquear TASK-04 | PASS: STATE e ROADMAP mantêm `TASK-04` bloqueada até `PILOT_AUDIT`. |
+| Ler lessons antes da implementação | PASS estrutural: ordem obrigatória do skill e lessons/evidências registradas. |
+| Preservar baseline/branch | PASS: baselines, branches e commits são rastreáveis; merges squash explicam a ancestralidade. |
+| Executar gates | PASS local; CI do merge da TASK-03 pendente por falha no setup. |
+| Reproduzir migrações | PASS em PostgreSQL limpo com as duas migrações. |
+| Usar Playwright somente quando aplicável | PASS: tasks sem mudança de UI registram `NOT_REQUIRED_NO_UI_CHANGE`. |
+| Registrar evidence | PASS: três evidências de task e este relatório existem. |
+| Separar commit técnico/documental | PASS demonstrado na TASK-03 e preservado no histórico da branch. |
+| Recuperar interrupção sem repetir mutações | PASS estrutural, por commits atômicos, restart commands, working tree limpo e migrações versionadas; não foi feito crash-injection destrutivo. |
+| Parar em revisão | PASS intencional: modo continua `SUPERVISED_PILOT` e TASK-04 bloqueada. |
+| Avançar em modo autônomo | Não executado por restrição do piloto; requer decisão humana explícita após os bloqueadores. |
+
+## Findings
+
+### PILOT-AUDIT-001 — BLOCKER — CI da merge em `main` falhou
+
+- Severidade: crítica para o gate formal.
+- Causa observada: run `31117339641` falhou no job `quality`, passo `Set up job`.
+- Risco: não existe CI verde para a cabeça atual de `main`, embora o PR tenha passado.
+- Correção necessária: repetir o workflow na merge atual ou em novo commit documental, confirmar conclusão `success` e registrar o novo run.
+- Arquivos afetados: evidência operacional e, caso o retry exija mudança, `.github/workflows/validate.yml`.
+- Novo teste do piloto: sim, pelo menos CI remoto verde e reconciliação documental.
+
+### PILOT-AUDIT-002 — BLOCKER — STATE/HANDOFF não reconciliados após o merge
+
+- Severidade: alta.
+- Causa observada: `main` está em `b3d2f30`, mas STATE/HANDOFF ainda apontam para a
+  branch TASK-03, `remote_review_pass_awaiting_merge` e `TASK_03_MERGE_REQUIRED`.
+- Risco: uma retomada pode tentar repetir o merge ou selecionar um estado já
+  encerrado, violando a recuperação segura.
+- Correção necessária: atualizar STATE/HANDOFF para `main`, merge `b3d2f30`,
+  validação atual e estado `PILOT_AUDIT`, preservando `SUPERVISED_PILOT`.
+- Arquivos afetados: `docs/operations/STATE.md`, `docs/operations/HANDOFF.md`,
+  `docs/evidence/TASK-02-validation.md` e `docs/evidence/TASK-03-validation.md`;
+  o ROADMAP já aponta `PILOT_AUDIT`, mas deve ser conferido junto.
+- Novo teste do piloto: sim, auditoria documental após a correção; não exige
+  nova funcionalidade.
+
+### PILOT-AUDIT-003 — WARNING — revisão formal não está representada como APPROVED
+
+- Severidade: média.
+- Causa observada: a API do GitHub classifica as revisões dos PRs #4, #5 e #6
+  como `COMMENTED`; PR #5 contém comentário humano de aprovação técnica, mas
+  PR #6 tem somente review automatizado `COMMENTED`.
+- Risco: a evidência de revisão independente não é equivalente a um estado
+  formal `APPROVED`.
+- Correção necessária: registrar aprovação humana explícita ou definir e
+  documentar que o comentário humano supervisionado é o gate aceito.
+- Novo teste do piloto: nova revisão humana do piloto; não exige teste de código.
+
+## Riscos residuais
+
+- O modo continua `SUPERVISED_PILOT`; nenhuma transição autônoma foi feita.
+- O warning de lockfile superior permanece operacionalmente inofensivo, mas deve
+  ser tratado antes de depender de inferência automática do workspace.
+- As branches históricas permanecem no remoto após squash merge; isso é
+  rastreabilidade, não conteúdo divergente na árvore da `main`.
+- TASK-04 não pode começar enquanto os blockers acima e a revisão humana não
+  forem encerrados.
+
+## Veredito
+
+**PILOT_BLOCKED**
+
+O piloto demonstrou implementação, migração, testes locais, documentação e
+recuperação estrutural satisfatórias, mas não atende ao requisito formal de
+`PILOT_APPROVED` porque o CI do merge atual da `main` falhou e o estado
+operacional pós-merge não está reconciliado. A revisão formal humana também
+precisa ser explicitada.
+
+## Condições para liberar TASK-04
+
+1. Obter CI remoto verde para a `main` atual.
+2. Corrigir STATE/HANDOFF para refletir `main` em `b3d2f30` e `PILOT_AUDIT` como
+   próxima ação, sem mudar o modo automaticamente.
+3. Registrar aprovação humana final do piloto e revisar este veredito.
+4. Somente depois autorizar TASK-04; até lá ela permanece bloqueada e não
+   iniciada.
