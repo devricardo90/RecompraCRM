@@ -3,45 +3,33 @@
 ```yaml
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-001
-loop_id: RCRM-TASK-03-ATTEMPT-01
-status: AWAITING_MERGE_THEN_PILOT_AUDIT
-task: TASK-03
+loop_id: RCRM-PILOT-AUDIT-ATTEMPT-01
+status: AWAITING_CLEAN_MAIN_CI
+task: PILOT_AUDIT
 previous_agent: ChatGPT
 next_role: Human Pilot Auditor
-baseline_head: 712aae5f193e61cea6508b01d165480f3abe8e74
+baseline_head: b3d2f30ed9941c24b973c9addd7578e789d0730b
 implementation_head: cd80bd6
-reviewed_remote_head: 3bebde46ff5c19d4cea1acba173a1906d43bab2e
+merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 plan:
-  - confirmar no SDD que Customer exige nome e telefone único quando informado
-  - adicionar somente o modelo Customer ao schema Prisma, preservando DatabaseMarker
-  - criar migração versionada sem alterar a migração inicial
-  - criar teste determinístico de persistência, obrigatoriedade, timestamps e unicidade
-  - validar a cadeia completa em PostgreSQL limpo e registrar a evidência do piloto
+  - registrar o resultado do CI da main como falha de infraestrutura
+  - preservar a validade técnica do CI verde da branch TASK-03
+  - publicar o fechamento documental para gerar um novo CI limpo
+  - aguardar revisão humana antes de qualquer autorização da TASK-04
 changes:
-  - "Customer criado com name obrigatório, phone opcional e único quando informado."
-  - "Migração 20260806151419_add_customer criada e validada em banco existente e limpo."
-  - "Teste determinístico de persistência integrado ao npm test e ao CI."
-  - "README, evidence, STATE, HANDOFF, LESSONS e ROADMAP reconciliados."
-files_changed:
-  - .github/workflows/validate.yml
-  - README.md
-  - docs/evidence/TASK-03-validation.md
-  - docs/operations/HANDOFF.md
-  - docs/operations/LESSONS.md
-  - docs/operations/STATE.md
-  - docs/roadmap/ROADMAP.md
-  - package.json
-  - prisma/migrations/20260806151419_add_customer/migration.sql
-  - prisma/schema.prisma
-  - scripts/customer-model-check.mjs
-validation: PASS
+  - "TASK-01, TASK-02 e TASK-03 registradas como concluídas e integradas em main."
+  - "TASK-03 mergeada no commit b3d2f30."
+  - "Run 31117339641 classificado como INFRASTRUCTURE_FAILURE."
+  - "Tentativa 1 falhou em Set up job; tentativa 2 foi cancelada sem steps."
+  - "Nenhum gate do projeto foi executado nessas tentativas."
+  - "Fechamento documental preparado para novo CI limpo."
+validation: PASS_LOCAL
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
-review: APPROVED_INDEPENDENT
+review: APPROVED_TECHNICAL_PENDING_FINAL_PILOT_AUDIT
 findings:
-  - "A migração incremental continha uma alteração redundante da sequência do DatabaseMarker; o bloco foi removido da migração nova e a cadeia completa foi revalidada."
-  - "PostgreSQL foi validado em porta isolada sem interromper containers externos."
-  - "O warning conhecido de múltiplos lockfiles não afetou lint, typecheck ou build."
-  - "PR #6 revisado tecnicamente no HEAD 3bebde46ff5c19d4cea1acba173a1906d43bab2e."
+  - "CI verde da branch TASK-03, run 31116844373, permanece evidência técnica aprovada."
+  - "CI da main, run 31117339641, é falha de infraestrutura, não falha técnica."
+  - "Novo push documental deve gerar um run limpo na main."
 lessons_read:
   - LESSON-RCRM-0001
   - LESSON-RCRM-0002
@@ -49,16 +37,21 @@ lessons_read:
 lessons_created:
   - LESSON-RCRM-0004
   - LESSON-RCRM-0005
-evidence: docs/evidence/TASK-03-validation.md
-ci_run: 31116541370
-ci_status: PASS
+evidence: docs/evidence/PILOT-AUDIT.md
+task_evidence: docs/evidence/TASK-03-validation.md
+ci_run: 31117339641
+ci_status: INFRASTRUCTURE_FAILURE
+ci_attempt_1: SETUP_JOB_FAILURE
+ci_attempt_2: CANCELLED_BEFORE_STEPS
+ci_project_gates: NOT_EXECUTED
+clean_main_ci_required: true
 pr_number: 6
 pr_review: APPROVED_TECHNICAL
-last_completed_task: TASK-02
-current_task: TASK-03
+last_completed_task: TASK-03
+current_task: PILOT_AUDIT
 next_eligible_task: PILOT_AUDIT
 blocked_tasks:
   - TASK-04
-next_action: Concluir CI do fechamento documental, fazer merge da TASK-03 e executar a auditoria humana do piloto; não iniciar TASK-04 antes da decisão da auditoria.
-restart_command: git switch feat/TASK-03-customer-model && git pull
+next_action: Publicar fechamento documental e aguardar novo CI limpo na main; não iniciar TASK-04.
+restart_command: git switch main && git pull
 ```

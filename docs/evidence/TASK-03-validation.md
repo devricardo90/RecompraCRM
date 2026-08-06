@@ -5,12 +5,18 @@ task: TASK-03
 branch: feat/TASK-03-customer-model
 baseline: 712aae5f193e61cea6508b01d165480f3abe8e74
 mode: SUPERVISED_PILOT
-status: REMOTE_REVIEW_PASS_AWAITING_MERGE
+status: MERGED_AWAITING_CLEAN_MAIN_CI
 implementation_head: cd80bd6
 reviewed_remote_head: 3bebde46ff5c19d4cea1acba173a1906d43bab2e
+merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
 pr_number: 6
-ci_run: 31116541370
-ci_status: PASS
+ci_branch_run: 31116844373
+ci_branch_status: PASS
+ci_main_run: 31117339641
+ci_main_status: INFRASTRUCTURE_FAILURE
+ci_main_attempt_1: SETUP_JOB_FAILURE
+ci_main_attempt_2: CANCELLED_BEFORE_STEPS
+ci_main_project_gates: NOT_EXECUTED
 playwright: NOT_REQUIRED_NO_UI_CHANGE
 next_eligible_task: PILOT_AUDIT
 blocked_tasks:
@@ -58,9 +64,13 @@ blocked_tasks:
 - Branch publicada: `feat/TASK-03-customer-model`.
 - Pull request: `#6`.
 - HEAD técnico revisado: `3bebde46ff5c19d4cea1acba173a1906d43bab2e`.
+- Merge em `main`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
 - Revisão técnica independente: PASS.
-- CI remoto `Validate`, run `31116541370`: PASS.
-- O fechamento documental posterior deve receber novo CI antes do merge.
+- CI remoto verde da branch: `Validate`, run `31116844373` — PASS; permanece evidência técnica aprovada.
+- CI remoto da `main`: run `31117339641` — `INFRASTRUCTURE_FAILURE`.
+- Tentativa 1 falhou em `Set up job`; tentativa 2 foi cancelada antes de qualquer step.
+- Não houve execução nem falha de Prisma, testes, lint, typecheck ou build nesse run.
+- O novo push documental deve gerar um CI limpo na `main`.
 
 ## Correção auditada
 
@@ -70,4 +80,4 @@ O primeiro `prisma migrate dev` gerou um bloco redundante relacionado à sequên
 
 - O build emitiu o warning já conhecido de múltiplos lockfiles acima do projeto; não afetou o resultado.
 - Playwright: `NOT_REQUIRED_NO_UI_CHANGE`; a task altera apenas Prisma, banco, testes, CI e documentação.
-- TASK-04 permanece bloqueada até o merge da TASK-03 e a auditoria final do piloto.
+- TASK-04 permanece bloqueada até o novo CI limpo e a auditoria final do piloto.

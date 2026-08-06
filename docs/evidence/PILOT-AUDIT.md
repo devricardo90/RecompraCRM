@@ -2,7 +2,7 @@
 
 Data da auditoria: 2026-08-06
 Modo preservado: `SUPERVISED_PILOT`
-Veredito: **PILOT_BLOCKED**
+Veredito: **PILOT_BLOCKED_TEMPORARY**
 
 ## Escopo
 
@@ -33,7 +33,7 @@ iniciada.
 |---|---|---|---|---|
 | TASK-01 | PR #4, merge `42784f0c70c3cd7a4a4e58abd8aa4343cacfdff5` | `2a98a2615dbd717af5e4466c52af915e9e98cc5a` | run `31039795434` | Merge concluído; CI success |
 | TASK-02 | PR #5, merge `712aae5f193e61cea6508b01d165480f3abe8e74` | `018153fd9cd9fae7f4d3bd5481102c2c3bd50330` | runs `31112180901` e `31113356008` | Merge concluído; CI success |
-| TASK-03 | PR #6, merge `b3d2f30ed9941c24b973c9addd7578e789d0730b` | `f6118b830ad68970baf59b5fac83a5177ea7c595` | PR run `31116844373` success; main run `31117339641` failure | Merge concluído; CI da main não verde |
+| TASK-03 | PR #6, merge `b3d2f30ed9941c24b973c9addd7578e789d0730b` | `f6118b830ad68970baf59b5fac83a5177ea7c595` | PR run `31116844373` success; main run `31117339641` `INFRASTRUCTURE_FAILURE` | Merge concluído; novo CI limpo pendente |
 
 PRs auditados:
 
@@ -79,9 +79,12 @@ não `APPROVED`. O CI do PR e o CI do merge passaram.
 ### TASK-03
 
 `Customer`, a segunda migração, teste determinístico, documentação e CI estão
-presentes no commit de merge `b3d2f30`. O PR run `31116844373` passou, mas o
-workflow disparado pelo push da merge em `main` (`31117339641`) falhou ainda no
-passo `Set up job`; nenhum gate de código chegou a executar nesse run.
+presentes no commit de merge `b3d2f30`. O PR run `31116844373` passou. O
+workflow disparado pelo push da merge em `main` (`31117339641`) foi classificado
+como `INFRASTRUCTURE_FAILURE`: a tentativa 1 falhou em `Set up job` e a
+tentativa 2 foi cancelada antes de qualquer step. Nenhum gate de código foi
+executado nesse run; não houve falha de Prisma, testes, lint, typecheck ou
+build. Um novo push documental será usado para gerar um CI limpo na `main`.
 
 ## Validação local na `main`
 
@@ -126,14 +129,14 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 
 ## Findings
 
-### PILOT-AUDIT-001 — BLOCKER — CI da merge em `main` falhou
+### PILOT-AUDIT-001 — BLOCKER TEMPORARY — CI da merge em `main` não executou o projeto
 
-- Severidade: crítica para o gate formal.
-- Causa observada: run `31117339641` falhou no job `quality`, passo `Set up job`.
-- Risco: não existe CI verde para a cabeça atual de `main`, embora o PR tenha passado.
-- Correção necessária: repetir o workflow na merge atual ou em novo commit documental, confirmar conclusão `success` e registrar o novo run.
-- Arquivos afetados: evidência operacional e, caso o retry exija mudança, `.github/workflows/validate.yml`.
-- Novo teste do piloto: sim, pelo menos CI remoto verde e reconciliação documental.
+- Severidade: bloqueador temporário do gate formal.
+- Causa observada: run `31117339641` foi `INFRASTRUCTURE_FAILURE`; tentativa 1 falhou em `Set up job` e tentativa 2 foi cancelada sem steps.
+- Risco: ainda não há um novo run limpo na `main`, embora não exista evidência de falha técnica do projeto.
+- Correção necessária: publicar este fechamento documental, gerar novo CI limpo e registrar conclusão `success`.
+- Arquivos afetados: `docs/evidence/PILOT-AUDIT.md`, `docs/operations/STATE.md`, `docs/operations/HANDOFF.md` e `docs/evidence/TASK-03-validation.md`; nenhum código.
+- Novo teste do piloto: sim, apenas o novo CI remoto e a revisão documental; os gates locais e o CI verde da branch permanecem válidos.
 
 ### PILOT-AUDIT-002 — BLOCKER — STATE/HANDOFF não reconciliados após o merge
 
@@ -174,19 +177,19 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 
 ## Veredito
 
-**PILOT_BLOCKED**
+**PILOT_BLOCKED_TEMPORARY**
 
 O piloto demonstrou implementação, migração, testes locais, documentação e
-recuperação estrutural satisfatórias, mas não atende ao requisito formal de
-`PILOT_APPROVED` porque o CI do merge atual da `main` falhou e o estado
-operacional pós-merge não está reconciliado. A revisão formal humana também
-precisa ser explicitada.
+recuperação estrutural satisfatórias. O run `31117339641` é uma falha de
+infraestrutura sem execução dos gates do projeto, não uma falha de Prisma,
+testes, lint, typecheck ou build. O bloqueio permanece temporário até um novo
+push documental gerar um CI limpo na `main` e a revisão humana fechar o piloto.
 
 ## Condições para liberar TASK-04
 
-1. Obter CI remoto verde para a `main` atual.
-2. Corrigir STATE/HANDOFF para refletir `main` em `b3d2f30` e `PILOT_AUDIT` como
-   próxima ação, sem mudar o modo automaticamente.
+1. Publicar o fechamento documental e obter novo CI remoto verde para a `main`.
+2. Manter STATE/HANDOFF refletindo TASK-03 mergeada em `b3d2f30` e
+   `PILOT_AUDIT` como próxima ação, sem mudar o modo automaticamente.
 3. Registrar aprovação humana final do piloto e revisar este veredito.
 4. Somente depois autorizar TASK-04; até lá ela permanece bloqueada e não
    iniciada.
