@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 10
+state_version: 11
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -12,31 +12,31 @@ completed_tasks:
   - TASK-02
   - TASK-03
 last_completed_task: TASK-03
-current_task: PILOT_AUDIT
-current_task_status: awaiting_clean_main_ci
+current_task: TASK-03-P2-FIX
+current_task_status: implemented_local_pending_review
 next_eligible_task: PILOT_AUDIT
 attempt: 1
 max_attempts: 3
-branch: main
-baseline_head: b3d2f30ed9941c24b973c9addd7578e789d0730b
-current_head: b3d2f30ed9941c24b973c9addd7578e789d0730b
-implementation_head: cd80bd6
+branch: fix/TASK-03-reject-blank-customer-name
+baseline_head: a3292835905d58a169aede27c1a9c1e1f9d905dc
+current_head: 7cb1255c1249b88e00b75c9c5cdfa73d0973a8ee
+implementation_head: 7cb1255c1249b88e00b75c9c5cdfa73d0973a8ee
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
-working_tree: clean_at_main_audit_head
+p2_finding: P2_BLANK_CUSTOMER_NAME
+p2_status: IMPLEMENTED_LOCAL_PENDING_PR_AND_CI
+working_tree: clean_after_local_commits
 baseline_status: VERIFIED_GREEN
-validation_status: PASS
-review_status: APPROVED_TECHNICAL_PENDING_FINAL_PILOT_AUDIT
-ci_run: 31117339641
-ci_status: INFRASTRUCTURE_FAILURE
-ci_attempt_1: SETUP_JOB_FAILURE
-ci_attempt_2: CANCELLED_BEFORE_STEPS
-ci_project_gates: NOT_EXECUTED
+validation_status: PASS_LOCAL
+review_status: P2_PENDING_PR_AND_CI
+ci_run: null
+ci_status: PENDING_NOT_PUSHED
+previous_main_ci_run: 31117339641
+previous_main_ci_status: INFRASTRUCTURE_FAILURE
+pr_number: null
 clean_main_ci_required: true
-pr_number: 6
-pr_review: APPROVED_TECHNICAL
-remote_branch: feat/TASK-03-customer-model
 blockers:
+  - P2_FIX_PR_AND_CI_REQUIRED
   - CLEAN_MAIN_CI_REQUIRED
   - HUMAN_PILOT_AUDIT_REQUIRED
 blocked_tasks:
@@ -47,17 +47,17 @@ lessons_validated:
   - LESSON-RCRM-0003
   - LESSON-RCRM-0004
   - LESSON-RCRM-0005
-next_action: PUBLISH_DOCUMENTAL_CLOSURE_AND_AWAIT_CLEAN_MAIN_CI
+  - LESSON-RCRM-0006
+next_action: REQUEST_P2_REVIEW_AND_CI
 next_action_authorized: false
-updated_at: "2026-08-06T20:17:52+02:00"
+updated_at: "2026-08-06T20:54:08+02:00"
 updated_by: ChatGPT
 ```
 
-TASK-01, TASK-02 e TASK-03 estão concluídas e integradas em `main`; TASK-03
-foi mergeada no commit `b3d2f30ed9941c24b973c9addd7578e789d0730b`. O CI verde da
-branch (`31116844373`) permanece evidência técnica válida. O run da `main`
-`31117339641` foi classificado como `INFRASTRUCTURE_FAILURE`: a tentativa 1
-falhou em `Set up job` e a tentativa 2 foi cancelada antes dos steps, sem
-executar Prisma, testes, lint, typecheck ou build. O próximo passo é publicar
-o fechamento documental e aguardar um novo CI limpo. TASK-04 permanece
-bloqueada e o modo continua `SUPERVISED_PILOT`.
+TASK-01, TASK-02 e TASK-03 permanecem concluídas e integradas; TASK-03 foi
+mergeada em `b3d2f30`. O finding P2 de nome Customer vazio ou somente whitespace
+foi corrigido localmente na branch `fix/TASK-03-reject-blank-customer-name`,
+com constraint PostgreSQL versionada e testes determinísticos aprovados.
+Ainda faltam PR/CI verdes para esta correção e o fechamento do piloto. TASK-04
+continua bloqueada, `next_eligible_task` permanece `PILOT_AUDIT` e o modo segue
+`SUPERVISED_PILOT`.

@@ -2,82 +2,78 @@
 
 ```yaml
 task: TASK-03
-branch: feat/TASK-03-customer-model
-baseline: 712aae5f193e61cea6508b01d165480f3abe8e74
+branch: fix/TASK-03-reject-blank-customer-name
+baseline: a3292835905d58a169aede27c1a9c1e1f9d905dc
 mode: SUPERVISED_PILOT
-status: MERGED_AWAITING_CLEAN_MAIN_CI
-implementation_head: cd80bd6
-reviewed_remote_head: 3bebde46ff5c19d4cea1acba173a1906d43bab2e
+status: P2_FIX_IMPLEMENTED_LOCAL_PENDING_PR_AND_CI
+finding: P2_BLANK_CUSTOMER_NAME
+implementation_head: 7cb1255c1249b88e00b75c9c5cdfa73d0973a8ee
 merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
-pr_number: 6
+pr_number: null
 ci_branch_run: 31116844373
 ci_branch_status: PASS
 ci_main_run: 31117339641
 ci_main_status: INFRASTRUCTURE_FAILURE
-ci_main_attempt_1: SETUP_JOB_FAILURE
-ci_main_attempt_2: CANCELLED_BEFORE_STEPS
-ci_main_project_gates: NOT_EXECUTED
+p2_ci_status: PENDING_NOT_PUSHED
 playwright: NOT_REQUIRED_NO_UI_CHANGE
 next_eligible_task: PILOT_AUDIT
 blocked_tasks:
   - TASK-04
 ```
 
-## Diagnóstico e contrato
+## Finding P2
 
-- A branch obrigatória existia local e remotamente e estava exatamente na baseline esperada.
-- O SDD define que todo cliente possui nome e que telefone é único quando informado.
-- Nenhum Product, Sale, Stock, alerta, autenticação ou fluxo de interface foi implementado.
+O contrato exige nome real. A constraint anterior rejeitava `NULL`, mas
+aceitava `""`, espaços, tabs e quebras de linha sem conteúdo.
 
-## Implementação
+Correção mínima: a migração
+`prisma/migrations/20260806204721_enforce_customer_name/migration.sql` adiciona
+`Customer_name_not_blank` com `CHECK ("name" ~ '[^[:space:]]')`. A validação
+ocorre no PostgreSQL e vale para qualquer caminho de persistência, sem novos
+campos, dependências, Product, Sale, Stock ou UI.
 
-- `Customer.id`: inteiro autoincremental e chave primária.
-- `Customer.name`: `String` obrigatório.
-- `Customer.phone`: `String? @unique`; PostgreSQL rejeita duplicatas informadas e permite múltiplos `NULL`.
-- `createdAt`: `DateTime @default(now())`.
-- `updatedAt`: `DateTime @updatedAt`.
-- `DatabaseMarker` e sua migração inicial foram preservados.
-- Migração nova: `prisma/migrations/20260806151419_add_customer/migration.sql`.
-- Teste determinístico: `scripts/customer-model-check.mjs`, exposto por `npm test` e `npm run test:customer`.
-- CI executa o teste de persistência após aplicar as migrações.
+## Testes determinísticos
+
+`scripts/customer-model-check.mjs` agora prova:
+
+- nome normal aceito e persistido;
+- nome omitido rejeitado;
+- string vazia rejeitada;
+- somente espaços rejeitado;
+- somente tabs rejeitado;
+- somente quebras de linha/whitespace rejeitadas;
+- telefone opcional funcionando;
+- telefone informado duplicado rejeitado;
+- múltiplos telefones `NULL` permitidos;
+- timestamps persistidos.
 
 ## Validação local
 
-- `npm install --no-audit --no-fund` — PASS.
-- `npm run db:generate` — PASS.
+- `npm run db:generate` — PASS; Prisma Client 6.19.0.
 - `npm run db:validate` — PASS.
-- `docker compose config` com porta isolada — PASS.
+- `docker compose config` com `POSTGRES_PORT=55433` — PASS.
 - PostgreSQL `16-alpine` iniciou saudável sem interromper containers externos.
-- `npm run db:migrate` — PASS.
+- Volume exclusivo do projeto foi recriado desde banco vazio.
+- `npm run db:migrate` — PASS; aplicou as três migrações, incluindo a nova constraint.
 - `npm run db:health` — PASS.
-- `npm test` — PASS; criação, persistência, campos obrigatórios, timestamps, unicidade e múltiplos `NULL` foram testados contra PostgreSQL real.
-- Inspeção SQL — PASS; tabela `Customer`, índice `Customer_phone_key`, timestamps e nullability confirmados.
-- Recriação limpa — PASS; as duas migrações foram aplicadas desde zero e o banco terminou sem dados de teste.
+- `npm test` — PASS.
+- Inspeção SQL — PASS; constraint `Customer_name_not_blank` confirmada.
 - `npm run lint` — PASS.
 - `npm run typecheck` — PASS.
 - `npm run build` — PASS.
 - `git diff --check` — PASS.
 - Scan de segredos — PASS.
 
-## Revisão remota
+## Revisão remota e estado do piloto
 
-- Branch publicada: `feat/TASK-03-customer-model`.
-- Pull request: `#6`.
-- HEAD técnico revisado: `3bebde46ff5c19d4cea1acba173a1906d43bab2e`.
-- Merge em `main`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
-- Revisão técnica independente: PASS.
-- CI remoto verde da branch: `Validate`, run `31116844373` — PASS; permanece evidência técnica aprovada.
-- CI remoto da `main`: run `31117339641` — `INFRASTRUCTURE_FAILURE`.
-- Tentativa 1 falhou em `Set up job`; tentativa 2 foi cancelada antes de qualquer step.
-- Não houve execução nem falha de Prisma, testes, lint, typecheck ou build nesse run.
-- O novo push documental deve gerar um CI limpo na `main`.
+- TASK-03 continua mergeada em `main` no commit `b3d2f30`.
+- O CI verde da implementação original na branch, run `31116844373`, permanece evidência técnica aprovada.
+- O run da `main`, `31117339641`, permanece `INFRASTRUCTURE_FAILURE`; as duas tentativas não executaram gates do projeto.
+- A correção P2 ainda não foi publicada, não possui PR nem CI próprio.
+- O veredito permanece `PILOT_BLOCKED` até PR/CI verdes para a correção e revisão humana.
+- TASK-04 continua bloqueada e não foi iniciada.
 
-## Correção auditada
+## Playwright
 
-O primeiro `prisma migrate dev` gerou um bloco redundante relacionado à sequência de `DatabaseMarker`. O SQL foi revisado, apenas o bloco redundante foi removido da migração nova e a cadeia completa foi reaplicada em banco existente e em banco limpo.
-
-## Warnings e decisão de Playwright
-
-- O build emitiu o warning já conhecido de múltiplos lockfiles acima do projeto; não afetou o resultado.
-- Playwright: `NOT_REQUIRED_NO_UI_CHANGE`; a task altera apenas Prisma, banco, testes, CI e documentação.
-- TASK-04 permanece bloqueada até o novo CI limpo e a auditoria final do piloto.
+`NOT_REQUIRED_NO_UI_CHANGE`: a correção altera apenas constraint de banco, teste
+determinístico e documentação operacional.

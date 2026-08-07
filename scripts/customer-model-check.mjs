@@ -28,6 +28,23 @@ function hasErrorCode(error, code) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
+async function assertCreateRejected(data, label) {
+  let created;
+  let error;
+
+  try {
+    created = await prisma.customer.create({ data });
+  } catch (caught) {
+    error = caught;
+  }
+
+  if (created) {
+    createdIds.push(created.id);
+  }
+
+  assert(!created && error, `${label} was accepted`);
+}
+
 loadLocalEnvironment();
 
 if (!process.env.DATABASE_URL) {
@@ -59,6 +76,12 @@ try {
   const persisted = await prisma.customer.findUnique({ where: { id: customer.id } });
   assert(persisted?.id === customer.id, "created customer was not persisted");
 
+  await assertCreateRejected({ phone: null }, "omitted customer name");
+  await assertCreateRejected({ name: "" }, "empty customer name");
+  await assertCreateRejected({ name: "   " }, "space-only customer name");
+  await assertCreateRejected({ name: "\t\t" }, "tab-only customer name");
+  await assertCreateRejected({ name: "\n\r\t" }, "line-break-only customer name");
+
   let duplicatePhoneRejected = false;
   try {
     const duplicate = await prisma.customer.create({
@@ -81,14 +104,6 @@ try {
   createdIds.push(withoutPhoneB.id);
 
   assert(withoutPhoneA.phone === null && withoutPhoneB.phone === null, "optional phone was not persisted as null");
-
-  let missingNameRejected = false;
-  try {
-    await prisma.$executeRaw`INSERT INTO "Customer" ("updatedAt") VALUES (CURRENT_TIMESTAMP)`;
-  } catch {
-    missingNameRejected = true;
-  }
-  assert(missingNameRejected, "missing required name was not rejected by the database constraint");
 
   console.log("Customer persistence tests: PASS");
 } catch (error) {
