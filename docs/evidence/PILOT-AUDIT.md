@@ -9,7 +9,7 @@ Veredito: **PILOT_BLOCKED**
 Esta auditoria verificou a recuperação do repositório, a cadeia de merges, PRs,
 CI remoto, documentos operacionais, evidências, lessons, migrações PostgreSQL,
 gates locais e o mecanismo de bloqueio do Rick Loop para TASK-01, TASK-02 e
-TASK-03. O finding P2 de nomes Customer em branco foi corrigido em branch
+TASK-03. O finding P1 de segurança da migration Customer foi corrigido em branch
 isolada, sem implementar funcionalidade de produto; TASK-04 não foi iniciada.
 
 ## Baseline e recuperação
@@ -191,6 +191,21 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Arquivos: `prisma/migrations/20260806204721_enforce_customer_name/migration.sql`,
   `scripts/customer-model-check.mjs` e documentação operacional.
 
+### PILOT-AUDIT-005 — P1 — Migration Customer não era segura para legado
+
+- Severidade: P1.
+- Causa: a constraint era adicionada já validada; linhas legadas inválidas
+  poderiam abortar o deploy da migration.
+- Correção: adicionar `Customer_name_not_blank` como `NOT VALID`, aplicar a
+  regra a novos `INSERT`/`UPDATE` e validar automaticamente somente quando não
+  houver linhas legadas inválidas.
+- Preservação: nenhum Customer é apagado, alterado ou substituído por
+  placeholder.
+- Testes obrigatórios: cenários A (banco limpo) e B (banco legado) contra
+  PostgreSQL real; ainda pendentes por indisponibilidade do Docker Desktop/WSL.
+- Estado: implementação local pronta, aguardando validação PostgreSQL, PR/CI e
+  revisão humana.
+
 ## Riscos residuais
 
 - O modo continua `SUPERVISED_PILOT`; nenhuma transição autônoma foi feita.
@@ -206,12 +221,11 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 **PILOT_BLOCKED**
 
 O piloto demonstrou implementação, migração, testes locais, documentação e
-recuperação estrutural satisfatórias. O finding P2 foi corrigido localmente,
-mas ainda aguarda PR/CI. O run `31117339641` é uma falha de
+recuperação estrutural satisfatórias. Os findings P1/P2 estão corrigidos no
+código local, mas a validação PostgreSQL do P1 ainda está pendente. O run `31117339641` é uma falha de
 infraestrutura sem execução dos gates do projeto, não uma falha de Prisma,
-testes, lint, typecheck ou build. O bloqueio permanece temporário até um novo
-push documental gerar um CI limpo na `main`, a correção P2 obter PR/CI verdes e
-a revisão humana fechar o piloto.
+testes, lint, typecheck ou build. O bloqueio permanece até os cenários
+PostgreSQL do P1, PR/CI verdes e revisão humana.
 
 ## Condições para liberar TASK-04
 
@@ -219,6 +233,7 @@ a revisão humana fechar o piloto.
 2. Manter STATE/HANDOFF refletindo TASK-03 mergeada em `b3d2f30` e
    `PILOT_AUDIT` como próxima ação, sem mudar o modo automaticamente.
 3. Registrar aprovação humana final do piloto e revisar este veredito.
-4. Revisar e aprovar a correção P2 após PR/CI verdes.
-5. Somente depois autorizar TASK-04; até lá ela permanece bloqueada e não
+4. Executar e registrar os cenários PostgreSQL A/B da correção P1.
+5. Revisar e aprovar as correções P1/P2 após PR/CI verdes.
+6. Somente depois autorizar TASK-04; até lá ela permanece bloqueada e não
    iniciada.

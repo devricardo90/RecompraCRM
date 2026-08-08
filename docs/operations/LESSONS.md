@@ -113,3 +113,20 @@ early_detection: "Testar vazio, espaços, tabs e quebras de linha, não apenas N
 limits: "Revalidar se a regra passar a exigir normalização, trim automático, comprimento mínimo ou política de nomes diferente."
 evidence: "TASK-03 P2: migração 20260806204721_enforce_customer_name aplicada em banco vazio; npm test rejeitou os quatro formatos sem conteúdo."
 ```
+
+### LESSON-RCRM-0007 — Tornar CHECK constraints seguras para dados legados
+
+```yaml
+id: LESSON-RCRM-0007
+status: pending_validation
+type: database_migration
+severity: critical
+source_task: TASK-03-P1-FIX
+symptom: "Uma CHECK adicionada já validada pode abortar o deploy quando o banco existente contém linhas legadas inválidas."
+root_cause: "A migration não separava enforcement de novos dados da validação retroativa do conjunto legado."
+fix: "Adicionar a CHECK como NOT VALID, aplicar a regra a novos INSERT/UPDATE e executar VALIDATE CONSTRAINT apenas quando a consulta de inválidos retornar zero linhas."
+prevention: "Avaliar sempre o estado dos dados existentes antes de validar constraints novas em migrations incrementais."
+early_detection: "Testar banco limpo e banco legado com linha inválida preservada, além de consultar pg_constraint.convalidated."
+limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
+evidence: "Aguardando cenários A/B contra PostgreSQL real; Docker Desktop/WSL indisponível nesta execução."
+```

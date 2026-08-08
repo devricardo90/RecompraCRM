@@ -76,6 +76,14 @@ try {
   const persisted = await prisma.customer.findUnique({ where: { id: customer.id } });
   assert(persisted?.id === customer.id, "created customer was not persisted");
 
+  const [nameConstraint] = await prisma.$queryRaw`
+    SELECT convalidated AS "validated"
+    FROM pg_constraint
+    WHERE conrelid = '"Customer"'::regclass
+      AND conname = 'Customer_name_not_blank'
+  `;
+  assert(nameConstraint?.validated === true, "customer name constraint was not validated on a clean database");
+
   await assertCreateRejected({ phone: null }, "omitted customer name");
   await assertCreateRejected({ name: "" }, "empty customer name");
   await assertCreateRejected({ name: "   " }, "space-only customer name");
