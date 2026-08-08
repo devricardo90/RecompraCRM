@@ -131,6 +131,13 @@ async function runCleanScenario(admin, databaseName) {
     await assertNameRejected(client, "   ", "clean space-only name");
     await assertNameRejected(client, "\t\t", "clean tab-only name");
     await assertNameRejected(client, "\n\r\t", "clean line-break-only name");
+    await assertNameRejected(client, "\u00A0", "clean NBSP-only name");
+    await assertNameRejected(client, "\u2007", "clean FIGURE SPACE-only name");
+    await assertNameRejected(client, "\u202F", "clean NARROW NO-BREAK SPACE-only name");
+    await assertNameRejected(client, " \t\u00A0\u2007\u202F\n", "clean mixed Unicode whitespace-only name");
+
+    const unicodeCustomer = await client.customer.create({ data: { name: "Hélio José" } });
+    assert(unicodeCustomer.name === "Hélio José", "Real Unicode name was not persisted on clean database");
 
     console.log("Migration compatibility scenario A (clean database): PASS");
   } finally {
@@ -148,10 +155,16 @@ async function runLegacyScenario(admin, databaseName) {
 
     const beforeClient = createClient(targetUrl);
     let legacyCustomer;
+    let legacyUnicodeCustomer;
     try {
       [legacyCustomer] = await beforeClient.$queryRaw`
         INSERT INTO "Customer" ("name", "createdAt", "updatedAt")
         VALUES ('   ', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING "id", "name"
+      `;
+      [legacyUnicodeCustomer] = await beforeClient.$queryRaw`
+        INSERT INTO "Customer" ("name", "createdAt", "updatedAt")
+        VALUES (${"\u00A0\u2007"}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING "id", "name"
       `;
     } finally {
@@ -170,19 +183,34 @@ async function runLegacyScenario(admin, databaseName) {
         FROM "Customer"
         WHERE "id" = ${legacyCustomer.id}
       `;
-      assert(legacyAfter?.id === legacyCustomer.id, "Legacy customer was deleted");
-      assert(legacyAfter.name === "   ", "Legacy customer name was changed");
+      assert(legacyAfter?.id === legacyCustomer.id, "Legacy space-only customer was deleted");
+      assert(legacyAfter.name === "   ", "Legacy space-only customer name was changed");
+
+      const [legacyUnicodeAfter] = await client.$queryRaw`
+        SELECT "id", "name"
+        FROM "Customer"
+        WHERE "id" = ${legacyUnicodeCustomer.id}
+      `;
+      assert(legacyUnicodeAfter?.id === legacyUnicodeCustomer.id, "Legacy Unicode whitespace customer was deleted");
+      assert(legacyUnicodeAfter.name === "\u00A0\u2007", "Legacy Unicode whitespace customer name was changed");
 
       await assertNameRejected(client, "", "legacy empty name");
       await assertNameRejected(client, "   ", "legacy space-only name");
       await assertNameRejected(client, "\t\t", "legacy tab-only name");
       await assertNameRejected(client, "\n\r\t", "legacy line-break-only name");
+      await assertNameRejected(client, "\u00A0", "legacy NBSP-only name");
+      await assertNameRejected(client, "\u2007", "legacy FIGURE SPACE-only name");
+      await assertNameRejected(client, "\u202F", "legacy NARROW NO-BREAK SPACE-only name");
+      await assertNameRejected(client, " \t\u00A0\u2007\u202F\n", "legacy mixed Unicode whitespace-only name");
 
       const normalCustomer = await client.customer.create({ data: { name: "New Normal Customer" } });
       assert(normalCustomer.name === "New Normal Customer", "Normal legacy-database customer was not persisted");
 
+      const unicodeCustomer = await client.customer.create({ data: { name: "Hélio José" } });
+      assert(unicodeCustomer.name === "Hélio José", "Real Unicode name was not persisted on legacy database");
+
       console.log("Migration compatibility scenario B (legacy database): PASS");
-      console.log("Legacy invalid row preserved; Customer_name_not_blank remains NOT VALID.");
+      console.log("Legacy invalid rows preserved; Customer_name_not_blank remains NOT VALID.");
     } finally {
       await client.$disconnect();
     }

@@ -89,6 +89,16 @@ try {
   await assertCreateRejected({ name: "   " }, "space-only customer name");
   await assertCreateRejected({ name: "\t\t" }, "tab-only customer name");
   await assertCreateRejected({ name: "\n\r\t" }, "line-break-only customer name");
+  await assertCreateRejected({ name: "\u00A0" }, "NBSP-only customer name");
+  await assertCreateRejected({ name: "\u2007" }, "FIGURE SPACE-only customer name");
+  await assertCreateRejected({ name: "\u202F" }, "NARROW NO-BREAK SPACE-only customer name");
+  await assertCreateRejected({ name: " \t\u00A0\u2007\u202F\n" }, "mixed ASCII + Unicode whitespace-only customer name");
+
+  const unicodeCustomer = await prisma.customer.create({
+    data: { name: `Hélio José ${suffix}` },
+  });
+  createdIds.push(unicodeCustomer.id);
+  assert(unicodeCustomer.name.startsWith("Hélio José"), "real Unicode customer name was not persisted");
 
   let duplicatePhoneRejected = false;
   try {
