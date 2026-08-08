@@ -118,7 +118,7 @@ evidence: "TASK-03 P2: migração 20260806204721_enforce_customer_name aplicada 
 
 ```yaml
 id: LESSON-RCRM-0007
-status: pending_validation
+status: pending_ci_validation
 type: database_migration
 severity: critical
 source_task: TASK-03-P1-FIX
@@ -128,5 +128,5 @@ fix: "Adicionar a CHECK como NOT VALID, aplicar a regra a novos INSERT/UPDATE e 
 prevention: "Avaliar sempre o estado dos dados existentes antes de validar constraints novas em migrations incrementais."
 early_detection: "Testar banco limpo e banco legado com linha inválida preservada, além de consultar pg_constraint.convalidated."
 limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
-evidence: "Aguardando cenários A/B contra PostgreSQL real; Docker Desktop/WSL indisponível nesta execução."
+evidence: "Harness scripts/customer-migration-compat-check.mjs criado; cenários A/B aguardam execução autoritativa no GitHub Actions porque Docker Desktop/WSL local estava indisponível."
 ```

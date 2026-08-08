@@ -52,6 +52,9 @@ jobs:
       - name: Verify database connection
         run: npm run db:health
 
+      - name: Test migration compatibility
+        run: npm run test:migration-compat
+
       - name: Test Customer persistence
         run: npm run test:customer
 

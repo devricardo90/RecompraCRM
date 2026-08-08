@@ -202,9 +202,12 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Preservação: nenhum Customer é apagado, alterado ou substituído por
   placeholder.
 - Testes obrigatórios: cenários A (banco limpo) e B (banco legado) contra
-  PostgreSQL real; ainda pendentes por indisponibilidade do Docker Desktop/WSL.
-- Estado: implementação local pronta, aguardando validação PostgreSQL, PR/CI e
-  revisão humana.
+  PostgreSQL real.
+- Harness: `scripts/customer-migration-compat-check.mjs`, exposto como
+  `npm run test:migration-compat` e inserido no workflow `Validate` depois de
+  migrations/health e antes de lint/typecheck/build.
+- Estado: implementação local pronta; a validação autoritativa será o GitHub
+  Actions, pois Docker/WSL local estava indisponível.
 
 ## Riscos residuais
 
@@ -222,10 +225,12 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 
 O piloto demonstrou implementação, migração, testes locais, documentação e
 recuperação estrutural satisfatórias. Os findings P1/P2 estão corrigidos no
-código local, mas a validação PostgreSQL do P1 ainda está pendente. O run `31117339641` é uma falha de
+código local, e o harness PostgreSQL foi adicionado, mas os cenários A/B ainda
+aguardam execução no CI. O run `31117339641` é uma falha de
 infraestrutura sem execução dos gates do projeto, não uma falha de Prisma,
 testes, lint, typecheck ou build. O bloqueio permanece até os cenários
-PostgreSQL do P1, PR/CI verdes e revisão humana.
+PostgreSQL do P1 executarem no GitHub Actions, o CI ficar verde e a revisão
+humana ocorrer.
 
 ## Condições para liberar TASK-04
 

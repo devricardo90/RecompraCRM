@@ -5,7 +5,7 @@ task: TASK-03
 branch: fix/TASK-03-reject-blank-customer-name
 baseline: a3292835905d58a169aede27c1a9c1e1f9d905dc
 mode: SUPERVISED_PILOT
-status: P1_FIX_IMPLEMENTED_LOCAL_PENDING_POSTGRES_VALIDATION
+status: P1_HARNESS_READY_PENDING_CI
 finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
 implementation_head: local_p1_fix_commit
 merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
@@ -14,7 +14,9 @@ ci_branch_run: 31116844373
 ci_branch_status: PASS
 ci_main_run: 31117339641
 ci_main_status: INFRASTRUCTURE_FAILURE
-p1_status: IMPLEMENTED_LOCAL_PENDING_POSTGRES_SCENARIOS_AND_CI
+p1_status: HARNESS_READY_PENDING_CI
+compatibility_harness: scripts/customer-migration-compat-check.mjs
+compatibility_ci_status: PENDING_PUSH
 playwright: NOT_REQUIRED_NO_UI_CHANGE
 next_eligible_task: PILOT_AUDIT
 blocked_tasks:
@@ -33,6 +35,19 @@ mantendo linhas legadas intactas e aplicando a regra a novos `INSERT` e
 `VALIDATE CONSTRAINT` automaticamente somente quando nenhuma existir. Enquanto
 houver legado inválido, a constraint permanece `NOT VALID` e a remediation deve
 ser feita com dados reais aprovados antes da validação definitiva.
+
+## Harness de compatibilidade
+
+`npm run test:migration-compat` cria dois bancos PostgreSQL isolados, executa
+`prisma migrate deploy` com a cadeia real e remove os bancos ao final. No
+cenário legado, uma cópia temporária contém somente as migrations anteriores;
+depois a migration `20260806204721_enforce_customer_name` real é aplicada.
+O harness confirma a preservação da linha inválida, `convalidated = false`,
+enforcement em novos registros e validação completa no banco limpo.
+
+O workflow `Validate` executa esse harness depois de migrations/health e antes
+dos gates de qualidade. Como o Docker/WSL local estava indisponível, a
+evidência autoritativa dos cenários A/B será o GitHub Actions.
 
 SQL final:
 
@@ -85,16 +100,18 @@ campos, dependências, Product, Sale, Stock ou UI.
 
 - `npm run db:generate` — PASS; Prisma Client 6.19.0.
 - `npm run db:validate` — PASS.
-- Cenário A — PENDENTE: Docker Desktop/WSL indisponível antes da execução.
-- Cenário B — PENDENTE: Docker Desktop/WSL indisponível antes da execução.
-- `npm run db:migrate` — PENDENTE; requer PostgreSQL real disponível.
-- `npm run db:health` — BLOCKED; não foi possível alcançar o PostgreSQL local.
-- `npm test` — BLOCKED por indisponibilidade do PostgreSQL, não por falha do teste.
+- `npm run test:migration-compat` — NÃO EXECUTADO localmente; requer PostgreSQL
+  real e será a evidência autoritativa do CI.
+- Cenário A — NÃO EXECUTADO localmente: Docker Desktop/WSL indisponível.
+- Cenário B — NÃO EXECUTADO localmente: Docker Desktop/WSL indisponível.
+- `npm run db:migrate` — NÃO EXECUTADO nesta validação local.
+- `npm run db:health` — NÃO EXECUTADO nesta validação local.
+- `npm test` — NÃO EXECUTADO nesta validação local.
 - `npm run lint` — PASS.
 - `npm run typecheck` — PASS.
 - `npm run build` — PASS; warning conhecido de múltiplos lockfiles.
-- `git diff --check` — será executado antes do commit.
-- Scan de segredos — será executado antes do commit.
+- `git diff --check` — PASS.
+- Scan de segredos — PASS.
 
 ### Cenários PostgreSQL obrigatórios
 
@@ -111,10 +128,10 @@ campos, dependências, Product, Sale, Stock ou UI.
 - TASK-03 continua mergeada em `main` no commit `b3d2f30`.
 - O CI verde da implementação original na branch, run `31116844373`, permanece evidência técnica aprovada.
 - O run da `main`, `31117339641`, permanece `INFRASTRUCTURE_FAILURE`; as duas tentativas não executaram gates do projeto.
-- O PR #7 continua aberto; a correção P1 ainda não foi publicada nem possui CI
-  próprio.
-- O veredito permanece `PILOT_BLOCKED` até os cenários PostgreSQL, PR/CI verdes
-  e revisão humana.
+- O PR #7 continua aberto; este harness será publicado no próprio PR #7 e
+  aguarda um novo CI.
+- O veredito permanece `PILOT_BLOCKED` até o harness executar os cenários A/B,
+  o CI ficar verde e a revisão humana ocorrer.
 - TASK-04 continua bloqueada e não foi iniciada.
 
 ## Playwright
