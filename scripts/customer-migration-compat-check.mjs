@@ -72,12 +72,16 @@ function createLegacyMigrationProject() {
   cpSync(schemaPath, join(tempRoot, "schema.prisma"));
   cpSync(join(migrationsRoot, "migration_lock.toml"), join(tempMigrations, "migration_lock.toml"));
 
-  for (const entry of readdirSync(migrationsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === NEW_MIGRATION) {
-      continue;
-    }
+  const migrationDirectories = readdirSync(migrationsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d+_.+$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  const targetIndex = migrationDirectories.indexOf(NEW_MIGRATION);
 
-    cpSync(join(migrationsRoot, entry.name), join(tempMigrations, entry.name), { recursive: true });
+  assert(targetIndex >= 0, `Target migration ${NEW_MIGRATION} was not found`);
+
+  for (const migrationName of migrationDirectories.slice(0, targetIndex)) {
+    cpSync(join(migrationsRoot, migrationName), join(tempMigrations, migrationName), { recursive: true });
   }
 
   return { root: tempRoot, schema: join(tempRoot, "schema.prisma") };
