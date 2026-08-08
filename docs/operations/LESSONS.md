@@ -128,5 +128,5 @@ fix: "Adicionar a CHECK como NOT VALID, aplicar a regra a novos INSERT/UPDATE e 
 prevention: "Avaliar sempre o estado dos dados existentes antes de validar constraints novas em migrations incrementais."
 early_detection: "Testar banco limpo e banco legado com linha inválida preservada, além de consultar pg_constraint.convalidated."
 limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
-evidence: "Harness scripts/customer-migration-compat-check.mjs criado; cenários A/B aguardam execução autoritativa no GitHub Actions porque Docker Desktop/WSL local estava indisponível."
+evidence: "Harness scripts/customer-migration-compat-check.mjs criado e limitado às migrations anteriores à migration alvo; run verde 31272281693 validou 859269b9dcb8697d4ac67cb7a6221831c5a29747, e nova validação é necessária após o commit ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255."
 ```

@@ -206,8 +206,12 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Harness: `scripts/customer-migration-compat-check.mjs`, exposto como
   `npm run test:migration-compat` e inserido no workflow `Validate` depois de
   migrations/health e antes de lint/typecheck/build.
-- Estado: implementação local pronta; a validação autoritativa será o GitHub
-  Actions, pois Docker/WSL local estava indisponível.
+- Implementation head: `1fdee1081895d0be6d5a7c59c2526c57aa2e3400`.
+- Harness fix head: `ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255`.
+- Último CI verde: run `31272281693`, validando o HEAD anterior
+  `859269b9dcb8697d4ac67cb7a6221831c5a29747`.
+- Estado: nova validação CI é necessária para os commits atuais; a validação
+  autoritativa será o GitHub Actions, pois Docker/WSL local estava indisponível.
 
 ## Riscos residuais
 
