@@ -132,9 +132,10 @@ async function runCleanScenario(admin, databaseName) {
     await assertNameRejected(client, "\t\t", "clean tab-only name");
     await assertNameRejected(client, "\n\r\t", "clean line-break-only name");
     await assertNameRejected(client, "\u00A0", "clean NBSP-only name");
+    await assertNameRejected(client, "\u0085", "clean NEXT LINE-only name");
     await assertNameRejected(client, "\u2007", "clean FIGURE SPACE-only name");
     await assertNameRejected(client, "\u202F", "clean NARROW NO-BREAK SPACE-only name");
-    await assertNameRejected(client, " \t\u00A0\u2007\u202F\n", "clean mixed Unicode whitespace-only name");
+    await assertNameRejected(client, " \t\u0085\u00A0\u2007\u202F\n", "clean mixed Unicode whitespace-only name");
 
     const unicodeCustomer = await client.customer.create({ data: { name: "Hélio José" } });
     assert(unicodeCustomer.name === "Hélio José", "Real Unicode name was not persisted on clean database");
@@ -164,7 +165,7 @@ async function runLegacyScenario(admin, databaseName) {
       `;
       [legacyUnicodeCustomer] = await beforeClient.$queryRaw`
         INSERT INTO "Customer" ("name", "createdAt", "updatedAt")
-        VALUES (${"\u00A0\u2007"}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES (${"\u0085\u00A0\u2007"}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING "id", "name"
       `;
     } finally {
@@ -192,16 +193,17 @@ async function runLegacyScenario(admin, databaseName) {
         WHERE "id" = ${legacyUnicodeCustomer.id}
       `;
       assert(legacyUnicodeAfter?.id === legacyUnicodeCustomer.id, "Legacy Unicode whitespace customer was deleted");
-      assert(legacyUnicodeAfter.name === "\u00A0\u2007", "Legacy Unicode whitespace customer name was changed");
+      assert(legacyUnicodeAfter.name === "\u0085\u00A0\u2007", "Legacy Unicode whitespace customer name was changed");
 
       await assertNameRejected(client, "", "legacy empty name");
       await assertNameRejected(client, "   ", "legacy space-only name");
       await assertNameRejected(client, "\t\t", "legacy tab-only name");
       await assertNameRejected(client, "\n\r\t", "legacy line-break-only name");
       await assertNameRejected(client, "\u00A0", "legacy NBSP-only name");
+      await assertNameRejected(client, "\u0085", "legacy NEXT LINE-only name");
       await assertNameRejected(client, "\u2007", "legacy FIGURE SPACE-only name");
       await assertNameRejected(client, "\u202F", "legacy NARROW NO-BREAK SPACE-only name");
-      await assertNameRejected(client, " \t\u00A0\u2007\u202F\n", "legacy mixed Unicode whitespace-only name");
+      await assertNameRejected(client, " \t\u0085\u00A0\u2007\u202F\n", "legacy mixed Unicode whitespace-only name");
 
       const normalCustomer = await client.customer.create({ data: { name: "New Normal Customer" } });
       assert(normalCustomer.name === "New Normal Customer", "Normal legacy-database customer was not persisted");

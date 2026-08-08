@@ -9,7 +9,7 @@ ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_name_not_blank";
 
 ALTER TABLE "Customer"
 ADD CONSTRAINT "Customer_name_not_blank"
-CHECK ("name" ~ E'[^ \\t\\n\\r\\x0B\\x0C\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]')
+CHECK ("name" ~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]')
 NOT VALID;
 
 -- Validate only when every existing row already satisfies the tighter rule.
@@ -18,7 +18,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM "Customer"
-    WHERE "name" !~ E'[^ \\t\\n\\r\\x0B\\x0C\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]'
+    WHERE "name" !~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]'
   ) THEN
     ALTER TABLE "Customer"
     VALIDATE CONSTRAINT "Customer_name_not_blank";
