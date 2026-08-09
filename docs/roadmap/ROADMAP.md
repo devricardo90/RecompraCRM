@@ -73,7 +73,15 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - done_when: fluxo de produtos e alertas básicos validados no navegador.
 - [ ] TASK-07 — Modelo de vendas
   - depends_on: TASK-03, TASK-05
-  - status: READY_TO_START
+  - status: VERIFIED_GREEN_AWAITING_REVIEW
+  - branch: feat/TASK-07-sales-model
+  - baseline: 5ce2365179b0b9519bb7312fed3990543043493c
+  - baseline_ci: Validate #50 / 31329344342 SUCCESS
+  - technical_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
+  - validation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
+  - validation: Validate #51 / 31330995290 SUCCESS
+  - pr: #11 DRAFT_AWAITING_REVIEW
+  - evidence: docs/evidence/TASK-07-validation.md
   - done_when: Sale e SaleItem persistidos com integridade.
 - [ ] TASK-08 — Transação de venda e estoque
   - depends_on: TASK-07
