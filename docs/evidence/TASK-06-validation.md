@@ -7,7 +7,8 @@
 - Mode: `CONTROLLED_AUTONOMOUS`
 - Baseline: `163ff93b27edd6d7ab76525318c323b46ebdfb8c`
 - Baseline CI: Validate #40 / `31319322422` — `SUCCESS`
-- Technical and validation head: `efc41c55def9cd0559a6219ea3999a224575dbb7`
+- Initial technical head: `efc41c55def9cd0559a6219ea3999a224575dbb7`
+- Reviewed-fix and validation head: `2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8`
 - Pull request: #10 — open and ready for review
 
 The implementation is limited to the Product interface and its Product API
@@ -22,6 +23,8 @@ workflows were not started.
 - Empty, loading and error states are represented, including retry behavior.
 - Low-stock status is shown when current stock is at or below the configured
   minimum.
+- Blank current or minimum stock fields are rejected before numeric coercion;
+  they cannot silently become zero.
 - Product API routes cover list/create/update and return validation, not-found
   and infrastructure responses with their intended status codes.
 - No `updatedAt` date is displayed; business timezone is not canonically
@@ -49,12 +52,13 @@ integration is evidenced by the remote CI below.
 
 ### GitHub Actions
 
-Validate #41 / run `31320545726` — `SUCCESS` for
-`efc41c55def9cd0559a6219ea3999a224575dbb7`.
+Validate #43 / run `31321978521` — `SUCCESS` for
+`2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8`.
 
 The run passed migrations, database health, migration compatibility, Customer
 and Product persistence, Customer and Product API integration, lint,
-typecheck and build against PostgreSQL.
+typecheck and build against PostgreSQL. Product API integration includes blank
+current-stock and minimum-stock payloads returning HTTP 400.
 
 ### Ephemeral Playwright
 
@@ -68,9 +72,11 @@ PASS without saved screenshots, traces, videos or test files:
 
 ## Review state and handoff
 
-Codex review was requested on PR #10 after the green technical CI and remains
-awaited. TASK-06 is technically validated but not closed until the independent
-review gate is complete. TASK-07 has not been started.
+Codex review was requested again on PR #10 after the green Validate #43, but
+no review for the new HEAD was published. A formal reviewer request returned
+HTTP 422 because `codex` is not a repository collaborator. TASK-06 is
+technically validated but not closed until the independent review gate is
+complete. TASK-07 has not been started.
 
 Next action: obtain the independent review for PR #10, address any findings
 within the Rick Loop attempt limit, then merge only after all gates remain

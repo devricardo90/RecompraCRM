@@ -64,9 +64,9 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - branch: feat/TASK-06-product-interface
   - baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
   - baseline_ci: Validate #40 / 31319322422 SUCCESS
-  - technical_head: efc41c55def9cd0559a6219ea3999a224575dbb7
-  - validation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
-  - validation: Validate #41 / 31320545726 SUCCESS
+  - technical_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
+  - validation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
+  - validation: Validate #43 / 31321978521 SUCCESS
   - pr: #10 OPEN_READY_FOR_REVIEW
   - done_when: fluxo de produtos e alertas básicos validados no navegador.
 - [ ] TASK-07 — Modelo de vendas

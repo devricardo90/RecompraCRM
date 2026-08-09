@@ -23,7 +23,7 @@ branch: feat/TASK-06-product-interface
 baseline_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: efc41c55def9cd0559a6219ea3999a224575dbb7
+last_green_validated_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 p1_finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
@@ -34,9 +34,9 @@ working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: TASK_06_TECHNICAL_VERIFIED_GREEN
 review_status: AWAITING_CODEX_REVIEW
-ci_run: 31320545726
+ci_run: 31321978521
 ci_status: SUCCESS
-last_green_ci_run: 31320545726
+last_green_ci_run: 31321978521
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 10
@@ -70,8 +70,8 @@ task_05_main_ci_run: 31319102311
 pr_9_status: MERGED
 task_06_branch: feat/TASK-06-product-interface
 task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
-task_06_implementation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
-task_06_validation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
+task_06_implementation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
+task_06_validation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
 task_06_evidence: docs/evidence/TASK-06-validation.md
 pr_10_status: OPEN_READY_FOR_REVIEW
 next_action: REQUEST_CODEX_REVIEW
@@ -89,9 +89,10 @@ TASK-05 foi implementada no commit `5c23f6dfc69669d9adf8143d5a41672d9da15336`
 e mergeada em `main` no commit `198b2f276389a5fa2f7fca10d4b5923194710fb7`.
 O Validate pós-merge #39 (`31319102311`) confirmou migrations, health,
 migration compatibility, Customer/Product persistence, Customer API, lint,
-typecheck e build com PostgreSQL real. A TASK-06 foi implementada no commit
-`efc41c55def9cd0559a6219ea3999a224575dbb7`; o Validate #41 (`31320545726`)
-confirmou os gates técnicos com PostgreSQL real. Playwright efêmero passou em
-desktop, mobile e short-landscape, sem overflow horizontal ou erros críticos
-de console. O PR #10 está aberto e pronto para revisão, com revisão Codex
-solicitada e ainda não publicada. TASK-07 permanece não iniciada.
+typecheck e build com PostgreSQL real. A TASK-06 foi corrigida no commit
+`2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8`, rejeitando campos de estoque
+vazios antes da coerção numérica e cobrindo o caso no harness da Product API.
+O Validate #43 (`31321978521`) confirmou os gates técnicos com PostgreSQL real.
+O PR #10 está aberto e pronto para revisão. A revisão Codex do novo HEAD não
+foi publicada; a solicitação formal falhou com HTTP 422 porque `codex` não é
+colaborador do repositório. TASK-07 permanece não iniciada.

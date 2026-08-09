@@ -13,7 +13,7 @@ baseline_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 branch: feat/TASK-06-product-interface
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: efc41c55def9cd0559a6219ea3999a224575dbb7
+last_green_validated_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 plan:
@@ -58,16 +58,16 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-06-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31320545726
+ci_run: 31321978521
 ci_status: SUCCESS
-last_green_ci_run: 31320545726
+last_green_ci_run: 31321978521
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 10
 current_task: TASK-06
 next_eligible_task: TASK-06
-technical_commit: efc41c55def9cd0559a6219ea3999a224575dbb7
-validation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
+technical_commit: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
+validation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
 pr_8_status: MERGED
 merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
@@ -82,8 +82,8 @@ task_05_merge_main_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
 task_05_main_ci_run: 31319102311
 task_06_branch: feat/TASK-06-product-interface
 task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
-task_06_implementation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
-task_06_validation_head: efc41c55def9cd0559a6219ea3999a224575dbb7
+task_06_implementation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
+task_06_validation_head: 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8
 evidence_task_06: docs/evidence/TASK-06-validation.md
 pr_10_status: OPEN_READY_FOR_REVIEW
 next_action: REQUEST_CODEX_REVIEW
@@ -96,9 +96,11 @@ TASK-04 foi mergeada pelo PR #8 em `main` no commit
 `8083428ad45b78eb18129ecd57a2abdc15455c61` foi validado pelo Validate #36
 (`31317857816`). A branch `feat/TASK-05-product-model` foi criada a partir
 dessa baseline. O Validate #40 (`31319322422`) está verde e a TASK-06 é a atividade corrente.
-A implementação técnica está no commit `efc41c55def9cd0559a6219ea3999a224575dbb7`.
-O Validate #41 (`31320545726`) terminou `SUCCESS` com migrations, health,
-persistência, integrações Customer/Product, lint, typecheck e build. Playwright
-efêmero passou em desktop, mobile e short-landscape. O PR #10 permanece aberto
-e pronto para revisão, com revisão Codex solicitada; ainda não há revisão
-publicada nem merge. TASK-07 não foi iniciada.
+A correção técnica está no commit `2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8`.
+O Validate #43 (`31321978521`) terminou `SUCCESS` com migrations, health,
+persistência, integrações Customer/Product, lint, typecheck e build; o P1 de
+campos de estoque vazios está coberto pela UI e pelo harness. Playwright
+efêmero passou em desktop, mobile e short-landscape. O PR #10 está aberto e
+pronto para revisão, mas a revisão Codex do novo HEAD está bloqueada
+externamente: `codex` não é colaborador e a solicitação formal retornou HTTP
+422. TASK-07 não foi iniciada.
