@@ -31,6 +31,8 @@ const emptyForm: ProductForm = {
   consumptionDays: "1",
 };
 
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
 async function readError(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;
   return payload?.error ?? fallback;
@@ -130,7 +132,13 @@ export default function ProductWorkspace() {
       setFormError("Informe o nome e a unidade do produto.");
       return;
     }
-    if (!values.every(Number.isInteger) || values[0] < 0 || values[1] < 0 || values[2] < 1) {
+    if (
+      !values.every(Number.isInteger) ||
+      values.some((value) => value > POSTGRES_INTEGER_MAX) ||
+      values[0] < 0 ||
+      values[1] < 0 ||
+      values[2] < 1
+    ) {
       setFormError("Confira os números de estoque e duração.");
       return;
     }
@@ -291,16 +299,16 @@ export default function ProductWorkspace() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="product-current-stock" className="text-sm font-semibold text-slate-800">Estoque atual</label>
-                  <input id="product-current-stock" name="currentStock" type="number" min="0" step="1" value={form.currentStock} onChange={(event) => setForm((current) => ({ ...current, currentStock: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                  <input id="product-current-stock" name="currentStock" type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={form.currentStock} onChange={(event) => setForm((current) => ({ ...current, currentStock: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                 </div>
                 <div>
                   <label htmlFor="product-minimum-stock" className="text-sm font-semibold text-slate-800">Estoque mínimo</label>
-                  <input id="product-minimum-stock" name="minimumStock" type="number" min="0" step="1" value={form.minimumStock} onChange={(event) => setForm((current) => ({ ...current, minimumStock: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                  <input id="product-minimum-stock" name="minimumStock" type="number" min="0" max={POSTGRES_INTEGER_MAX} step="1" value={form.minimumStock} onChange={(event) => setForm((current) => ({ ...current, minimumStock: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
                 </div>
               </div>
               <div>
                 <label htmlFor="product-consumption-days" className="text-sm font-semibold text-slate-800">Duração estimada (dias por unidade)</label>
-                <input id="product-consumption-days" name="consumptionDays" type="number" min="1" step="1" value={form.consumptionDays} onChange={(event) => setForm((current) => ({ ...current, consumptionDays: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                <input id="product-consumption-days" name="consumptionDays" type="number" min="1" max={POSTGRES_INTEGER_MAX} step="1" value={form.consumptionDays} onChange={(event) => setForm((current) => ({ ...current, consumptionDays: event.target.value }))} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 text-base text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
               </div>
               {formError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800" role="alert">{formError}</p>}
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">

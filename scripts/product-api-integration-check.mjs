@@ -105,6 +105,19 @@ try {
   }));
   assert(blankMinimumStock.status === 400, `blank minimum stock expected 400, received ${blankMinimumStock.status}`);
 
+  for (const [field, payload] of [
+    ["currentStock", { currentStock: 2_147_483_648, minimumStock: 0, consumptionDays: 1 }],
+    ["minimumStock", { currentStock: 0, minimumStock: 2_147_483_648, consumptionDays: 1 }],
+    ["consumptionDays", { currentStock: 0, minimumStock: 0, consumptionDays: 2_147_483_648 }],
+  ]) {
+    const oversized = await request(url, "/api/products", postOptions({
+      name: `Oversized POST ${field}`,
+      unit: "un",
+      ...payload,
+    }));
+    assert(oversized.status === 400, `oversized POST ${field} expected 400, received ${oversized.status}`);
+  }
+
   const listed = await request(url, "/api/products");
   assert(listed.status === 200 && Array.isArray(listed.body.products), "Product GET did not return products");
   const listedProduct = listed.body.products.find((product) => product.id === valid.body.product.id);
@@ -119,6 +132,19 @@ try {
   }));
   assert(updated.status === 200, `valid Product PUT expected 200, received ${updated.status}`);
   assert(updated.body.product.currentStock === 1, "Product PUT returned wrong current stock");
+
+  for (const [field, payload] of [
+    ["currentStock", { currentStock: 2_147_483_648, minimumStock: 2, consumptionDays: 45 }],
+    ["minimumStock", { currentStock: 1, minimumStock: 2_147_483_648, consumptionDays: 45 }],
+    ["consumptionDays", { currentStock: 1, minimumStock: 2, consumptionDays: 2_147_483_648 }],
+  ]) {
+    const oversized = await request(url, `/api/products/${valid.body.product.id}`, putOptions({
+      name: `Oversized PUT ${field}`,
+      unit: "un",
+      ...payload,
+    }));
+    assert(oversized.status === 400, `oversized PUT ${field} expected 400, received ${oversized.status}`);
+  }
 
   const missing = await request(url, "/api/products/999999999", putOptions({
     name: "Missing", unit: "un", currentStock: 1, minimumStock: 0, consumptionDays: 1,
