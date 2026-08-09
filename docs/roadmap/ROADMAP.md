@@ -60,9 +60,14 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - done_when: CRUD de produtos com estoque, mínimo e duração.
 - [ ] TASK-06 — Interface de produtos e estoque
   - depends_on: TASK-05
-  - status: READY_TO_START
-  - baseline: 198b2f276389a5fa2f7fca10d4b5923194710fb7
-  - baseline_ci: Validate #39 / 31319102311 SUCCESS
+  - status: VERIFIED_GREEN_AWAITING_REVIEW
+  - branch: feat/TASK-06-product-interface
+  - baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
+  - baseline_ci: Validate #40 / 31319322422 SUCCESS
+  - technical_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
+  - validation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
+  - validation: Validate #46 / 31325836264 SUCCESS
+  - pr: #10 OPEN_READY_FOR_REVIEW
   - done_when: fluxo de produtos e alertas básicos validados no navegador.
 - [ ] TASK-07 — Modelo de vendas
   - depends_on: TASK-03, TASK-05

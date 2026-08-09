@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Customer = {
   id: number;
@@ -153,14 +154,17 @@ export default function CustomerWorkspace() {
               <p className="text-xs font-medium text-slate-500">Relacionamentos que voltam</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreateForm}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
-          >
-            <span aria-hidden="true" className="text-lg leading-none">+</span>
-            Novo cliente
-          </button>
+          <nav className="flex flex-wrap items-center gap-2" aria-label="Navegação principal">
+            <Link href="/products" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Produtos</Link>
+            <button
+              type="button"
+              onClick={openCreateForm}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
+            >
+              <span aria-hidden="true" className="text-lg leading-none">+</span>
+              Novo cliente
+            </button>
+          </nav>
         </header>
 
         <section className="py-8 sm:py-10">

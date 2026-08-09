@@ -51,6 +51,7 @@ npm run db:migrate     # aplica migrações existentes sem gerar novas
 npm run db:health      # executa SELECT 1 usando uma conexão real
 npm run test:customer  # valida persistência e constraints do Customer
 npm run test:product   # valida persistência e constraints do Product
+npm run test:product-api # valida a API Product contra o PostgreSQL real
 npm run db:down        # para o container, preservando o volume local
 ```
 
@@ -62,8 +63,13 @@ local configurado por `DATABASE_URL`.
 O modelo `Product` exige `name`, `unit`, `currentStock`, `minimumStock` e
 `consumptionDays`. Estoque atual e mínimo não podem ser negativos, a duração
 de consumo deve ser positiva e nome/unidade não podem ser somente whitespace.
-As operações de venda, alertas e interface de produtos permanecem nas tasks
+As operações de venda e a redução automática de estoque permanecem nas tasks
 posteriores.
+
+A interface de produtos fica disponível em `http://localhost:3000/products` e
+permite cadastro, edição, busca, estados vazios/erro e sinalização de estoque
+menor ou igual ao mínimo. A redução automática de estoque continua reservada
+às tasks de venda.
 
 Para recriar o banco local do zero durante uma validação, use `docker compose down -v` e depois `npm run db:setup`. Esse comando remove apenas o volume local do Compose e não deve ser usado contra ambientes compartilhados.
 
