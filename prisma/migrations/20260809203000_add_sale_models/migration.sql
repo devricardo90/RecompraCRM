@@ -80,3 +80,16 @@ CREATE CONSTRAINT TRIGGER "SaleItem_preserves_sale_items"
 AFTER DELETE OR UPDATE OF "saleId" ON "SaleItem"
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION "ensure_sale_has_items"();
+
+-- Until TASK-08 defines stock restoration, deleting a Sale is prohibited even
+-- when its items are removed earlier in the same transaction.
+CREATE FUNCTION "block_sale_deletion"() RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Sale deletion requires an explicit stock-restoration policy'
+    USING ERRCODE = '23514';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Sale_deletion_blocked"
+BEFORE DELETE ON "Sale"
+FOR EACH ROW EXECUTE FUNCTION "block_sale_deletion"();

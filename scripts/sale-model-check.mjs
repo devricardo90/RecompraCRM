@@ -49,7 +49,6 @@ const suffix = `${Date.now()}-${process.pid}`;
 let customerId;
 let productAId;
 let productBId;
-const saleIds = [];
 
 try {
   const customer = await prisma.customer.create({
@@ -96,8 +95,6 @@ try {
     },
     include: { customer: true, items: { include: { product: true } } },
   });
-  saleIds.push(sale.id);
-
   assert(sale.customer.id === customerId, "Sale customer relation was not persisted");
   assert(sale.soldAt.getTime() === soldAt.getTime(), "Sale soldAt was not persisted");
   assert(sale.items.length === 2, "Sale did not persist both items");
@@ -127,10 +124,10 @@ try {
     SELECT COUNT(*)::int AS "count"
     FROM pg_trigger
     WHERE tgrelid IN ('"Sale"'::regclass, '"SaleItem"'::regclass)
-      AND tgname IN ('Sale_requires_item', 'SaleItem_preserves_sale_items')
+      AND tgname IN ('Sale_requires_item', 'SaleItem_preserves_sale_items', 'Sale_deletion_blocked')
       AND NOT tgisinternal
   `;
-  assert(triggerCount?.count === 2, "Sale item-count constraint triggers were not created");
+  assert(triggerCount?.count === 3, "Sale integrity triggers were not created");
 
   await assertRejected(
     () => prisma.sale.create({ data: { customerId, soldAt, status: "MODEL_TEST" } }),
@@ -196,6 +193,13 @@ try {
     () => prisma.sale.delete({ where: { id: sale.id } }),
     "Sale deletion before a stock-restoration policy exists",
   );
+  await assertRejected(
+    () => prisma.$transaction(async (transaction) => {
+      await transaction.saleItem.deleteMany({ where: { saleId: sale.id } });
+      await transaction.sale.delete({ where: { id: sale.id } });
+    }),
+    "transactional Sale deletion after removing all items",
+  );
 
   console.log("Sale persistence tests: PASS");
 } catch (error) {
@@ -203,17 +207,5 @@ try {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally {
-  if (saleIds.length > 0) {
-    await prisma.$transaction(async (transaction) => {
-      await transaction.saleItem.deleteMany({ where: { saleId: { in: saleIds } } });
-      await transaction.sale.deleteMany({ where: { id: { in: saleIds } } });
-    });
-  }
-  if (productAId || productBId) {
-    await prisma.product.deleteMany({ where: { id: { in: [productAId, productBId].filter(Boolean) } } });
-  }
-  if (customerId) {
-    await prisma.customer.delete({ where: { id: customerId } });
-  }
   await prisma.$disconnect();
 }
