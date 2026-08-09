@@ -7,8 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Technical marker only: TASK-02 needs a real, repeatable migration without
-// introducing Customer, Product, Sale, or other domain models prematurely.
+// Technical marker only: TASK-02 needs a real, repeatable migration.
 model DatabaseMarker {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
@@ -22,4 +21,15 @@ model Customer {
   phone     String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  unit                 String
+  currentStock         Int
+  minimumStock         Int
+  consumptionDays      Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
