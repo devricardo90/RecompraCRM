@@ -2,7 +2,12 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { ProductInputError, parseProductInput, parseProductRequest } from "../validation";
+import {
+  POSTGRES_INTEGER_MAX,
+  ProductInputError,
+  parseProductInput,
+  parseProductRequest,
+} from "../validation";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -12,7 +17,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const productId = Number(id);
 
-  if (!Number.isInteger(productId) || productId < 1) {
+  if (!Number.isInteger(productId) || productId < 1 || productId > POSTGRES_INTEGER_MAX) {
     return NextResponse.json({ error: "Produto inválido." }, { status: 400 });
   }
 

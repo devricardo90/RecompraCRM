@@ -146,6 +146,11 @@ try {
     assert(oversized.status === 400, `oversized PUT ${field} expected 400, received ${oversized.status}`);
   }
 
+  const oversizedId = await request(url, "/api/products/2147483648", putOptions({
+    name: "Oversized id", unit: "un", currentStock: 1, minimumStock: 0, consumptionDays: 1,
+  }));
+  assert(oversizedId.status === 400, `oversized Product id expected 400, received ${oversizedId.status}`);
+
   const missing = await request(url, "/api/products/999999999", putOptions({
     name: "Missing", unit: "un", currentStock: 1, minimumStock: 0, consumptionDays: 1,
   }));
