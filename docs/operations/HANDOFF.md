@@ -57,9 +57,9 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-04-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31310027955
+ci_run: 31310407319
 ci_status: SUCCESS
-last_green_ci_run: 31310027955
+last_green_ci_run: 31310407319
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -67,7 +67,7 @@ last_completed_task: TASK-03
 current_task: TASK-04
 next_eligible_task: TASK-05
 technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
-validation_head: 0038aaf2a0d01dc590432c3dacf2e3dfb8902456
+validation_head: c7f758b432544ad2900915c982b3a9fa08eacb2b
 pr_8_status: OPEN_DRAFT
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
 next_action: AWAIT_PR_8_REVIEW_OR_MERGE

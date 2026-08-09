@@ -9,7 +9,7 @@ mode: CONTROLLED_AUTONOMOUS
 status: VERIFIED_GREEN
 technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
 pr: 8
-ci_run: 31310027955
+ci_run: 31310407319
 ci_status: SUCCESS
 next_task: TASK-05
 ```
@@ -46,8 +46,8 @@ API adicionada:
 
 ## Validação remota
 
-Validate #28 (`31310027955`) concluiu `SUCCESS` no HEAD
-`0038aaf2a0d01dc590432c3dacf2e3dfb8902456`. O job executou com PostgreSQL
+Validate #29 (`31310407319`) concluiu `SUCCESS` no HEAD
+`c7f758b432544ad2900915c982b3a9fa08eacb2b`. O job executou com PostgreSQL
 real e aprovou migrations, database health, migration compatibility, Customer
 persistence, lint, typecheck e build.
 

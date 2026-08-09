@@ -32,9 +32,9 @@ working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: VERIFIED_GREEN_CI
 review_status: TASK_04_VERIFIED_GREEN_PR_8_OPEN
-ci_run: 31310027955
+ci_run: 31310407319
 ci_status: SUCCESS
-last_green_ci_run: 31310027955
+last_green_ci_run: 31310407319
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -50,7 +50,7 @@ lessons_validated:
   - LESSON-RCRM-0006
   - LESSON-RCRM-0007
 task_04_technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
-task_04_validation_head: 0038aaf2a0d01dc590432c3dacf2e3dfb8902456
+task_04_validation_head: c7f758b432544ad2900915c982b3a9fa08eacb2b
 task_04_evidence: docs/evidence/TASK-04-validation.md
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
 pr_8_status: OPEN_DRAFT
@@ -69,7 +69,7 @@ lint, typecheck e build em PASS. Os findings técnicos P1/P2 e todas as
 pendências técnicas do piloto estão encerrados. O modo é
 `CONTROLLED_AUTONOMOUS`. TASK-04 foi implementada no commit técnico
 `b3e87a062fb62ce5a97fbde0840db31851e9af28`, com lint, typecheck, build, Prisma
-generate/validate e Playwright efêmero em PASS. O Validate #28
-(`31310027955`) confirmou migrations, database health, migration compatibility,
+generate/validate e Playwright efêmero em PASS. O Validate #29
+(`31310407319`) confirmou migrations, database health, migration compatibility,
 Customer persistence, lint, typecheck e build com PostgreSQL real. O PR #8 está
 aberto em draft, sem merge; TASK-05 não foi iniciada.
