@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 17
+state_version: 21
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -13,15 +13,15 @@ completed_tasks:
   - TASK-03
 last_completed_task: TASK-03
 current_task: TASK-04
-current_task_status: READY_TO_START
-next_eligible_task: TASK-04
+current_task_status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW
+next_eligible_task: TASK-05
 attempt: 1
 max_attempts: 3
-branch: main
-baseline_head: 44ae41746869f5dcf439f8903ff4d6be254aab9a
+branch: feat/TASK-04-customer-interface
+baseline_head: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 44ae41746869f5dcf439f8903ff4d6be254aab9a
+last_green_validated_head: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 p1_finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
@@ -30,11 +30,11 @@ p2_finding: P2_BLANK_CUSTOMER_NAME
 p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
-validation_status: VERIFIED_GREEN_POSTGRES_CI
-review_status: PILOT_APPROVED
-ci_run: 31306424995
+validation_status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_CI
+review_status: TASK_04_FINAL_FINDINGS_CLOSED_AWAITING_CODEX_REVIEW
+ci_run: 31316500371
 ci_status: SUCCESS
-last_green_ci_run: 31306424995
+last_green_ci_run: 31316500371
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -49,7 +49,14 @@ lessons_validated:
   - LESSON-RCRM-0005
   - LESSON-RCRM-0006
   - LESSON-RCRM-0007
-next_action: START_TASK_04
+task_04_technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
+task_04_api_integration_head: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
+task_04_final_implementation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
+task_04_validation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
+task_04_evidence: docs/evidence/TASK-04-validation.md
+local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
+pr_8_status: OPEN_READY_FOR_REVIEW
+next_action: REQUEST_CODEX_REVIEW
 next_action_authorized: true
 updated_at: "2026-08-09T00:00:00+02:00"
 updated_by: ChatGPT
@@ -62,5 +69,13 @@ concedida. O Validate #26 (`31306424995`) concluiu `SUCCESS` em `main`, com
 migrations, database health, migration compatibility, Customer persistence,
 lint, typecheck e build em PASS. Os findings técnicos P1/P2 e todas as
 pendências técnicas do piloto estão encerrados. O modo é
-`CONTROLLED_AUTONOMOUS`, TASK-04 está pronta para iniciar e
-`next_action_authorized` é `true`.
+`CONTROLLED_AUTONOMOUS`. TASK-04 foi implementada no commit técnico
+`b3e87a062fb62ce5a97fbde0840db31851e9af28`, com lint, typecheck, build, Prisma
+generate/validate e Playwright efêmero em PASS. O Validate #33
+(`31316500371`) confirmou migrations, database health, migration compatibility,
+Customer persistence, Customer API integration, lint, typecheck e build com
+PostgreSQL real no HEAD `d34591a0fcae06b03fb2ab52a9c8d4acd7202e89`. Os cinco
+findings P2 finais foram corrigidos: Unicode White_Space/U+0085, JSON inválido,
+diálogo em viewport baixo e remoção do timezone não definido da UI. A exibição
+de datas permanece deferred até definição canônica do timezone. O PR #8 está
+pronto para revisão, sem merge; TASK-05 não foi iniciada.

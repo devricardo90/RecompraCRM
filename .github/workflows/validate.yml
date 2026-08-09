@@ -58,6 +58,9 @@ jobs:
       - name: Test Customer persistence
         run: npm run test:customer
 
+      - name: Test Customer API integration
+        run: npm run test:customer-api
+
       - name: Lint
         run: npm run lint
 
