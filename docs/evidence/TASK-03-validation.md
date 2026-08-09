@@ -5,21 +5,21 @@ task: TASK-03
 branch: fix/TASK-03-reject-blank-customer-name
 baseline: a3292835905d58a169aede27c1a9c1e1f9d905dc
 mode: SUPERVISED_PILOT
-status: P2_REVIEW_FIX_IMPLEMENTED_PENDING_CI
+status: ATOMIC_REPLACEMENT_IMPLEMENTED_PENDING_CI
 finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
-implementation_head: 1fdee1081895d0be6d5a7c59c2526c57aa2e3400
+implementation_head: ce516d44935c22db332bb226d2b84fd64739f308
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 859269b9dcb8697d4ac67cb7a6221831c5a29747
+last_green_validated_head: ce516d44935c22db332bb226d2b84fd64739f308
 merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
 pr_number: 7
 ci_branch_run: 31116844373
 ci_branch_status: PASS
 ci_main_run: 31117339641
 ci_main_status: INFRASTRUCTURE_FAILURE
-p1_status: HARNESS_READY_PENDING_CI
+p1_status: HARNESS_VALIDATED_ON_PRIOR_HEAD
 compatibility_harness: scripts/customer-migration-compat-check.mjs
-compatibility_ci_status: NEW_CI_REQUIRED_AFTER_REVIEW_FIX
-last_green_ci_run: 31272281693
+compatibility_ci_status: LAST_GREEN_FOR_CE516D4_NEW_CI_REQUIRED_AFTER_ATOMIC_FIX
+last_green_ci_run: 31278203432
 playwright: NOT_REQUIRED_NO_UI_CHANGE
 next_eligible_task: PILOT_AUDIT
 blocked_tasks:
@@ -49,30 +49,38 @@ O harness confirma a preservação da linha inválida, `convalidated = false`,
 enforcement em novos registros e validação completa no banco limpo.
 
 O workflow `Validate` executa esse harness depois de migrations/health e antes
-dos gates de qualidade. O run verde `31272281693` validou o HEAD anterior
-`859269b9dcb8697d4ac67cb7a6221831c5a29747`; os commits atuais exigem nova
+dos gates de qualidade. O run verde `31278203432` validou o HEAD anterior
+`ce516d44935c22db332bb226d2b84fd64739f308`, que contém a implementação
+Unicode/U+0085; os commits atuais exigem nova
 validação CI. Como o Docker/WSL local estava indisponível, a evidência
 autoritativa dos cenários A/B continua sendo o GitHub Actions.
 
-SQL final:
+SQL final da migration Unicode/U+0085:
 
 ```sql
+BEGIN;
+
+ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_name_not_blank";
+
 ALTER TABLE "Customer"
 ADD CONSTRAINT "Customer_name_not_blank"
-CHECK ("name" ~ '[^[:space:]]') NOT VALID;
+CHECK ("name" ~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]')
+NOT VALID;
 
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM "Customer"
-    WHERE "name" !~ '[^[:space:]]'
+    WHERE "name" !~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]'
   ) THEN
     ALTER TABLE "Customer"
     VALIDATE CONSTRAINT "Customer_name_not_blank";
   END IF;
 END
 $$;
+
+COMMIT;
 ```
 
 ## Finding P2 — preservado
@@ -134,9 +142,9 @@ campos, dependências, Product, Sale, Stock ou UI.
 - O CI verde da implementação original na branch, run `31116844373`, permanece evidência técnica aprovada.
 - O run da `main`, `31117339641`, permanece `INFRASTRUCTURE_FAILURE`; as duas tentativas não executaram gates do projeto.
 - O PR #7 continua aberto; o harness está publicado no próprio PR #7.
-- O CI verde `31272281693` permanece válido somente para
-  `859269b9dcb8697d4ac67cb7a6221831c5a29747`; uma nova validação é necessária
-  para os commits atuais.
+- O CI verde `31278203432` valida o HEAD anterior
+  `ce516d44935c22db332bb226d2b84fd64739f308`, que contém a implementação
+  Unicode/U+0085; uma nova validação é necessária para os commits atuais.
 - O veredito permanece `PILOT_BLOCKED` até o harness executar os cenários A/B,
   o CI ficar verde e a revisão humana ocorrer.
 - TASK-04 continua bloqueada e não foi iniciada.

@@ -71,8 +71,9 @@ na branch `fix/TASK-03-reject-blank-customer-name`, a partir da baseline
 `a3292835905d58a169aede27c1a9c1e1f9d905dc`, com uma constraint PostgreSQL
 versionada e testes determinísticos para nome omitido, vazio, espaços, tabs e
 quebras de linha. A validação local passou no commit técnico
-`7cb1255c1249b88e00b75c9c5cdfa73d0973a8ee`; a correção ainda aguarda PR/CI
-verde e revisão humana.
+`ce516d44935c22db332bb226d2b84fd64739f308`; o CI verde `31278203432` validou
+esse HEAD anterior, e a correção atômica atual ainda aguarda novo CI e revisão
+humana.
 
 ### TASK-01
 
@@ -187,7 +188,7 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
   linha rejeitados; regras de telefone preservadas.
 - Estado: correção implementada e validada localmente na branch isolada,
   aguardando PR e CI verdes.
-- Commit técnico: `7cb1255c1249b88e00b75c9c5cdfa73d0973a8ee`.
+- Commit técnico da implementação Unicode/U+0085: `ce516d44935c22db332bb226d2b84fd64739f308`.
 - Arquivos: `prisma/migrations/20260806204721_enforce_customer_name/migration.sql`,
   `scripts/customer-model-check.mjs` e documentação operacional.
 
@@ -206,11 +207,12 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Harness: `scripts/customer-migration-compat-check.mjs`, exposto como
   `npm run test:migration-compat` e inserido no workflow `Validate` depois de
   migrations/health e antes de lint/typecheck/build.
-- Implementation head: `1fdee1081895d0be6d5a7c59c2526c57aa2e3400`.
+- Implementation head: `ce516d44935c22db332bb226d2b84fd64739f308`.
 - Harness fix head: `ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255`.
-- Último CI verde: run `31272281693`, validando o HEAD anterior
-  `859269b9dcb8697d4ac67cb7a6221831c5a29747`.
-- Estado: nova validação CI é necessária para os commits atuais; a validação
+- Último CI verde: run `31278203432`, validando o HEAD anterior
+  `ce516d44935c22db332bb226d2b84fd64739f308`.
+- Estado: nova validação CI é necessária para os commits técnico e documental
+  atuais; a validação
   autoritativa será o GitHub Actions, pois Docker/WSL local estava indisponível.
 
 ## Riscos residuais
