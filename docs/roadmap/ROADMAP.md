@@ -3,7 +3,7 @@
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
-current_task: TASK-04
+current_task: TASK-05
 next_eligible_task: TASK-05
 
 ## Política
@@ -36,14 +36,17 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - status: COMPLETED
   - baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
   - technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
-  - validation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
-  - final_validation: Validate #33 / 31316500371 SUCCESS
-  - pr: #8 OPEN_READY_FOR_REVIEW
+  - final_implementation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
+  - validation_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
+  - merge_main: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
+  - final_validation: Validate #35 / 31317395962 SUCCESS
+  - pr: #8 MERGED
   - evidence: docs/evidence/TASK-04-validation.md
   - validation: lint/typecheck/build/Playwright/PostgreSQL/Customer API CI PASS
   - date_display: deferred until business timezone is canonically defined
 - [ ] TASK-05 — Modelo Product
   - depends_on: TASK-02
+  - status: READY_TO_START
   - done_when: CRUD de produtos com estoque, mínimo e duração.
 - [ ] TASK-06 — Interface de produtos e estoque
   - depends_on: TASK-05

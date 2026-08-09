@@ -6,11 +6,13 @@ branch: feat/TASK-04-customer-interface
 baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 baseline_ci: 31307415339
 mode: CONTROLLED_AUTONOMOUS
-status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW
+status: COMPLETED_MERGED_MAIN
 technical_commit: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
 pr: 8
-ci_run: 31316500371
+ci_run: 31317395962
 ci_status: SUCCESS
+merge_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
+pr_status: MERGED
 next_task: TASK-05
 ```
 
@@ -86,7 +88,9 @@ teste ou artefato Playwright foi salvo no repositório.
 
 ## Fechamento
 
-A TASK-04 está `FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW` no modo
-`CONTROLLED_AUTONOMOUS`. O PR #8 está aberto e pronto para revisão, sem merge.
-Nenhuma funcionalidade de Product, Sale ou Stock foi antecipada; TASK-05 não
-foi iniciada.
+A TASK-04 está `COMPLETED_MERGED_MAIN` no modo `CONTROLLED_AUTONOMOUS`. O PR #8
+foi mergeado em `main` no commit `19754d8d69c7d8d156ebeff5f42ef64a7c401814`.
+O Validate #35 (`31317395962`) confirmou a cadeia completa de gates com
+PostgreSQL real, e a revisão final Codex não encontrou major issues. Nenhuma
+funcionalidade de Product, Sale ou Stock foi antecipada; TASK-05 é a próxima
+task elegível e ainda não foi iniciada.
