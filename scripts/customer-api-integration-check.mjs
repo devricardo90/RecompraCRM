@@ -110,6 +110,15 @@ try {
   assert(created.body.customer.name === `API Customer ${suffix}`, "valid POST returned the wrong name");
   createdIds.push(created.body.customer.id);
 
+  const unicodeWhitespacePost = await request(url, "/api/customers", postOptions({ name: "\u0085" }));
+  assert(unicodeWhitespacePost.status === 400, `U+0085-only POST expected 400, received ${unicodeWhitespacePost.status}`);
+
+  const malformedPost = await request(url, "/api/customers", {
+    method: "POST",
+    body: '{"name":"truncated',
+  });
+  assert(malformedPost.status === 400, `malformed POST expected 400, received ${malformedPost.status}`);
+
   const invalid = await request(url, "/api/customers", postOptions({ name: "   " }));
   assert(invalid.status === 400, `blank-name POST expected 400, received ${invalid.status}`);
 
@@ -120,10 +129,11 @@ try {
   assert(duplicatePost.status === 409, `duplicate-phone POST expected 409, received ${duplicatePost.status}`);
 
   const second = await request(url, "/api/customers", postOptions({
-    name: `API Second ${suffix}`,
+    name: `Hélio José ${suffix}`,
     phone: secondPhone,
   }));
   assert(second.status === 201, `second valid POST expected 201, received ${second.status}`);
+  assert(second.body.customer.name === `Hélio José ${suffix}`, "real Unicode name was not accepted");
   createdIds.push(second.body.customer.id);
 
   const listed = await request(url, "/api/customers");
@@ -139,6 +149,18 @@ try {
   }));
   assert(updated.status === 200, `valid PUT expected 200, received ${updated.status}`);
   assert(updated.body.customer.phone === updatedPhone, "valid PUT returned the wrong phone");
+
+  const unicodeWhitespacePut = await request(url, `/api/customers/${created.body.customer.id}`, putOptions({
+    name: "\u0085",
+    phone: updatedPhone,
+  }));
+  assert(unicodeWhitespacePut.status === 400, `U+0085-only PUT expected 400, received ${unicodeWhitespacePut.status}`);
+
+  const malformedPut = await request(url, `/api/customers/${created.body.customer.id}`, {
+    method: "PUT",
+    body: '{"name":"truncated',
+  });
+  assert(malformedPut.status === 400, `malformed PUT expected 400, received ${malformedPut.status}`);
 
   const duplicatePut = await request(url, `/api/customers/${second.body.customer.id}`, putOptions({
     name: `API Second Conflict ${suffix}`,

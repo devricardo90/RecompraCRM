@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   CustomerInputError,
+  parseCustomerRequest,
   parseCustomerInput,
 } from "../validation";
 
@@ -20,7 +21,7 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const input = parseCustomerInput(await request.json());
+    const input = parseCustomerInput(await parseCustomerRequest(request));
     const customer = await prisma.customer.update({
       where: { id: customerId },
       data: input,

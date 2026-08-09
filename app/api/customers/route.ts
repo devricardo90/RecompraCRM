@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   CustomerInputError,
+  parseCustomerRequest,
   parseCustomerInput,
 } from "./validation";
 
@@ -26,7 +27,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const input = parseCustomerInput(await request.json());
+    const input = parseCustomerInput(await parseCustomerRequest(request));
     const customer = await prisma.customer.create({ data: input });
 
     return NextResponse.json({ customer }, { status: 201 });

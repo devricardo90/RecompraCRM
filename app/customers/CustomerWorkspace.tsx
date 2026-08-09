@@ -26,14 +26,6 @@ function getInitials(name: string) {
     .join("");
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 async function readError(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;
   return payload?.error ?? fallback;
@@ -248,7 +240,6 @@ export default function CustomerWorkspace() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
-                    <p className="text-xs text-slate-400">Atualizado em {formatDate(customer.updatedAt)}</p>
                     <button type="button" onClick={() => openEditForm(customer)} className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Editar</button>
                   </div>
                 </article>
@@ -259,8 +250,8 @@ export default function CustomerWorkspace() {
       </div>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-10 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-6" role="presentation">
-          <section className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="customer-form-title">
+        <div className="fixed inset-0 z-10 flex items-end justify-center overflow-y-auto bg-slate-950/40 p-4 sm:items-center sm:p-6" role="presentation">
+          <section className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl bg-white p-5 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-7" role="dialog" aria-modal="true" aria-labelledby="customer-form-title">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">{editingId ? "Editar cadastro" : "Novo cadastro"}</p>
