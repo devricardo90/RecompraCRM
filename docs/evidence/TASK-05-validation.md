@@ -6,11 +6,15 @@ branch: feat/TASK-05-product-model
 baseline: 8083428ad45b78eb18129ecd57a2abdc15455c61
 baseline_ci: 31317857816
 mode: CONTROLLED_AUTONOMOUS
-status: VERIFIED_GREEN_AWAITING_CODEX_REVIEW
+status: COMPLETED_MERGED_MAIN
 technical_commit: 5c23f6dfc69669d9adf8143d5a41672d9da15336
 pr: 9
-ci_run: 31318451893
+ci_run: 31319102311
 ci_status: SUCCESS
+technical_ci_run: 31318451893
+merge_main_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
+main_ci_run: 31319102311
+pr_status: MERGED
 next_task: TASK-06
 ```
 
@@ -72,6 +76,8 @@ contra PostgreSQL real:
 
 Playwright: `NOT_REQUIRED_NO_UI_CHANGE`.
 
-O PR #9 está aberto e pronto para revisão. A revisão Codex foi solicitada por
-comentário, mas ainda não foi publicada; a task permanece tecnicamente verde,
-aguardando esse gate. TASK-06 não foi iniciada.
+O PR #9 foi mergeado em `main` no commit
+`198b2f276389a5fa2f7fca10d4b5923194710fb7`. A revisão Codex não encontrou
+major issues. O Validate #39 (`31319102311`) confirmou novamente a cadeia
+completa contra PostgreSQL real. A TASK-05 está concluída; TASK-06 é a próxima
+task elegível e ainda não foi iniciada.
