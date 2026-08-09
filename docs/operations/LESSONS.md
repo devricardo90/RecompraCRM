@@ -130,3 +130,20 @@ early_detection: "Testar banco limpo e banco legado com linha inválida preserva
 limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
 evidence: "Harness scripts/customer-migration-compat-check.mjs criado e limitado às migrations anteriores à migration alvo; Validate #26 run 31306424995 concluiu SUCCESS na main 44ae41746869f5dcf439f8903ff4d6be254aab9a, com cenários A/B e migration compatibility PASS."
 ```
+
+### LESSON-RCRM-0008 — Alinhar ranges numéricos da API aos tipos do banco
+
+```yaml
+id: LESSON-RCRM-0008
+status: validated
+type: input_validation
+severity: high
+source_task: TASK-06
+symptom: "Number.isInteger aceitava valores acima do range PostgreSQL INTEGER, convertendo entrada inválida em erro Prisma/HTTP 503."
+root_cause: "A validação aplicava somente integralidade e limite mínimo, sem refletir o limite superior do tipo persistido, inclusive para IDs de rota."
+fix: "Aplicar o máximo 2147483647 a currentStock, minimumStock, consumptionDays e Product.id; manter os mínimos do domínio; cobrir POST e PUT contra PostgreSQL real."
+prevention: "Ao validar números de API, derivar limites inferiores do domínio e limites superiores do tipo de persistência, incluindo path parameters."
+early_detection: "Adicionar casos imediatamente acima do limite do banco e confirmar resposta 400 antes da chamada Prisma."
+limits: "Revalidar se os campos migrarem para BIGINT, Decimal ou outro tipo de armazenamento."
+evidence: "TASK-06: Product API integration local PASS e Validate #46 run 31325836264 SUCCESS no HEAD 7e1c9670535421af7bfce2e040bf306a2e783a08."
+```
