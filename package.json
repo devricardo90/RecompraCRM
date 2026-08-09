@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:customer",
     "test:customer": "node scripts/customer-model-check.mjs",
+    "test:customer-api": "node scripts/customer-api-integration-check.mjs",
     "test:migration-compat": "node scripts/customer-migration-compat-check.mjs",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
