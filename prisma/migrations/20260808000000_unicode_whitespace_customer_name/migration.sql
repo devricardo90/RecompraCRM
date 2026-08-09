@@ -5,6 +5,8 @@
 --
 -- The new pattern explicitly enumerates every Unicode White_Space code point so
 -- the check is deterministic regardless of server locale.
+BEGIN;
+
 ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_name_not_blank";
 
 ALTER TABLE "Customer"
@@ -25,3 +27,5 @@ BEGIN
   END IF;
 END
 $$;
+
+COMMIT;
