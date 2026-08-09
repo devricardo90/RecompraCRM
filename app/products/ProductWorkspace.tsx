@@ -120,6 +120,11 @@ export default function ProductWorkspace() {
     setFormError(null);
     setSuccessMessage(null);
 
+    if (!form.currentStock.trim() || !form.minimumStock.trim() || !form.consumptionDays.trim()) {
+      setFormError("Confira os números de estoque e duração.");
+      return;
+    }
+
     const values = [form.currentStock, form.minimumStock, form.consumptionDays].map(Number);
     if (!form.name.trim() || !form.unit.trim()) {
       setFormError("Informe o nome e a unidade do produto.");

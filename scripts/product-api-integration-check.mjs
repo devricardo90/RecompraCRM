@@ -95,6 +95,16 @@ try {
   }));
   assert(negative.status === 400, `negative stock expected 400, received ${negative.status}`);
 
+  const blankCurrentStock = await request(url, "/api/products", postOptions({
+    name: "Blank current stock", unit: "un", currentStock: "", minimumStock: 0, consumptionDays: 1,
+  }));
+  assert(blankCurrentStock.status === 400, `blank current stock expected 400, received ${blankCurrentStock.status}`);
+
+  const blankMinimumStock = await request(url, "/api/products", postOptions({
+    name: "Blank minimum stock", unit: "un", currentStock: 0, minimumStock: "", consumptionDays: 1,
+  }));
+  assert(blankMinimumStock.status === 400, `blank minimum stock expected 400, received ${blankMinimumStock.status}`);
+
   const listed = await request(url, "/api/products");
   assert(listed.status === 200 && Array.isArray(listed.body.products), "Product GET did not return products");
   const listedProduct = listed.body.products.find((product) => product.id === valid.body.product.id);
