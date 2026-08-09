@@ -36,11 +36,12 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - status: COMPLETED
   - baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
   - technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
-  - validation_head: c7f758b432544ad2900915c982b3a9fa08eacb2b
-  - final_validation: Validate #29 / 31310407319 SUCCESS
-  - pr: #8 OPEN_DRAFT
+  - validation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
+  - final_validation: Validate #33 / 31316500371 SUCCESS
+  - pr: #8 OPEN_READY_FOR_REVIEW
   - evidence: docs/evidence/TASK-04-validation.md
-  - validation: lint/typecheck/build/Playwright/PostgreSQL CI PASS
+  - validation: lint/typecheck/build/Playwright/PostgreSQL/Customer API CI PASS
+  - date_display: deferred until business timezone is canonically defined
 - [ ] TASK-05 — Modelo Product
   - depends_on: TASK-02
   - done_when: CRUD de produtos com estoque, mínimo e duração.

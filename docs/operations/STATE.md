@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 20
+state_version: 21
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -13,7 +13,7 @@ completed_tasks:
   - TASK-03
 last_completed_task: TASK-03
 current_task: TASK-04
-current_task_status: VERIFIED_GREEN
+current_task_status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW
 next_eligible_task: TASK-05
 attempt: 1
 max_attempts: 3
@@ -30,11 +30,11 @@ p2_finding: P2_BLANK_CUSTOMER_NAME
 p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
-validation_status: API_INTEGRATION_VERIFIED_GREEN_CI
-review_status: TASK_04_API_INTEGRATION_VERIFIED_PR_8_READY
-ci_run: 31313323944
+validation_status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_CI
+review_status: TASK_04_FINAL_FINDINGS_CLOSED_AWAITING_CODEX_REVIEW
+ci_run: 31316500371
 ci_status: SUCCESS
-last_green_ci_run: 31313323944
+last_green_ci_run: 31316500371
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -51,7 +51,8 @@ lessons_validated:
   - LESSON-RCRM-0007
 task_04_technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
 task_04_api_integration_head: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
-task_04_validation_head: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
+task_04_final_implementation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
+task_04_validation_head: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
 task_04_evidence: docs/evidence/TASK-04-validation.md
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
 pr_8_status: OPEN_READY_FOR_REVIEW
@@ -70,8 +71,11 @@ lint, typecheck e build em PASS. Os findings técnicos P1/P2 e todas as
 pendências técnicas do piloto estão encerrados. O modo é
 `CONTROLLED_AUTONOMOUS`. TASK-04 foi implementada no commit técnico
 `b3e87a062fb62ce5a97fbde0840db31851e9af28`, com lint, typecheck, build, Prisma
-generate/validate e Playwright efêmero em PASS. O Validate #31
-(`31313323944`) confirmou migrations, database health, migration compatibility,
+generate/validate e Playwright efêmero em PASS. O Validate #33
+(`31316500371`) confirmou migrations, database health, migration compatibility,
 Customer persistence, Customer API integration, lint, typecheck e build com
-PostgreSQL real no HEAD `abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132`. O PR #8 está
+PostgreSQL real no HEAD `d34591a0fcae06b03fb2ab52a9c8d4acd7202e89`. Os cinco
+findings P2 finais foram corrigidos: Unicode White_Space/U+0085, JSON inválido,
+diálogo em viewport baixo e remoção do timezone não definido da UI. A exibição
+de datas permanece deferred até definição canônica do timezone. O PR #8 está
 pronto para revisão, sem merge; TASK-05 não foi iniciada.

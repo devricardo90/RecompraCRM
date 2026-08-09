@@ -6,10 +6,10 @@ branch: feat/TASK-04-customer-interface
 baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 baseline_ci: 31307415339
 mode: CONTROLLED_AUTONOMOUS
-status: API_INTEGRATION_VERIFIED_GREEN
-technical_commit: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
+status: FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW
+technical_commit: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
 pr: 8
-ci_run: 31313323944
+ci_run: 31316500371
 ci_status: SUCCESS
 next_task: TASK-05
 ```
@@ -72,9 +72,21 @@ O smoke de UI usou respostas em memória somente no Playwright efêmero; a
 persistência real da API será confirmada pelo CI com PostgreSQL real. Nenhum
 teste ou artefato Playwright foi salvo no repositório.
 
+## Findings finais
+
+- P2-1: validação explícita de Unicode White_Space, incluindo U+0085, para
+  rejeitar nomes sem conteúdo com HTTP 400.
+- P2-2: exibição de `updatedAt` removida da UI; date display deferred until
+  the business timezone is canonically defined.
+- P2-3: JSON inválido ou truncado em POST/PUT retorna HTTP 400; falhas de
+  infraestrutura continuam retornando HTTP 503.
+- P2-4: diálogo limitado por `100dvh` com scroll vertical e validado em
+  landscape baixo.
+- P2-5: HEAD e CI desta implementação foram reconciliados no roadmap.
+
 ## Fechamento
 
-A TASK-04 está `API_INTEGRATION_VERIFIED_GREEN` no modo
+A TASK-04 está `FINAL_IMPLEMENTATION_VERIFIED_GREEN_AWAITING_REVIEW` no modo
 `CONTROLLED_AUTONOMOUS`. O PR #8 está aberto e pronto para revisão, sem merge.
 Nenhuma funcionalidade de Product, Sale ou Stock foi antecipada; TASK-05 não
 foi iniciada.
