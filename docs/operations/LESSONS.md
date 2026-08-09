@@ -145,5 +145,5 @@ fix: "Aplicar o máximo 2147483647 a currentStock, minimumStock, consumptionDays
 prevention: "Ao validar números de API, derivar limites inferiores do domínio e limites superiores do tipo de persistência, incluindo path parameters."
 early_detection: "Adicionar casos imediatamente acima do limite do banco e confirmar resposta 400 antes da chamada Prisma."
 limits: "Revalidar se os campos migrarem para BIGINT, Decimal ou outro tipo de armazenamento."
-evidence: "TASK-06: Product API integration local PASS e Validate #46 run 31325836264 SUCCESS no HEAD 7e1c9670535421af7bfce2e040bf306a2e783a08."
+evidence: "TASK-06: Product API integration local PASS; Validate #46 run 31325836264 SUCCESS no head técnico 7e1c9670535421af7bfce2e040bf306a2e783a08; Validate #49 run 31328149760 SUCCESS na main mergeada c9cb0fba8a907ce46d385c2e03fa7411b48c03c8."
 ```

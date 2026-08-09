@@ -3,17 +3,17 @@
 ```yaml
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
-loop_id: RCRM-TASK-06-PRODUCT-INTERFACE-ATTEMPT-01
-status: TASK_06_VERIFIED_GREEN_AWAITING_FINAL_CODEX_REVIEW
-task: TASK-06
+loop_id: RCRM-TASK-06-PRODUCT-INTERFACE-CLOSED
+status: TASK_06_MERGED_VERIFIED_GREEN
+task: TASK-07
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
 next_role: Autonomous Agent
-baseline_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
-branch: feat/TASK-06-product-interface
+baseline_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
+branch: main
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
+last_green_validated_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 plan:
@@ -32,9 +32,9 @@ changes:
   - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
   - "Interface Product implementada com lista, busca, cadastro, edição e alerta de estoque baixo."
   - "API Product valida payloads e IDs no range PostgreSQL signed 32-bit INTEGER."
-validation: TASK_06_TECHNICAL_VERIFIED_GREEN
+validation: TASK_06_MERGED_VERIFIED_GREEN
 playwright_ephemeral: PASS_DESKTOP_MOBILE_SHORT_LANDSCAPE
-review: AWAITING_FINAL_CODEX_REVIEW
+review: CODEX_FINAL_NO_MAJOR_ISSUES
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -65,16 +65,16 @@ lessons_created:
   - LESSON-RCRM-0008
 evidence: docs/evidence/TASK-06-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31325836264
+ci_run: 31328149760
 ci_status: SUCCESS
-last_green_ci_run: 31325836264
+last_green_ci_run: 31328149760
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 10
-current_task: TASK-06
-next_eligible_task: TASK-06
+current_task: TASK-07
+next_eligible_task: TASK-07
 technical_commit: 7e1c9670535421af7bfce2e040bf306a2e783a08
-validation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
+validation_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
 pr_8_status: MERGED
 merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 local_validation_blocker: NONE
@@ -90,26 +90,31 @@ task_05_main_ci_run: 31319102311
 task_06_branch: feat/TASK-06-product-interface
 task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 task_06_implementation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
-task_06_validation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
+task_06_validation_head: 4382895c8a78062453ebb474f57cab038dcdaf93
 task_06_integer_payload_fix_head: 428992761162576e656e015840730c478f060f85
 task_06_integer_id_fix_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
 evidence_task_06: docs/evidence/TASK-06-validation.md
-pr_10_status: OPEN_READY_FOR_REVIEW
-next_action: REQUEST_FINAL_CODEX_REVIEW
+task_06_merge_main_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
+task_06_main_ci_run: 31328149760
+pr_10_status: MERGED
+next_action: START_TASK_07
 next_action_authorized: true
-restart_command: git switch feat/TASK-06-product-interface && npm install
+restart_command: git switch main && git pull --ff-only origin main
 ```
 
 TASK-04 foi mergeada pelo PR #8 em `main` no commit
 `19754d8d69c7d8d156ebeff5f42ef64a7c401814`. O fechamento documental em
 `8083428ad45b78eb18129ecd57a2abdc15455c61` foi validado pelo Validate #36
 (`31317857816`). A branch `feat/TASK-05-product-model` foi criada a partir
-dessa baseline. O Validate #40 (`31319322422`) está verde e a TASK-06 é a atividade corrente.
+dessa baseline. O Validate #40 (`31319322422`) certificou a baseline usada pela TASK-06.
 A implementação técnica final está no commit
 `7e1c9670535421af7bfce2e040bf306a2e783a08`. O Validate #46
 (`31325836264`) terminou `SUCCESS` com migrations, health, persistência,
 integrações Customer/Product, lint, typecheck e build. Os campos numéricos e o
 ID de Product respeitam o range PostgreSQL `INTEGER`; payloads e IDs oversized
 retornam 400. Playwright efêmero passou em desktop, mobile e short-landscape.
-O PR #10 está aberto e pronto para a revisão Codex final. TASK-07 não foi
-iniciada.
+O Codex revisou o HEAD final `4382895c8a78062453ebb474f57cab038dcdaf93`
+sem major issues. O PR #10 foi mergeado em `main` no commit
+`c9cb0fba8a907ce46d385c2e03fa7411b48c03c8`; o Validate #49
+(`31328149760`) terminou `SUCCESS`. TASK-06 está concluída e TASK-07 é a
+próxima task elegível.

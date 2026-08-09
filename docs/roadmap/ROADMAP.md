@@ -3,8 +3,8 @@
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
-current_task: TASK-06
-next_eligible_task: TASK-06
+current_task: TASK-07
+next_eligible_task: TASK-07
 
 ## Política
 
@@ -58,19 +58,22 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - pr: #9 MERGED
   - evidence: docs/evidence/TASK-05-validation.md
   - done_when: CRUD de produtos com estoque, mínimo e duração.
-- [ ] TASK-06 — Interface de produtos e estoque
+- [x] TASK-06 — Interface de produtos e estoque
   - depends_on: TASK-05
-  - status: VERIFIED_GREEN_AWAITING_REVIEW
+  - status: COMPLETED
   - branch: feat/TASK-06-product-interface
   - baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
   - baseline_ci: Validate #40 / 31319322422 SUCCESS
   - technical_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
-  - validation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
-  - validation: Validate #46 / 31325836264 SUCCESS
-  - pr: #10 OPEN_READY_FOR_REVIEW
+  - reviewed_head: 4382895c8a78062453ebb474f57cab038dcdaf93
+  - validation_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
+  - validation: Validate #49 / 31328149760 SUCCESS
+  - merge_main: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
+  - pr: #10 MERGED
   - done_when: fluxo de produtos e alertas básicos validados no navegador.
 - [ ] TASK-07 — Modelo de vendas
   - depends_on: TASK-03, TASK-05
+  - status: READY_TO_START
   - done_when: Sale e SaleItem persistidos com integridade.
 - [ ] TASK-08 — Transação de venda e estoque
   - depends_on: TASK-07
