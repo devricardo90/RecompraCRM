@@ -1,8 +1,8 @@
 # Rick Autonomous Roadmap Loop — Auditoria Formal do Piloto
 
 Data da auditoria: 2026-08-09
-Modo preservado: `SUPERVISED_PILOT`
-Veredito: **PILOT_READY_FOR_HUMAN_APPROVAL**
+Modo: `CONTROLLED_AUTONOMOUS`
+Veredito: **PILOT_APPROVED**
 
 ## Escopo
 
@@ -10,13 +10,15 @@ Esta auditoria verificou a recuperação do repositório, a cadeia de merges, PR
 CI remoto, documentos operacionais, evidências, lessons, migrações PostgreSQL,
 gates locais e o mecanismo de bloqueio do Rick Loop para TASK-01, TASK-02 e
 TASK-03. Os findings técnicos P1/P2 da migration Customer foram corrigidos e
-validados, sem implementar funcionalidade de produto; TASK-04 não foi iniciada.
+validados, a aprovação humana final foi concedida e TASK-04 foi liberada para
+execução controlada autônoma, sem implementar funcionalidade de produto nesta
+auditoria.
 
 ## Baseline e recuperação
 
 - Branch local: `main`.
-- `HEAD`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
-- `origin/main`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
+- Merge/main validada: `44ae41746869f5dcf439f8903ff4d6be254aab9a`.
+- `origin/main` validada no mesmo commit antes do fechamento documental.
 - Working tree: limpo; `main` está `0 ahead / 0 behind` de `origin/main`.
 - `git fetch --all --prune`: PASS.
 - Branches remotas TASK-01, TASK-02 e TASK-03 existem.
@@ -33,7 +35,7 @@ validados, sem implementar funcionalidade de produto; TASK-04 não foi iniciada.
 |---|---|---|---|---|
 | TASK-01 | PR #4, merge `42784f0c70c3cd7a4a4e58abd8aa4343cacfdff5` | `2a98a2615dbd717af5e4466c52af915e9e98cc5a` | run `31039795434` | Merge concluído; CI success |
 | TASK-02 | PR #5, merge `712aae5f193e61cea6508b01d165480f3abe8e74` | `018153fd9cd9fae7f4d3bd5481102c2c3bd50330` | runs `31112180901` e `31113356008` | Merge concluído; CI success |
-| TASK-03 | PR #6, merge `b3d2f30ed9941c24b973c9addd7578e789d0730b`; PR #7 | `a2b443cc117c5332e7cd00242ef4c26d3771aded` | CI `31304186437` `SUCCESS` | Findings P1/P2 encerrados tecnicamente; aprovação humana pendente |
+| TASK-03 | PR #6, merge `b3d2f30ed9941c24b973c9addd7578e789d0730b`; PR #7 mergeado | `44ae41746869f5dcf439f8903ff4d6be254aab9a` | Validate #26 / `31306424995` `SUCCESS` | Findings P1/P2 encerrados; aprovação humana concedida |
 
 PRs auditados:
 
@@ -71,9 +73,9 @@ na branch `fix/TASK-03-reject-blank-customer-name`, a partir da baseline
 `a3292835905d58a169aede27c1a9c1e1f9d905dc`, com uma constraint PostgreSQL
 versionada e testes determinísticos para nome omitido, vazio, espaços, tabs e
 quebras de linha. A implementação Unicode/U+0085 e a correção atômica foram
-validadas no HEAD `a2b443cc117c5332e7cd00242ef4c26d3771aded` pelo CI
-`31304186437`, com migration compatibility e Customer persistence em PASS.
-Resta somente a aprovação humana final do piloto.
+validadas no HEAD de `main` `44ae41746869f5dcf439f8903ff4d6be254aab9a` pelo
+Validate #26 `31306424995`, com migration compatibility e Customer persistence
+em PASS. A aprovação humana final foi concedida.
 
 ### TASK-01
 
@@ -90,13 +92,11 @@ não `APPROVED`. O CI do PR e o CI do merge passaram.
 
 ### TASK-03
 
-`Customer`, a segunda migração, teste determinístico, documentação e CI estão
-presentes no commit de merge `b3d2f30`. O PR run `31116844373` passou. O
-workflow disparado pelo push da merge em `main` (`31117339641`) foi classificado
-como `INFRASTRUCTURE_FAILURE`: a tentativa 1 falhou em `Set up job` e a
-tentativa 2 foi cancelada antes de qualquer step. Nenhum gate de código foi
-executado nesse run; não houve falha de Prisma, testes, lint, typecheck ou
-build. Um novo push documental será usado para gerar um CI limpo na `main`.
+`Customer`, as migrações, testes determinísticos, documentação e correções do
+piloto estão presentes em `main` após o merge do PR #7 em
+`44ae41746869f5dcf439f8903ff4d6be254aab9a`. O Validate #26, run
+`31306424995`, concluiu `SUCCESS` em `main` e passou migrations, database
+health, migration compatibility, Customer persistence, lint, typecheck e build.
 
 ## Validação local na `main`
 
@@ -126,18 +126,18 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 
 | Capacidade | Resultado da auditoria |
 |---|---|
-| Identificar próxima task | PASS: STATE/HANDOFF identificam `PILOT_AUDIT`, com `TASK-04` como próxima elegível após aprovação humana. |
-| Bloquear TASK-04 | PASS: TASK-04 permanece bloqueada exclusivamente pelo gate humano final. |
+| Identificar próxima task | PASS: STATE/HANDOFF/ROADMAP identificam `TASK-04` como task corrente e elegível. |
+| Bloquear TASK-04 | PASS: a liberação ocorreu somente após aprovação humana final e CI main verde. |
 | Ler lessons antes da implementação | PASS estrutural: ordem obrigatória do skill e lessons/evidências registradas. |
 | Preservar baseline/branch | PASS: baselines, branches e commits são rastreáveis; merges squash explicam a ancestralidade. |
-| Executar gates | PASS: CI `31304186437` executou migration compatibility, Customer persistence, lint, typecheck e build. |
+| Executar gates | PASS: CI `31306424995` executou migrations, database health, migration compatibility, Customer persistence, lint, typecheck e build. |
 | Reproduzir migrações | PASS em PostgreSQL limpo com as duas migrações. |
 | Usar Playwright somente quando aplicável | PASS: tasks sem mudança de UI registram `NOT_REQUIRED_NO_UI_CHANGE`. |
 | Registrar evidence | PASS: três evidências de task e este relatório existem. |
 | Separar commit técnico/documental | PASS demonstrado na TASK-03 e preservado no histórico da branch. |
 | Recuperar interrupção sem repetir mutações | PASS estrutural, por commits atômicos, restart commands, working tree limpo e migrações versionadas; não foi feito crash-injection destrutivo. |
-| Parar em revisão | PASS intencional: modo continua `SUPERVISED_PILOT` e TASK-04 bloqueada. |
-| Avançar em modo autônomo | Não executado por restrição do piloto; requer decisão humana explícita após os bloqueadores. |
+| Parar em revisão | PASS: o piloto parou até a aprovação humana final explícita. |
+| Avançar em modo autônomo | LIBERADO: modo `CONTROLLED_AUTONOMOUS`, TASK-04 autorizada após CI main verde. |
 
 ## Findings
 
@@ -146,7 +146,7 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Severidade histórica: bloqueador temporário do gate formal.
 - Causa observada: run `31117339641` foi `INFRASTRUCTURE_FAILURE`; tentativa 1 falhou em `Set up job` e tentativa 2 foi cancelada sem steps.
 - Risco: encerrado pelo CI posterior do PR #7.
-- Correção aplicada: o run `31304186437` concluiu `SUCCESS` e executou os gates do projeto.
+- Correção aplicada: o Validate #26 `31306424995` concluiu `SUCCESS` e executou os gates do projeto.
 - Arquivos afetados: `docs/evidence/PILOT-AUDIT.md`, `docs/operations/STATE.md`, `docs/operations/HANDOFF.md` e `docs/evidence/TASK-03-validation.md`; nenhum código.
 - Evidência: migration compatibility, Customer persistence, lint, typecheck e build em `PASS`.
 
@@ -157,20 +157,17 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
   branch TASK-03, `remote_review_pass_awaiting_merge` e `TASK_03_MERGE_REQUIRED`.
 - Risco: encerrado; os documentos operacionais foram reconciliados neste
   fechamento documental e não há mutação técnica pendente.
-- Correção aplicada: STATE/HANDOFF registram `PILOT_AUDIT`, aprovação humana
-  pendente, `TASK-04` bloqueada e modo `SUPERVISED_PILOT`.
+- Correção aplicada: STATE/HANDOFF registram `TASK-04` como corrente, aprovação
+  humana concedida e modo `CONTROLLED_AUTONOMOUS`.
 
-### PILOT-AUDIT-003 — WARNING — revisão formal não está representada como APPROVED
+### PILOT-AUDIT-003 — RESOLVED — aprovação humana final do piloto
 
-- Severidade: média.
+- Severidade histórica: média.
 - Causa observada: a API do GitHub classifica as revisões dos PRs #4, #5 e #6
   como `COMMENTED`; PR #5 contém comentário humano de aprovação técnica, mas
   PR #6 tem somente review automatizado `COMMENTED`.
-- Risco: a evidência de revisão independente não é equivalente a um estado
-  formal `APPROVED`.
-- Correção necessária: registrar aprovação humana explícita ou definir e
-  documentar que o comentário humano supervisionado é o gate aceito.
-- Novo teste do piloto: nova revisão humana do piloto; não exige teste de código.
+- Risco: encerrado pela aprovação humana final explicitamente concedida.
+- Correção aplicada: piloto aprovado após PR #7 mergeado e Validate #26 verde.
 
 ### PILOT-AUDIT-004 — RESOLVED P2 — Customer aceitava nome sem conteúdo
 
@@ -181,7 +178,7 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
   `CHECK ("name" ~ '[^[:space:]]')`.
 - Testes: nome normal aceito; nome omitido, vazio, espaços, tabs e quebras de
   linha rejeitados; regras de telefone preservadas.
-- Estado: tecnicamente encerrado; CI `31304186437` concluiu `SUCCESS`.
+- Estado: tecnicamente encerrado; Validate #26 `31306424995` concluiu `SUCCESS`.
 - Commit técnico da implementação Unicode/U+0085: `ce516d44935c22db332bb226d2b84fd64739f308`.
 - Arquivos: `prisma/migrations/20260806204721_enforce_customer_name/migration.sql`,
   `scripts/customer-model-check.mjs` e documentação operacional.
@@ -197,42 +194,45 @@ O build emitiu somente o warning conhecido de múltiplos lockfiles, com
 - Preservação: nenhum Customer é apagado, alterado ou substituído por
   placeholder.
 - Testes: cenários A (banco limpo) e B (banco legado) contra PostgreSQL real
-  passaram no CI `31304186437`.
+  passaram no Validate #26 `31306424995`.
 - Harness: `scripts/customer-migration-compat-check.mjs`, exposto como
   `npm run test:migration-compat` e inserido no workflow `Validate` depois de
   migrations/health e antes de lint/typecheck/build.
 - Atomic implementation head: `6f24ffc0b32ec69daa405e6977283cc9a27e7427`.
 - Harness fix head: `ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255`.
-- Último CI verde: run `31304186437`, validando o HEAD
-  `a2b443cc117c5332e7cd00242ef4c26d3771aded`.
+- Último CI verde: Validate #26, run `31306424995`, validando o HEAD de `main`
+  `44ae41746869f5dcf439f8903ff4d6be254aab9a`.
 - Estado: migration compatibility e preservação de dados legados passaram no
   CI; não há blocker técnico remanescente.
 
 ## Riscos residuais
 
-- O modo continua `SUPERVISED_PILOT`; nenhuma transição autônoma foi feita.
+- O modo foi transicionado para `CONTROLLED_AUTONOMOUS` após aprovação humana.
 - O warning de lockfile superior permanece operacionalmente inofensivo, mas deve
   ser tratado antes de depender de inferência automática do workspace.
 - As branches históricas permanecem no remoto após squash merge; isso é
   rastreabilidade, não conteúdo divergente na árvore da `main`.
-- TASK-04 permanece bloqueada exclusivamente até a aprovação humana final do
-  piloto.
+- O novo commit documental de fechamento ainda deve obter seu Validate verde
+  antes da criação da branch isolada da TASK-04.
 
 ## Veredito
 
-**PILOT_READY_FOR_HUMAN_APPROVAL**
+**PILOT_APPROVED**
 
 O piloto demonstrou implementação, migração, testes determinísticos,
-documentação e recuperação estrutural satisfatórias. Os findings técnicos P1/P2
-estão encerrados. O CI `31304186437` concluiu `SUCCESS` para o HEAD
-`a2b443cc117c5332e7cd00242ef4c26d3771aded`, com cenários PostgreSQL A/B,
-migration compatibility, Customer persistence, lint, typecheck e build em
-`PASS`. O único gate remanescente é a aprovação humana final; o modo continua
-`SUPERVISED_PILOT` e TASK-04 permanece bloqueada.
+documentação e recuperação estrutural satisfatórias. A aprovação humana final
+foi concedida. O PR #7 foi mergeado em `main` no commit
+`44ae41746869f5dcf439f8903ff4d6be254aab9a`. O Validate #26, run
+`31306424995`, concluiu `SUCCESS`, com migrations, database health, migration
+compatibility, Customer persistence, lint, typecheck e build em `PASS`.
+Todos os findings P1/P2 e pendências técnicas do piloto estão encerrados.
+TASK-04 está liberada para execução em modo `CONTROLLED_AUTONOMOUS`, após o
+Validate verde do commit documental deste fechamento.
 
 ## Condições para liberar TASK-04
 
-1. Registrar a aprovação humana final do piloto e revisar este veredito.
-2. Manter o modo `SUPERVISED_PILOT` até decisão explícita sobre a próxima fase.
-3. Somente depois autorizar TASK-04; até lá ela permanece bloqueada e não foi
-   iniciada.
+1. Obter Validate verde para o commit documental de fechamento na `main`.
+2. Confirmar `main` alinhada com `origin/main` e criar
+   `feat/TASK-04-customer-interface` a partir do novo HEAD verde.
+3. Ler STATE, HANDOFF, LESSONS, ROADMAP e source of truth antes de iniciar
+   TASK-04 em modo `CONTROLLED_AUTONOMOUS`.

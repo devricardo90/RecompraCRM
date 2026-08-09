@@ -2,8 +2,9 @@
 
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
-mode: SUPERVISED_PILOT
-next_eligible_task: PILOT_AUDIT
+mode: CONTROLLED_AUTONOMOUS
+current_task: TASK-04
+next_eligible_task: TASK-04
 
 ## Política
 
@@ -20,17 +21,19 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - verified_head: 712aae5f193e61cea6508b01d165480f3abe8e74
   - review: PR #5 aprovado tecnicamente; CI remoto 31112180901 PASS; integrada em main.
   - evidence: docs/evidence/TASK-02-validation.md
-- [ ] TASK-03 — Modelo Customer
+- [x] TASK-03 — Modelo Customer
   - depends_on: TASK-02
   - done_when: CRUD e validações de cliente passam.
-  - status: IMPLEMENTED_AND_VALIDATED_PENDING_PILOT_AUDIT
+  - status: COMPLETED
   - baseline: 712aae5f193e61cea6508b01d165480f3abe8e74
-  - implementation_head: cd80bd6
+  - implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
+  - merge_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
+  - final_validation: Validate #26 / 31306424995 SUCCESS
   - evidence: docs/evidence/TASK-03-validation.md
 - [ ] TASK-04 — Interface de clientes
   - depends_on: TASK-03
   - done_when: lista, cadastro, edição, busca e empty state validados no navegador.
-  - blocked_until: PILOT_AUDIT
+  - status: READY_TO_START
 - [ ] TASK-05 — Modelo Product
   - depends_on: TASK-02
   - done_when: CRUD de produtos com estoque, mínimo e duração.

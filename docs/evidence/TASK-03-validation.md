@@ -2,30 +2,30 @@
 
 ```yaml
 task: TASK-03
-branch: fix/TASK-03-reject-blank-customer-name
+branch: main
+implementation_branch: fix/TASK-03-reject-blank-customer-name
 baseline: a3292835905d58a169aede27c1a9c1e1f9d905dc
-mode: SUPERVISED_PILOT
-status: PILOT_READY_FOR_HUMAN_APPROVAL
+mode: CONTROLLED_AUTONOMOUS
+status: COMPLETED
 finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: a2b443cc117c5332e7cd00242ef4c26d3771aded
+last_green_validated_head: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
 pr_number: 7
 ci_branch_run: 31116844373
 ci_branch_status: PASS
 ci_main_run: 31117339641
 ci_main_status: INFRASTRUCTURE_FAILURE
-ci_run: 31304186437
+merge_main_head: 44ae41746869f5dcf439f8903ff4d6be254aab9a
+ci_run: 31306424995
 ci_status: SUCCESS
 p1_status: TECHNICALLY_CLOSED_CI_PASS
 compatibility_harness: scripts/customer-migration-compat-check.mjs
 compatibility_ci_status: PASS
-last_green_ci_run: 31304186437
+last_green_ci_run: 31306424995
 playwright: NOT_REQUIRED_NO_UI_CHANGE
 next_eligible_task: TASK-04
-blocked_tasks:
-  - TASK-04
 ```
 
 ## Finding P1
@@ -50,12 +50,12 @@ depois a migration `20260806204721_enforce_customer_name` real é aplicada.
 O harness confirma a preservação da linha inválida, `convalidated = false`,
 enforcement em novos registros e validação completa no banco limpo.
 
-O workflow `Validate` executa esse harness depois de migrations/health e antes
-dos gates de qualidade. O run `31304186437` concluiu `SUCCESS` e validou o
-HEAD `a2b443cc117c5332e7cd00242ef4c26d3771aded`, incluindo a implementação
-atômica `6f24ffc0b32ec69daa405e6977283cc9a27e7427`. Migration compatibility,
-cenários PostgreSQL A/B e Customer persistence foram `PASS`. Como o Docker/WSL
-local estava indisponível, essa é a evidência autoritativa do PostgreSQL.
+O workflow `Validate` executou esse harness depois de migrations/health e antes
+dos gates de qualidade. O Validate #26, run `31306424995`, concluiu `SUCCESS`
+na `main` em `44ae41746869f5dcf439f8903ff4d6be254aab9a`, incluindo a
+implementação atômica `6f24ffc0b32ec69daa405e6977283cc9a27e7427`.
+Migration compatibility, cenários PostgreSQL A/B e Customer persistence foram
+`PASS`. Esta é a validação final pós-merge do piloto.
 
 SQL final da migration Unicode/U+0085:
 
@@ -121,7 +121,7 @@ campos, dependências, Product, Sale, Stock ou UI.
 - Cenário B — NÃO EXECUTADO localmente: Docker Desktop/WSL indisponível.
 - `npm run db:migrate` — NÃO EXECUTADO nesta validação local.
 - `npm run db:health` — NÃO EXECUTADO nesta validação local.
-- `npm test` — PASS no CI `31304186437`; não executado localmente por falta de PostgreSQL.
+- `npm test` — PASS no CI `31306424995`.
 - `npm run lint` — PASS.
 - `npm run typecheck` — PASS.
 - `npm run build` — PASS; warning conhecido de múltiplos lockfiles.
@@ -130,27 +130,27 @@ campos, dependências, Product, Sale, Stock ou UI.
 
 ### Cenários PostgreSQL obrigatórios
 
-- Cenário A — PASS no CI `31304186437`: banco limpo, constraint validada e nomes
+- Cenário A — PASS no CI `31306424995`: banco limpo, constraint validada e nomes
   vazios/whitespace rejeitados.
-- Cenário B — PASS no CI `31304186437`: linha legada preservada, migration
+- Cenário B — PASS no CI `31306424995`: linha legada preservada, migration
   bem-sucedida, novos inválidos rejeitados e `convalidated = false` quando
   aplicável.
-- Migration compatibility — PASS no CI `31304186437`.
-- Customer persistence — PASS no CI `31304186437`.
-- Docker/WSL permanece indisponível localmente, sem bloquear a validação remota.
+- Migration compatibility — PASS no CI `31306424995`.
+- Customer persistence — PASS no CI `31306424995`.
 
 ## Revisão remota e estado do piloto
 
-- TASK-03 continua mergeada em `main` no commit `b3d2f30`.
+- TASK-03 e sua correção do piloto estão mergeadas em `main`; o PR #7 foi
+  mergeado no commit `44ae41746869f5dcf439f8903ff4d6be254aab9a`.
 - O CI verde da implementação original na branch, run `31116844373`, permanece evidência técnica aprovada.
 - O run da `main`, `31117339641`, permanece `INFRASTRUCTURE_FAILURE`; as duas tentativas não executaram gates do projeto.
 - O PR #7 continua aberto; o harness está publicado no próprio PR #7.
-- O CI `31304186437` concluiu `SUCCESS` para o HEAD
-  `a2b443cc117c5332e7cd00242ef4c26d3771aded`.
-- Os findings técnicos P1/P2 estão encerrados; o piloto está
-  `PILOT_READY_FOR_HUMAN_APPROVAL`.
-- TASK-04 continua bloqueada exclusivamente pela aprovação humana final e não
-  foi iniciada.
+- O Validate #26, run `31306424995`, concluiu `SUCCESS` para o HEAD de `main`
+  `44ae41746869f5dcf439f8903ff4d6be254aab9a`.
+- A aprovação humana final foi concedida e os findings técnicos P1/P2 estão
+  encerrados; o piloto está `PILOT_APPROVED`.
+- TASK-04 é a próxima task elegível e será iniciada após o CI verde do commit
+  documental de fechamento.
 
 ## Playwright
 

@@ -118,7 +118,7 @@ evidence: "TASK-03 P2: migração 20260806204721_enforce_customer_name aplicada 
 
 ```yaml
 id: LESSON-RCRM-0007
-status: pending_ci_validation
+status: validated
 type: database_migration
 severity: critical
 source_task: TASK-03-P1-FIX
@@ -128,5 +128,5 @@ fix: "Adicionar a CHECK como NOT VALID, aplicar a regra a novos INSERT/UPDATE e 
 prevention: "Avaliar sempre o estado dos dados existentes antes de validar constraints novas em migrations incrementais."
 early_detection: "Testar banco limpo e banco legado com linha inválida preservada, além de consultar pg_constraint.convalidated."
 limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
-evidence: "Harness scripts/customer-migration-compat-check.mjs criado e limitado às migrations anteriores à migration alvo; run verde 31272281693 validou 859269b9dcb8697d4ac67cb7a6221831c5a29747, e nova validação é necessária após o commit ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255."
+evidence: "Harness scripts/customer-migration-compat-check.mjs criado e limitado às migrations anteriores à migration alvo; Validate #26 run 31306424995 concluiu SUCCESS na main 44ae41746869f5dcf439f8903ff4d6be254aab9a, com cenários A/B e migration compatibility PASS."
 ```
