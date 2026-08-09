@@ -63,7 +63,7 @@ local configurado por `DATABASE_URL`.
 O modelo `Product` exige `name`, `unit`, `currentStock`, `minimumStock` e
 `consumptionDays`. Estoque atual e mínimo não podem ser negativos, a duração
 de consumo deve ser positiva e nome/unidade não podem ser somente whitespace.
-As operações de venda, alertas e interface de produtos permanecem nas tasks
+As operações de venda e a redução automática de estoque permanecem nas tasks
 posteriores.
 
 A interface de produtos fica disponível em `http://localhost:3000/products` e
