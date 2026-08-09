@@ -7,7 +7,8 @@
 - Branch: `feat/TASK-07-sales-model`
 - Baseline: `5ce2365179b0b9519bb7312fed3990543043493c`
 - Baseline CI: Validate #50 / `31329344342` — `SUCCESS`
-- Technical head: `693c4504a6799fefdb28e0fff70fe37c1c780495`
+- Initial technical head: `693c4504a6799fefdb28e0fff70fe37c1c780495`
+- Transactional-deletion fix head: `e1f4899f0425232dbc76c4236e654792f86e5835`
 - Pull request: #11
 
 The local SDD and the canonical Google Doc `Fonte da Verdade - Recompra CRM`
@@ -26,6 +27,8 @@ remains TASK-09.
   cannot be removed before TASK-08 defines stock-restoration behavior.
 - A deferred PostgreSQL constraint trigger permits atomic nested creation while
   preventing any committed Sale from existing without at least one item.
+- A `BEFORE DELETE` trigger blocks Sale deletion even when every SaleItem is
+  removed earlier in the same transaction.
 - No stock mutation, repurchase formula, Sale API or Sale UI was implemented.
 
 ## Deterministic validation
@@ -66,7 +69,16 @@ The run passed migration deploy, database health, migration compatibility,
 Customer/Product/Sale persistence, Customer/Product API integration, lint,
 typecheck and build against PostgreSQL 16.
 
+Codex reviewed `50eeff525423aaf50baca158522f0c0b895e8f28` and found that a
+transaction could remove all items before deleting the parent Sale. The P2 was
+fixed in `e1f4899f0425232dbc76c4236e654792f86e5835`; the harness now executes
+that exact sequence and proves rejection.
+
+Validate #53 / run `31332166675` — `SUCCESS` for
+`e1f4899f0425232dbc76c4236e654792f86e5835`.
+
 ## Status
 
-TASK-07 is technically verified green and awaits independent Codex review.
+TASK-07 is technically verified green after correction attempt 1 and awaits a
+new independent Codex review.
 TASK-08 has not been started.

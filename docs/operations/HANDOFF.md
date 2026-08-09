@@ -3,7 +3,7 @@
 ```yaml
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
-loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-01
+loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-02
 status: TASK_07_VERIFIED_GREEN_AWAITING_REVIEW
 task: TASK-07
 mode: CONTROLLED_AUTONOMOUS
@@ -13,7 +13,7 @@ baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
 branch: feat/TASK-07-sales-model
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
+last_green_validated_head: e1f4899f0425232dbc76c4236e654792f86e5835
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 plan:
@@ -34,6 +34,7 @@ changes:
   - "API Product valida payloads e IDs no range PostgreSQL signed 32-bit INTEGER."
   - "Sale e SaleItem persistidos com FKs restritivas, quantidade positiva e trigger diferido de ao menos um item."
   - "Harness Sale integrado ao npm test e ao Validate."
+  - "Trigger BEFORE DELETE bloqueia exclusão da Sale mesmo após remoção transacional dos itens."
 validation: TASK_07_TECHNICAL_VERIFIED_GREEN
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
 review: AWAITING_CODEX_REVIEW
@@ -67,16 +68,16 @@ lessons_created:
   - LESSON-RCRM-0008
 evidence: docs/evidence/TASK-07-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31330995290
+ci_run: 31332166675
 ci_status: SUCCESS
-last_green_ci_run: 31330995290
+last_green_ci_run: 31332166675
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
 current_task: TASK-07
 next_eligible_task: TASK-07
-technical_commit: 693c4504a6799fefdb28e0fff70fe37c1c780495
-validation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
+technical_commit: e1f4899f0425232dbc76c4236e654792f86e5835
+validation_head: e1f4899f0425232dbc76c4236e654792f86e5835
 pr_8_status: MERGED
 merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 local_validation_blocker: NONE
@@ -101,9 +102,10 @@ task_06_main_ci_run: 31328149760
 pr_10_status: MERGED
 task_07_branch: feat/TASK-07-sales-model
 task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
-task_07_implementation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
-task_07_validation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
-task_07_ci_run: 31330995290
+task_07_implementation_head: e1f4899f0425232dbc76c4236e654792f86e5835
+task_07_validation_head: e1f4899f0425232dbc76c4236e654792f86e5835
+task_07_ci_run: 31332166675
+task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 evidence_task_07: docs/evidence/TASK-07-validation.md
 pr_11_status: DRAFT_AWAITING_DOCUMENTATION
 next_action: PUBLISH_TASK_07_DOCUMENTATION_AND_REQUEST_REVIEW
@@ -127,7 +129,8 @@ sem major issues. O PR #10 foi mergeado em `main` no commit
 `c9cb0fba8a907ce46d385c2e03fa7411b48c03c8`; o Validate #49
 (`31328149760`) terminou `SUCCESS`. TASK-06 está concluída e TASK-07 é a
 próxima task elegível. A TASK-07 está implementada em
-`693c4504a6799fefdb28e0fff70fe37c1c780495`; o Validate #51
-(`31330995290`) passou com PostgreSQL real. Sale/SaleItem possuem relações
-restritivas, quantidade positiva e ao menos um item por venda. TASK-08 não foi
-iniciada; o próximo gate é a revisão independente do PR #11.
+`693c4504a6799fefdb28e0fff70fe37c1c780495`. O P2 de exclusão transacional foi
+corrigido em `e1f4899f0425232dbc76c4236e654792f86e5835`; o Validate #53
+(`31332166675`) passou com PostgreSQL real. Sale/SaleItem possuem relações
+restritivas, quantidade positiva, ao menos um item e bloqueio de exclusão da
+Sale. TASK-08 não foi iniciada; o próximo gate é nova revisão do PR #11.

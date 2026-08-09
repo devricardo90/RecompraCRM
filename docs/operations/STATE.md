@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 28
+state_version: 29
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -18,13 +18,13 @@ last_completed_task: TASK-06
 current_task: TASK-07
 current_task_status: VERIFIED_GREEN_AWAITING_REVIEW
 next_eligible_task: TASK-07
-attempt: 1
+attempt: 2
 max_attempts: 3
 branch: feat/TASK-07-sales-model
 baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
+last_green_validated_head: e1f4899f0425232dbc76c4236e654792f86e5835
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 p1_finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
@@ -35,9 +35,9 @@ working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: TASK_07_TECHNICAL_VERIFIED_GREEN
 review_status: AWAITING_CODEX_REVIEW
-ci_run: 31330995290
+ci_run: 31332166675
 ci_status: SUCCESS
-last_green_ci_run: 31330995290
+last_green_ci_run: 31332166675
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
@@ -82,14 +82,15 @@ task_06_main_ci_run: 31328149760
 pr_10_status: MERGED
 task_07_branch: feat/TASK-07-sales-model
 task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
-task_07_implementation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
-task_07_validation_head: 693c4504a6799fefdb28e0fff70fe37c1c780495
-task_07_ci_run: 31330995290
+task_07_implementation_head: e1f4899f0425232dbc76c4236e654792f86e5835
+task_07_validation_head: e1f4899f0425232dbc76c4236e654792f86e5835
+task_07_ci_run: 31332166675
+task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_evidence: docs/evidence/TASK-07-validation.md
 pr_11_status: DRAFT_AWAITING_DOCUMENTATION
 next_action: PUBLISH_TASK_07_DOCUMENTATION_AND_REQUEST_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-09T21:20:00+02:00"
+updated_at: "2026-08-09T21:35:00+02:00"
 updated_by: ChatGPT
 ```
 
@@ -112,7 +113,9 @@ Playwright efêmero desktop/mobile também passaram. O Codex revisou o HEAD fina
 mergeado em `main` no commit `c9cb0fba8a907ce46d385c2e03fa7411b48c03c8`,
 e o Validate #49 (`31328149760`) terminou `SUCCESS`. TASK-06 está concluída;
 TASK-07 foi implementada em `693c4504a6799fefdb28e0fff70fe37c1c780495`.
-O Validate #51 (`31330995290`) confirmou as seis migrations, health,
+O P2 de exclusão transacional foi corrigido em
+`e1f4899f0425232dbc76c4236e654792f86e5835`. O Validate #53 (`31332166675`)
+confirmou as seis migrations, health,
 compatibilidade, persistência Customer/Product/Sale, APIs existentes, lint,
 typecheck e build contra PostgreSQL real. Playwright não é aplicável porque não
 houve alteração de UI. TASK-08 permanece não iniciada até revisão e merge da
