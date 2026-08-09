@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-04-CUSTOMER-INTERFACE-ATTEMPT-01
-status: TASK_04_VERIFIED_GREEN_PR_OPEN
+status: TASK_04_API_INTEGRATION_VERIFIED_PR_READY
 task: TASK-04
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -32,9 +32,9 @@ changes:
   - "STATE, evidence, HANDOFF, PILOT-AUDIT e LESSONS atualizados."
   - "Interface Customer implementada com lista, cadastro, edição, busca e empty state."
   - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
-validation: VERIFIED_GREEN_CI
+validation: API_INTEGRATION_VERIFIED_GREEN_CI
 playwright_ephemeral: PASS_DESKTOP_MOBILE_EPHEMERAL
-review: TASK_04_VERIFIED_GREEN_PR_8_OPEN
+review: TASK_04_API_INTEGRATION_VERIFIED_PR_8_READY
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -43,6 +43,7 @@ findings:
   - "Validate #26 / CI 31306424995 SUCCESS em main."
   - "Migrations, database health, migration compatibility, Customer persistence, lint, typecheck e build: PASS."
   - "TASK-04 technical commit: b3e87a062fb62ce5a97fbde0840db31851e9af28."
+  - "Customer API integration harness: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132."
   - "PostgreSQL local indisponível; persistência real foi confirmada no CI."
 lessons_read:
   - LESSON-RCRM-0001
@@ -57,9 +58,9 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-04-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31310407319
+ci_run: 31313323944
 ci_status: SUCCESS
-last_green_ci_run: 31310407319
+last_green_ci_run: 31313323944
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -67,10 +68,10 @@ last_completed_task: TASK-03
 current_task: TASK-04
 next_eligible_task: TASK-05
 technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
-validation_head: c7f758b432544ad2900915c982b3a9fa08eacb2b
-pr_8_status: OPEN_DRAFT
+validation_head: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
+pr_8_status: OPEN_READY_FOR_REVIEW
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
-next_action: AWAIT_PR_8_REVIEW_OR_MERGE
-next_action_authorized: false
+next_action: REQUEST_CODEX_REVIEW
+next_action_authorized: true
 restart_command: git switch feat/TASK-04-customer-interface && npm install
 ```

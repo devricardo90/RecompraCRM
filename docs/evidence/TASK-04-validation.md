@@ -6,10 +6,10 @@ branch: feat/TASK-04-customer-interface
 baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 baseline_ci: 31307415339
 mode: CONTROLLED_AUTONOMOUS
-status: VERIFIED_GREEN
-technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
+status: API_INTEGRATION_VERIFIED_GREEN
+technical_commit: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132
 pr: 8
-ci_run: 31310407319
+ci_run: 31313323944
 ci_status: SUCCESS
 next_task: TASK-05
 ```
@@ -43,13 +43,17 @@ API adicionada:
 - Scan de segredos — PASS.
 - `npm test` — BLOQUEADO localmente: PostgreSQL indisponível no Docker/WSL.
 - `npm run db:health` — BLOQUEADO localmente pela mesma indisponibilidade.
+- `npm run test:customer-api` — BLOQUEADO localmente pela mesma indisponibilidade; o
+  harness iniciou o Next e alcançou as rotas, que responderam 503 sem banco.
 
 ## Validação remota
 
-Validate #29 (`31310407319`) concluiu `SUCCESS` no HEAD
-`c7f758b432544ad2900915c982b3a9fa08eacb2b`. O job executou com PostgreSQL
+Validate #31 (`31313323944`) concluiu `SUCCESS` no HEAD
+`abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132`. O job executou com PostgreSQL
 real e aprovou migrations, database health, migration compatibility, Customer
-persistence, lint, typecheck e build.
+persistence, Customer API integration, lint, typecheck e build. O novo step
+exercitou as rotas reais `GET /api/customers`, `POST /api/customers` e
+`PUT /api/customers/:id`.
 
 ## Playwright efêmero
 
@@ -70,6 +74,7 @@ teste ou artefato Playwright foi salvo no repositório.
 
 ## Fechamento
 
-A TASK-04 está `VERIFIED_GREEN` no modo `CONTROLLED_AUTONOMOUS`. O PR #8 está
-aberto em draft, sem merge. Nenhuma funcionalidade de Product, Sale ou Stock
-foi antecipada.
+A TASK-04 está `API_INTEGRATION_VERIFIED_GREEN` no modo
+`CONTROLLED_AUTONOMOUS`. O PR #8 está aberto e pronto para revisão, sem merge.
+Nenhuma funcionalidade de Product, Sale ou Stock foi antecipada; TASK-05 não
+foi iniciada.
