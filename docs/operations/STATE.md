@@ -14,7 +14,7 @@ completed_tasks:
   - TASK-04
 last_completed_task: TASK-04
 current_task: TASK-05
-current_task_status: READY_TO_START
+current_task_status: VERIFIED_GREEN_AWAITING_CODEX_REVIEW
 next_eligible_task: TASK-05
 attempt: 1
 max_attempts: 3
@@ -31,14 +31,14 @@ p2_finding: P2_BLANK_CUSTOMER_NAME
 p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
-validation_status: TASK_05_BASELINE_VERIFIED_GREEN
-review_status: TASK_05_IMPLEMENTATION_IN_PROGRESS
-ci_run: 31317857816
+validation_status: TASK_05_TECHNICAL_VERIFIED_GREEN
+review_status: AWAITING_CODEX_REVIEW
+ci_run: 31318451893
 ci_status: SUCCESS
-last_green_ci_run: 31317857816
+last_green_ci_run: 31318451893
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
-pr_number: 8
+pr_number: 9
 pr_7_status: MERGED
 merge_main_head: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 clean_main_ci_required: false
@@ -61,7 +61,11 @@ task_04_merge_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 task_04_main_ci_run: 31317395962
 task_05_branch: feat/TASK-05-product-model
 task_05_baseline: 8083428ad45b78eb18129ecd57a2abdc15455c61
-next_action: IMPLEMENT_TASK_05
+task_05_implementation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+task_05_validation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+task_05_evidence: docs/evidence/TASK-05-validation.md
+pr_9_status: OPEN_READY_FOR_REVIEW
+next_action: REQUEST_CODEX_REVIEW
 next_action_authorized: true
 updated_at: "2026-08-09T14:15:00+02:00"
 updated_by: ChatGPT
@@ -72,5 +76,8 @@ O PR #7 foi mergeado em `44ae41746869f5dcf439f8903ff4d6be254aab9a` e o PR #8
 foi mergeado em `19754d8d69c7d8d156ebeff5f42ef64a7c401814`. O fechamento
 documental em `main` está no commit `8083428ad45b78eb18129ecd57a2abdc15455c61`
 e o Validate #36 (`31317857816`) concluiu `SUCCESS`. A branch isolada da
-TASK-05 foi criada a partir dessa baseline verde; a implementação Product
-ainda está em andamento e não inclui UI, Sale ou Stock operacional.
+TASK-05 foi implementada no commit `5c23f6dfc69669d9adf8143d5a41672d9da15336`.
+O Validate #37 (`31318451893`) confirmou migrations, health, migration
+compatibility, Customer/Product persistence, Customer API, lint, typecheck e
+build com PostgreSQL real. A task aguarda somente revisão Codex; não foi
+marcada como concluída e TASK-06 não foi iniciada.

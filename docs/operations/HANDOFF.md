@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-04-CUSTOMER-INTERFACE-ATTEMPT-01
-status: TASK_05_IMPLEMENTATION_IN_PROGRESS
+status: TASK_05_VERIFIED_GREEN_AWAITING_CODEX_REVIEW
 task: TASK-05
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -29,9 +29,9 @@ changes:
   - "STATE, evidence, HANDOFF, PILOT-AUDIT e LESSONS atualizados."
   - "Interface Customer implementada com lista, cadastro, edição, busca e empty state."
   - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
-validation: TASK_05_BASELINE_VERIFIED_GREEN
-playwright_ephemeral: PASS_DESKTOP_MOBILE_EPHEMERAL
-review: TASK_05_NOT_YET_REVIEWED
+validation: TASK_05_TECHNICAL_VERIFIED_GREEN
+playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
+review: AWAITING_CODEX_REVIEW
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -57,23 +57,27 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-04-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31317857816
+ci_run: 31318451893
 ci_status: SUCCESS
-last_green_ci_run: 31317857816
+last_green_ci_run: 31318451893
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
-pr_number: 8
+pr_number: 9
 last_completed_task: TASK-04
 current_task: TASK-05
 next_eligible_task: TASK-05
-technical_commit: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89
-validation_head: 8083428ad45b78eb18129ecd57a2abdc15455c61
+technical_commit: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+validation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
 pr_8_status: MERGED
 merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
 task_05_branch: feat/TASK-05-product-model
 task_05_baseline: 8083428ad45b78eb18129ecd57a2abdc15455c61
-next_action: IMPLEMENT_TASK_05
+pr_9_status: OPEN_READY_FOR_REVIEW
+task_05_implementation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+task_05_validation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+evidence_task_05: docs/evidence/TASK-05-validation.md
+next_action: REQUEST_CODEX_REVIEW
 next_action_authorized: true
 restart_command: git switch feat/TASK-05-product-model && npm install
 ```
@@ -82,4 +86,6 @@ TASK-04 foi mergeada pelo PR #8 em `main` no commit
 `19754d8d69c7d8d156ebeff5f42ef64a7c401814`. O fechamento documental em
 `8083428ad45b78eb18129ecd57a2abdc15455c61` foi validado pelo Validate #36
 (`31317857816`). A branch `feat/TASK-05-product-model` foi criada a partir
-dessa baseline; a implementação do modelo Product é a atividade corrente.
+dessa baseline. O commit `5c23f6dfc69669d9adf8143d5a41672d9da15336` e o
+Validate #37 (`31318451893`) estão verdes; falta somente a revisão Codex antes
+de concluir a task. TASK-06 permanece não iniciada.

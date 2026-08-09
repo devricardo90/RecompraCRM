@@ -46,10 +46,14 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - date_display: deferred until business timezone is canonically defined
 - [ ] TASK-05 — Modelo Product
   - depends_on: TASK-02
-  - status: IN_PROGRESS
+  - status: VERIFIED_GREEN_AWAITING_REVIEW
   - branch: feat/TASK-05-product-model
   - baseline: 8083428ad45b78eb18129ecd57a2abdc15455c61
   - baseline_ci: Validate #36 / 31317857816 SUCCESS
+  - technical_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+  - validation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
+  - validation: Validate #37 / 31318451893 SUCCESS
+  - pr: #9 OPEN_READY_FOR_REVIEW
   - done_when: CRUD de produtos com estoque, mínimo e duração.
 - [ ] TASK-06 — Interface de produtos e estoque
   - depends_on: TASK-05
