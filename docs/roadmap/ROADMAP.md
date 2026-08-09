@@ -33,7 +33,11 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
 - [ ] TASK-04 — Interface de clientes
   - depends_on: TASK-03
   - done_when: lista, cadastro, edição, busca e empty state validados no navegador.
-  - status: READY_TO_START
+  - status: IMPLEMENTED_PENDING_CI
+  - baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
+  - technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
+  - evidence: docs/evidence/TASK-04-validation.md
+  - validation: lint/typecheck/build/Playwright PASS; PostgreSQL deferred to CI
 - [ ] TASK-05 — Modelo Product
   - depends_on: TASK-02
   - done_when: CRUD de produtos com estoque, mínimo e duração.
