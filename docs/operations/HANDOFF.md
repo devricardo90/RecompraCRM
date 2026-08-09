@@ -4,23 +4,24 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-04-CUSTOMER-INTERFACE-ATTEMPT-01
-status: TASK_05_COMPLETED_MAIN_GREEN_TASK_06_READY
+status: TASK_06_IMPLEMENTATION_IN_PROGRESS
 task: TASK-06
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
 next_role: Autonomous Agent
-baseline_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
+baseline_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
+branch: feat/TASK-06-product-interface
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
+last_green_validated_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 plan:
-  - adicionar somente o modelo Product definido no SDD
-  - persistir nome, unidade, estoque atual, estoque mínimo e duração estimada
-  - preservar estoque não negativo e tipos coerentes para a previsão futura
-  - criar migração versionada e teste determinístico contra PostgreSQL real
-  - validar a cadeia completa de migrações e os gates do projeto
+  - criar API mínima de Product para leitura, cadastro e edição persistentes
+  - entregar tela `/products` mobile-first com lista, cadastro e edição
+  - mostrar estado vazio, loading, erro e alerta de estoque baixo
+  - validar integração da interface com PostgreSQL via API e navegador
+  - manter vendas, redução de estoque e dashboards futuros fora do escopo
 changes:
   - "Migração 20260806204721_enforce_customer_name usa NOT VALID e validação condicional."
   - "Harness scripts/customer-migration-compat-check.mjs cria bancos isolados e executa migrate deploy real."
@@ -29,9 +30,9 @@ changes:
   - "STATE, evidence, HANDOFF, PILOT-AUDIT e LESSONS atualizados."
   - "Interface Customer implementada com lista, cadastro, edição, busca e empty state."
   - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
-validation: MAIN_MERGE_VERIFIED_GREEN
+validation: TASK_06_BASELINE_VERIFIED_GREEN
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
-review: FINAL_CODEX_REVIEW_NO_MAJOR_ISSUES
+review: TASK_06_NOT_YET_REVIEWED
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -57,9 +58,9 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-04-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31319102311
+ci_run: 31319322422
 ci_status: SUCCESS
-last_green_ci_run: 31319102311
+last_green_ci_run: 31319322422
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 9
@@ -79,17 +80,17 @@ evidence_task_05: docs/evidence/TASK-05-validation.md
 last_completed_task: TASK-05
 task_05_merge_main_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
 task_05_main_ci_run: 31319102311
-task_06_baseline: 198b2f276389a5fa2f7fca10d4b5923194710fb7
-next_action: START_TASK_06
+task_06_branch: feat/TASK-06-product-interface
+task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
+next_action: IMPLEMENT_TASK_06
 next_action_authorized: true
-restart_command: git switch main && git pull --ff-only origin main
+restart_command: git switch feat/TASK-06-product-interface && npm install
 ```
 
 TASK-04 foi mergeada pelo PR #8 em `main` no commit
 `19754d8d69c7d8d156ebeff5f42ef64a7c401814`. O fechamento documental em
 `8083428ad45b78eb18129ecd57a2abdc15455c61` foi validado pelo Validate #36
 (`31317857816`). A branch `feat/TASK-05-product-model` foi criada a partir
-dessa baseline. O commit `5c23f6dfc69669d9adf8143d5a41672d9da15336`, o Validate
-#37 (`31318451893`) e o Validate pós-merge #39 (`31319102311`) estão verdes; a
-revisão Codex não encontrou major issues. TASK-05 está concluída e TASK-06 é a
-próxima task elegível, ainda não iniciada.
+dessa baseline. O Validate #40 (`31319322422`) está verde e a TASK-06 é a
+atividade corrente. A interface de produtos e seus estados operacionais ainda
+não foram implementados; TASK-07 permanece não iniciada.

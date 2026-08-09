@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 23
+state_version: 24
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -15,15 +15,15 @@ completed_tasks:
   - TASK-05
 last_completed_task: TASK-05
 current_task: TASK-06
-current_task_status: READY_TO_START
+current_task_status: IN_PROGRESS
 next_eligible_task: TASK-06
 attempt: 1
 max_attempts: 3
-branch: main
-baseline_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
+branch: feat/TASK-06-product-interface
+baseline_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
+last_green_validated_head: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 p1_finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
@@ -32,11 +32,11 @@ p2_finding: P2_BLANK_CUSTOMER_NAME
 p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
-validation_status: MAIN_MERGE_VERIFIED_GREEN
-review_status: FINAL_CODEX_REVIEW_NO_MAJOR_ISSUES
-ci_run: 31319102311
+validation_status: TASK_06_BASELINE_VERIFIED_GREEN
+review_status: TASK_06_IMPLEMENTATION_IN_PROGRESS
+ci_run: 31319322422
 ci_status: SUCCESS
-last_green_ci_run: 31319102311
+last_green_ci_run: 31319322422
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 9
@@ -68,10 +68,11 @@ task_05_evidence: docs/evidence/TASK-05-validation.md
 task_05_merge_main_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
 task_05_main_ci_run: 31319102311
 pr_9_status: MERGED
-task_06_baseline: 198b2f276389a5fa2f7fca10d4b5923194710fb7
-next_action: START_TASK_06
+task_06_branch: feat/TASK-06-product-interface
+task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
+next_action: IMPLEMENT_TASK_06
 next_action_authorized: true
-updated_at: "2026-08-09T14:45:00+02:00"
+updated_at: "2026-08-09T14:55:00+02:00"
 updated_by: ChatGPT
 ```
 
