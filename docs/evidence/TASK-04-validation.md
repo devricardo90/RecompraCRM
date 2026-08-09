@@ -6,9 +6,12 @@ branch: feat/TASK-04-customer-interface
 baseline: 2d7e8c4a2d03131b5c7512f2b114a7efefd9e2fb
 baseline_ci: 31307415339
 mode: CONTROLLED_AUTONOMOUS
-status: IMPLEMENTED_PENDING_CI
+status: VERIFIED_GREEN
 technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
-next_task: TASK-04
+pr: 8
+ci_run: 31310027955
+ci_status: SUCCESS
+next_task: TASK-05
 ```
 
 ## Escopo implementado
@@ -41,6 +44,13 @@ API adicionada:
 - `npm test` — BLOQUEADO localmente: PostgreSQL indisponível no Docker/WSL.
 - `npm run db:health` — BLOQUEADO localmente pela mesma indisponibilidade.
 
+## Validação remota
+
+Validate #28 (`31310027955`) concluiu `SUCCESS` no HEAD
+`0038aaf2a0d01dc590432c3dacf2e3dfb8902456`. O job executou com PostgreSQL
+real e aprovou migrations, database health, migration compatibility, Customer
+persistence, lint, typecheck e build.
+
 ## Playwright efêmero
 
 PASS em desktop `1440x900` e mobile `390x844`:
@@ -58,8 +68,8 @@ O smoke de UI usou respostas em memória somente no Playwright efêmero; a
 persistência real da API será confirmada pelo CI com PostgreSQL real. Nenhum
 teste ou artefato Playwright foi salvo no repositório.
 
-## Próximo gate
+## Fechamento
 
-Publicar a branch e executar o Validate com PostgreSQL real antes de marcar
-TASK-04 como `COMPLETED`. A task permanece corrente no modo
-`CONTROLLED_AUTONOMOUS`.
+A TASK-04 está `VERIFIED_GREEN` no modo `CONTROLLED_AUTONOMOUS`. O PR #8 está
+aberto em draft, sem merge. Nenhuma funcionalidade de Product, Sale ou Stock
+foi antecipada.

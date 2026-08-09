@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-04-CUSTOMER-INTERFACE-ATTEMPT-01
-status: TASK_04_IMPLEMENTED_PENDING_CI
+status: TASK_04_VERIFIED_GREEN_PR_OPEN
 task: TASK-04
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -23,7 +23,7 @@ plan:
   - preservar o contrato de telefone opcional e único quando informado
   - validar a migração em PostgreSQL limpo e executar os gates locais
   - validar a interface de clientes no CI com PostgreSQL real
-  - marcar TASK-04 como concluída somente após os gates verdes
+  - manter o PR #8 aberto para integração
 changes:
   - "Migração 20260806204721_enforce_customer_name usa NOT VALID e validação condicional."
   - "Harness scripts/customer-migration-compat-check.mjs cria bancos isolados e executa migrate deploy real."
@@ -32,9 +32,9 @@ changes:
   - "STATE, evidence, HANDOFF, PILOT-AUDIT e LESSONS atualizados."
   - "Interface Customer implementada com lista, cadastro, edição, busca e empty state."
   - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
-validation: STATIC_GATES_PASS_POSTGRES_DEFERRED_TO_CI
+validation: VERIFIED_GREEN_CI
 playwright_ephemeral: PASS_DESKTOP_MOBILE_EPHEMERAL
-review: TASK_04_IMPLEMENTED_PENDING_CI
+review: TASK_04_VERIFIED_GREEN_PR_8_OPEN
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -43,7 +43,7 @@ findings:
   - "Validate #26 / CI 31306424995 SUCCESS em main."
   - "Migrations, database health, migration compatibility, Customer persistence, lint, typecheck e build: PASS."
   - "TASK-04 technical commit: b3e87a062fb62ce5a97fbde0840db31851e9af28."
-  - "PostgreSQL local indisponível; persistência real deferida ao CI."
+  - "PostgreSQL local indisponível; persistência real foi confirmada no CI."
 lessons_read:
   - LESSON-RCRM-0001
   - LESSON-RCRM-0002
@@ -57,18 +57,20 @@ lessons_created:
   - LESSON-RCRM-0007
 evidence: docs/evidence/TASK-04-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31307415339
-ci_status: SUCCESS_BASELINE_ONLY
-last_green_ci_run: 31307415339
+ci_run: 31310027955
+ci_status: SUCCESS
+last_green_ci_run: 31310027955
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
 last_completed_task: TASK-03
 current_task: TASK-04
-next_eligible_task: TASK-04
+next_eligible_task: TASK-05
 technical_commit: b3e87a062fb62ce5a97fbde0840db31851e9af28
+validation_head: 0038aaf2a0d01dc590432c3dacf2e3dfb8902456
+pr_8_status: OPEN_DRAFT
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
-next_action: AWAIT_TASK_04_CI
-next_action_authorized: true
+next_action: AWAIT_PR_8_REVIEW_OR_MERGE
+next_action_authorized: false
 restart_command: git switch feat/TASK-04-customer-interface && npm install
 ```

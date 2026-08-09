@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 18
+state_version: 19
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -13,8 +13,8 @@ completed_tasks:
   - TASK-03
 last_completed_task: TASK-03
 current_task: TASK-04
-current_task_status: IMPLEMENTED_PENDING_CI
-next_eligible_task: TASK-04
+current_task_status: VERIFIED_GREEN
+next_eligible_task: TASK-05
 attempt: 1
 max_attempts: 3
 branch: feat/TASK-04-customer-interface
@@ -30,11 +30,11 @@ p2_finding: P2_BLANK_CUSTOMER_NAME
 p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
-validation_status: STATIC_GATES_PASS_POSTGRES_DEFERRED_TO_CI
-review_status: TASK_04_IMPLEMENTED_PENDING_CI
-ci_run: 31307415339
-ci_status: SUCCESS_BASELINE_ONLY
-last_green_ci_run: 31307415339
+validation_status: VERIFIED_GREEN_CI
+review_status: TASK_04_VERIFIED_GREEN_PR_8_OPEN
+ci_run: 31310027955
+ci_status: SUCCESS
+last_green_ci_run: 31310027955
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 7
@@ -50,10 +50,12 @@ lessons_validated:
   - LESSON-RCRM-0006
   - LESSON-RCRM-0007
 task_04_technical_head: b3e87a062fb62ce5a97fbde0840db31851e9af28
+task_04_validation_head: 0038aaf2a0d01dc590432c3dacf2e3dfb8902456
 task_04_evidence: docs/evidence/TASK-04-validation.md
 local_validation_blocker: POSTGRESQL_UNAVAILABLE_DOCKER_WSL
-next_action: AWAIT_TASK_04_CI
-next_action_authorized: true
+pr_8_status: OPEN_DRAFT
+next_action: AWAIT_PR_8_REVIEW_OR_MERGE
+next_action_authorized: false
 updated_at: "2026-08-09T00:00:00+02:00"
 updated_by: ChatGPT
 ```
@@ -66,7 +68,8 @@ migrations, database health, migration compatibility, Customer persistence,
 lint, typecheck e build em PASS. Os findings técnicos P1/P2 e todas as
 pendências técnicas do piloto estão encerrados. O modo é
 `CONTROLLED_AUTONOMOUS`. TASK-04 foi implementada no commit técnico
-`b3e87a062fb62ce5a97fbde0840db31851e9af28`, com lint, typecheck, build, Prisma generate/validate e Playwright efêmero em
-PASS. A persistência real e os testes PostgreSQL estão deferidos ao CI porque
-o Docker/WSL local está indisponível; `next_action_authorized` permanece `true`
-e a próxima ação é aguardar o Validate da branch.
+`b3e87a062fb62ce5a97fbde0840db31851e9af28`, com lint, typecheck, build, Prisma
+generate/validate e Playwright efêmero em PASS. O Validate #28
+(`31310027955`) confirmou migrations, database health, migration compatibility,
+Customer persistence, lint, typecheck e build com PostgreSQL real. O PR #8 está
+aberto em draft, sem merge; TASK-05 não foi iniciada.
