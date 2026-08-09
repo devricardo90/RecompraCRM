@@ -51,6 +51,7 @@ npm run db:migrate     # aplica migrações existentes sem gerar novas
 npm run db:health      # executa SELECT 1 usando uma conexão real
 npm run test:customer  # valida persistência e constraints do Customer
 npm run test:product   # valida persistência e constraints do Product
+npm run test:sale      # valida Sale/SaleItem e integridade relacional
 npm run test:product-api # valida a API Product contra o PostgreSQL real
 npm run db:down        # para o container, preservando o volume local
 ```
