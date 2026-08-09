@@ -2,82 +2,157 @@
 
 ```yaml
 task: TASK-03
-branch: feat/TASK-03-customer-model
-baseline: 712aae5f193e61cea6508b01d165480f3abe8e74
+branch: fix/TASK-03-reject-blank-customer-name
+baseline: a3292835905d58a169aede27c1a9c1e1f9d905dc
 mode: SUPERVISED_PILOT
-status: MERGED_AWAITING_CLEAN_MAIN_CI
-implementation_head: cd80bd6
-reviewed_remote_head: 3bebde46ff5c19d4cea1acba173a1906d43bab2e
+status: PILOT_READY_FOR_HUMAN_APPROVAL
+finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
+atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
+validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
+last_green_validated_head: a2b443cc117c5332e7cd00242ef4c26d3771aded
 merge_commit: b3d2f30ed9941c24b973c9addd7578e789d0730b
-pr_number: 6
+pr_number: 7
 ci_branch_run: 31116844373
 ci_branch_status: PASS
 ci_main_run: 31117339641
 ci_main_status: INFRASTRUCTURE_FAILURE
-ci_main_attempt_1: SETUP_JOB_FAILURE
-ci_main_attempt_2: CANCELLED_BEFORE_STEPS
-ci_main_project_gates: NOT_EXECUTED
+ci_run: 31304186437
+ci_status: SUCCESS
+p1_status: TECHNICALLY_CLOSED_CI_PASS
+compatibility_harness: scripts/customer-migration-compat-check.mjs
+compatibility_ci_status: PASS
+last_green_ci_run: 31304186437
 playwright: NOT_REQUIRED_NO_UI_CHANGE
-next_eligible_task: PILOT_AUDIT
+next_eligible_task: TASK-04
 blocked_tasks:
   - TASK-04
 ```
 
-## Diagnóstico e contrato
+## Finding P1
 
-- A branch obrigatória existia local e remotamente e estava exatamente na baseline esperada.
-- O SDD define que todo cliente possui nome e que telefone é único quando informado.
-- Nenhum Product, Sale, Stock, alerta, autenticação ou fluxo de interface foi implementado.
+O finding P1 identificado no PR #7 era que a migration adicionava imediatamente
+uma `CHECK` validada. Em banco existente, qualquer Customer legado com nome
+vazio ou somente whitespace faria o deploy falhar.
 
-## Implementação
+Correção: a migration adiciona `Customer_name_not_blank` como `NOT VALID`,
+mantendo linhas legadas intactas e aplicando a regra a novos `INSERT` e
+`UPDATE`. Um bloco `DO` consulta linhas inválidas e executa
+`VALIDATE CONSTRAINT` automaticamente somente quando nenhuma existir. Enquanto
+houver legado inválido, a constraint permanece `NOT VALID` e a remediation deve
+ser feita com dados reais aprovados antes da validação definitiva.
 
-- `Customer.id`: inteiro autoincremental e chave primária.
-- `Customer.name`: `String` obrigatório.
-- `Customer.phone`: `String? @unique`; PostgreSQL rejeita duplicatas informadas e permite múltiplos `NULL`.
-- `createdAt`: `DateTime @default(now())`.
-- `updatedAt`: `DateTime @updatedAt`.
-- `DatabaseMarker` e sua migração inicial foram preservados.
-- Migração nova: `prisma/migrations/20260806151419_add_customer/migration.sql`.
-- Teste determinístico: `scripts/customer-model-check.mjs`, exposto por `npm test` e `npm run test:customer`.
-- CI executa o teste de persistência após aplicar as migrações.
+## Harness de compatibilidade
+
+`npm run test:migration-compat` cria dois bancos PostgreSQL isolados, executa
+`prisma migrate deploy` com a cadeia real e remove os bancos ao final. No
+cenário legado, uma cópia temporária contém somente as migrations anteriores;
+depois a migration `20260806204721_enforce_customer_name` real é aplicada.
+O harness confirma a preservação da linha inválida, `convalidated = false`,
+enforcement em novos registros e validação completa no banco limpo.
+
+O workflow `Validate` executa esse harness depois de migrations/health e antes
+dos gates de qualidade. O run `31304186437` concluiu `SUCCESS` e validou o
+HEAD `a2b443cc117c5332e7cd00242ef4c26d3771aded`, incluindo a implementação
+atômica `6f24ffc0b32ec69daa405e6977283cc9a27e7427`. Migration compatibility,
+cenários PostgreSQL A/B e Customer persistence foram `PASS`. Como o Docker/WSL
+local estava indisponível, essa é a evidência autoritativa do PostgreSQL.
+
+SQL final da migration Unicode/U+0085:
+
+```sql
+BEGIN;
+
+ALTER TABLE "Customer" DROP CONSTRAINT IF EXISTS "Customer_name_not_blank";
+
+ALTER TABLE "Customer"
+ADD CONSTRAINT "Customer_name_not_blank"
+CHECK ("name" ~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]')
+NOT VALID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM "Customer"
+    WHERE "name" !~ E'[^ \\t\\n\\r\\x0B\\x0C\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]'
+  ) THEN
+    ALTER TABLE "Customer"
+    VALIDATE CONSTRAINT "Customer_name_not_blank";
+  END IF;
+END
+$$;
+
+COMMIT;
+```
+
+## Finding P2 — preservado
+
+O contrato exige nome real. A constraint anterior rejeitava `NULL`, mas
+aceitava `""`, espaços, tabs e quebras de linha sem conteúdo.
+
+Correção mínima anterior: a migração
+`prisma/migrations/20260806204721_enforce_customer_name/migration.sql` adiciona
+`Customer_name_not_blank` com `CHECK ("name" ~ '[^[:space:]]')`. A validação
+ocorre no PostgreSQL e vale para qualquer caminho de persistência, sem novos
+campos, dependências, Product, Sale, Stock ou UI.
+
+## Testes determinísticos
+
+`scripts/customer-model-check.mjs` agora prova:
+
+- nome normal aceito e persistido;
+- nome omitido rejeitado;
+- string vazia rejeitada;
+- somente espaços rejeitado;
+- somente tabs rejeitado;
+- somente quebras de linha/whitespace rejeitadas;
+- telefone opcional funcionando;
+- telefone informado duplicado rejeitado;
+- múltiplos telefones `NULL` permitidos;
+- timestamps persistidos.
 
 ## Validação local
 
-- `npm install --no-audit --no-fund` — PASS.
-- `npm run db:generate` — PASS.
+- `npm run db:generate` — PASS; Prisma Client 6.19.0.
 - `npm run db:validate` — PASS.
-- `docker compose config` com porta isolada — PASS.
-- PostgreSQL `16-alpine` iniciou saudável sem interromper containers externos.
-- `npm run db:migrate` — PASS.
-- `npm run db:health` — PASS.
-- `npm test` — PASS; criação, persistência, campos obrigatórios, timestamps, unicidade e múltiplos `NULL` foram testados contra PostgreSQL real.
-- Inspeção SQL — PASS; tabela `Customer`, índice `Customer_phone_key`, timestamps e nullability confirmados.
-- Recriação limpa — PASS; as duas migrações foram aplicadas desde zero e o banco terminou sem dados de teste.
+- `npm run test:migration-compat` — NÃO EXECUTADO localmente; requer PostgreSQL
+  real e será a evidência autoritativa do CI.
+- Cenário A — NÃO EXECUTADO localmente: Docker Desktop/WSL indisponível.
+- Cenário B — NÃO EXECUTADO localmente: Docker Desktop/WSL indisponível.
+- `npm run db:migrate` — NÃO EXECUTADO nesta validação local.
+- `npm run db:health` — NÃO EXECUTADO nesta validação local.
+- `npm test` — PASS no CI `31304186437`; não executado localmente por falta de PostgreSQL.
 - `npm run lint` — PASS.
 - `npm run typecheck` — PASS.
-- `npm run build` — PASS.
+- `npm run build` — PASS; warning conhecido de múltiplos lockfiles.
 - `git diff --check` — PASS.
 - Scan de segredos — PASS.
 
-## Revisão remota
+### Cenários PostgreSQL obrigatórios
 
-- Branch publicada: `feat/TASK-03-customer-model`.
-- Pull request: `#6`.
-- HEAD técnico revisado: `3bebde46ff5c19d4cea1acba173a1906d43bab2e`.
-- Merge em `main`: `b3d2f30ed9941c24b973c9addd7578e789d0730b`.
-- Revisão técnica independente: PASS.
-- CI remoto verde da branch: `Validate`, run `31116844373` — PASS; permanece evidência técnica aprovada.
-- CI remoto da `main`: run `31117339641` — `INFRASTRUCTURE_FAILURE`.
-- Tentativa 1 falhou em `Set up job`; tentativa 2 foi cancelada antes de qualquer step.
-- Não houve execução nem falha de Prisma, testes, lint, typecheck ou build nesse run.
-- O novo push documental deve gerar um CI limpo na `main`.
+- Cenário A — PASS no CI `31304186437`: banco limpo, constraint validada e nomes
+  vazios/whitespace rejeitados.
+- Cenário B — PASS no CI `31304186437`: linha legada preservada, migration
+  bem-sucedida, novos inválidos rejeitados e `convalidated = false` quando
+  aplicável.
+- Migration compatibility — PASS no CI `31304186437`.
+- Customer persistence — PASS no CI `31304186437`.
+- Docker/WSL permanece indisponível localmente, sem bloquear a validação remota.
 
-## Correção auditada
+## Revisão remota e estado do piloto
 
-O primeiro `prisma migrate dev` gerou um bloco redundante relacionado à sequência de `DatabaseMarker`. O SQL foi revisado, apenas o bloco redundante foi removido da migração nova e a cadeia completa foi reaplicada em banco existente e em banco limpo.
+- TASK-03 continua mergeada em `main` no commit `b3d2f30`.
+- O CI verde da implementação original na branch, run `31116844373`, permanece evidência técnica aprovada.
+- O run da `main`, `31117339641`, permanece `INFRASTRUCTURE_FAILURE`; as duas tentativas não executaram gates do projeto.
+- O PR #7 continua aberto; o harness está publicado no próprio PR #7.
+- O CI `31304186437` concluiu `SUCCESS` para o HEAD
+  `a2b443cc117c5332e7cd00242ef4c26d3771aded`.
+- Os findings técnicos P1/P2 estão encerrados; o piloto está
+  `PILOT_READY_FOR_HUMAN_APPROVAL`.
+- TASK-04 continua bloqueada exclusivamente pela aprovação humana final e não
+  foi iniciada.
 
-## Warnings e decisão de Playwright
+## Playwright
 
-- O build emitiu o warning já conhecido de múltiplos lockfiles acima do projeto; não afetou o resultado.
-- Playwright: `NOT_REQUIRED_NO_UI_CHANGE`; a task altera apenas Prisma, banco, testes, CI e documentação.
-- TASK-04 permanece bloqueada até o novo CI limpo e a auditoria final do piloto.
+`NOT_REQUIRED_NO_UI_CHANGE`: a correção altera apenas constraint de banco, teste
+determinístico e documentação operacional.

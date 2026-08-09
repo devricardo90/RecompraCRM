@@ -96,3 +96,37 @@ early_detection: "Executar migrate dev em banco controlado, revisar o SQL e cons
 limits: "Revalidar ao alterar o modelo técnico inicial ou atualizar a versão major do Prisma."
 evidence: "TASK-03: migração 20260806151419_add_customer aplicada após correção auditada, em banco existente e em recriação limpa."
 ```
+
+### LESSON-RCRM-0006 — Persistir invariantes de conteúdo no banco
+
+```yaml
+id: LESSON-RCRM-0006
+status: validated
+type: data_model
+severity: high
+source_task: TASK-03-P2-FIX
+symptom: "Customer.name rejeitava NULL, mas aceitava string vazia e whitespace sem conteúdo."
+root_cause: "Nullability não expressa a regra semântica de que o nome deve conter ao menos um caractere não whitespace."
+fix: "Adicionar constraint PostgreSQL Customer_name_not_blank usando expressão POSIX [^[:space:]] e cobrir casos inválidos no teste de persistência."
+prevention: "Para invariantes de conteúdo, combinar validação de entrada futura com constraint persistente e teste contra PostgreSQL real."
+early_detection: "Testar vazio, espaços, tabs e quebras de linha, não apenas NULL, durante a primeira modelagem da entidade."
+limits: "Revalidar se a regra passar a exigir normalização, trim automático, comprimento mínimo ou política de nomes diferente."
+evidence: "TASK-03 P2: migração 20260806204721_enforce_customer_name aplicada em banco vazio; npm test rejeitou os quatro formatos sem conteúdo."
+```
+
+### LESSON-RCRM-0007 — Tornar CHECK constraints seguras para dados legados
+
+```yaml
+id: LESSON-RCRM-0007
+status: pending_ci_validation
+type: database_migration
+severity: critical
+source_task: TASK-03-P1-FIX
+symptom: "Uma CHECK adicionada já validada pode abortar o deploy quando o banco existente contém linhas legadas inválidas."
+root_cause: "A migration não separava enforcement de novos dados da validação retroativa do conjunto legado."
+fix: "Adicionar a CHECK como NOT VALID, aplicar a regra a novos INSERT/UPDATE e executar VALIDATE CONSTRAINT apenas quando a consulta de inválidos retornar zero linhas."
+prevention: "Avaliar sempre o estado dos dados existentes antes de validar constraints novas em migrations incrementais."
+early_detection: "Testar banco limpo e banco legado com linha inválida preservada, além de consultar pg_constraint.convalidated."
+limits: "A constraint NOT VALID exige remediation aprovada dos dados legados antes de uma validação definitiva."
+evidence: "Harness scripts/customer-migration-compat-check.mjs criado e limitado às migrations anteriores à migration alvo; run verde 31272281693 validou 859269b9dcb8697d4ac67cb7a6221831c5a29747, e nova validação é necessária após o commit ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255."
+```

@@ -28,6 +28,23 @@ function hasErrorCode(error, code) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
+async function assertCreateRejected(data, label) {
+  let created;
+  let error;
+
+  try {
+    created = await prisma.customer.create({ data });
+  } catch (caught) {
+    error = caught;
+  }
+
+  if (created) {
+    createdIds.push(created.id);
+  }
+
+  assert(!created && error, `${label} was accepted`);
+}
+
 loadLocalEnvironment();
 
 if (!process.env.DATABASE_URL) {
@@ -59,6 +76,31 @@ try {
   const persisted = await prisma.customer.findUnique({ where: { id: customer.id } });
   assert(persisted?.id === customer.id, "created customer was not persisted");
 
+  const [nameConstraint] = await prisma.$queryRaw`
+    SELECT convalidated AS "validated"
+    FROM pg_constraint
+    WHERE conrelid = '"Customer"'::regclass
+      AND conname = 'Customer_name_not_blank'
+  `;
+  assert(nameConstraint?.validated === true, "customer name constraint was not validated on a clean database");
+
+  await assertCreateRejected({ phone: null }, "omitted customer name");
+  await assertCreateRejected({ name: "" }, "empty customer name");
+  await assertCreateRejected({ name: "   " }, "space-only customer name");
+  await assertCreateRejected({ name: "\t\t" }, "tab-only customer name");
+  await assertCreateRejected({ name: "\n\r\t" }, "line-break-only customer name");
+  await assertCreateRejected({ name: "\u00A0" }, "NBSP-only customer name");
+  await assertCreateRejected({ name: "\u0085" }, "NEXT LINE-only customer name");
+  await assertCreateRejected({ name: "\u2007" }, "FIGURE SPACE-only customer name");
+  await assertCreateRejected({ name: "\u202F" }, "NARROW NO-BREAK SPACE-only customer name");
+  await assertCreateRejected({ name: " \t\u0085\u00A0\u2007\u202F\n" }, "mixed ASCII + Unicode whitespace-only customer name");
+
+  const unicodeCustomer = await prisma.customer.create({
+    data: { name: `Hélio José ${suffix}` },
+  });
+  createdIds.push(unicodeCustomer.id);
+  assert(unicodeCustomer.name.startsWith("Hélio José"), "real Unicode customer name was not persisted");
+
   let duplicatePhoneRejected = false;
   try {
     const duplicate = await prisma.customer.create({
@@ -81,14 +123,6 @@ try {
   createdIds.push(withoutPhoneB.id);
 
   assert(withoutPhoneA.phone === null && withoutPhoneB.phone === null, "optional phone was not persisted as null");
-
-  let missingNameRejected = false;
-  try {
-    await prisma.$executeRaw`INSERT INTO "Customer" ("updatedAt") VALUES (CURRENT_TIMESTAMP)`;
-  } catch {
-    missingNameRejected = true;
-  }
-  assert(missingNameRejected, "missing required name was not rejected by the database constraint");
 
   console.log("Customer persistence tests: PASS");
 } catch (error) {
