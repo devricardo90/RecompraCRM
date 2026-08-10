@@ -239,6 +239,122 @@ try {
     assert(finalProduct.currentStock === 4, "concurrent sales left stock at an unexpected value");
   }
 
+  // Case F: deleting one item from a multi-item sale restores that item's
+  // stock while leaving the sibling item's reduction untouched.
+  {
+    const productAId = await makeProduct(10);
+    const productBId = await makeProduct(10);
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: {
+          create: [
+            { productId: productAId, quantity: 4 },
+            { productId: productBId, quantity: 3 },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const itemA = sale.items.find((item) => item.productId === productAId);
+
+    await prisma.saleItem.delete({ where: { id: itemA.id } });
+
+    const [productA, productB] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: productAId } }),
+      prisma.product.findUniqueOrThrow({ where: { id: productBId } }),
+    ]);
+    assert(productA.currentStock === 10, "deleting a SaleItem did not restore its product's stock");
+    assert(productB.currentStock === 7, "deleting a sibling SaleItem affected an unrelated product's stock");
+  }
+
+  // Case G: increasing a SaleItem's quantity further reduces stock by the
+  // delta, and is rejected (with no partial change) if it would go negative.
+  {
+    const productId = await makeProduct(10);
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId, quantity: 3 }] },
+      },
+      include: { items: true },
+    });
+    const itemId = sale.items[0].id;
+
+    await prisma.saleItem.update({ where: { id: itemId }, data: { quantity: 5 } });
+    const afterIncrease = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+    assert(afterIncrease.currentStock === 5, "increasing SaleItem quantity did not reduce stock by the delta");
+
+    await assertRejected(
+      () => prisma.saleItem.update({ where: { id: itemId }, data: { quantity: 999 } }),
+      "quantity increase that would drive stock negative",
+    );
+    const afterRejected = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+    assert(afterRejected.currentStock === 5, "rejected quantity increase still partially changed stock");
+  }
+
+  // Case H: decreasing a SaleItem's quantity restores the delta to stock.
+  {
+    const productId = await makeProduct(10);
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId, quantity: 6 }] },
+      },
+      include: { items: true },
+    });
+    const itemId = sale.items[0].id;
+
+    await prisma.saleItem.update({ where: { id: itemId }, data: { quantity: 2 } });
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+    assert(product.currentStock === 8, "decreasing SaleItem quantity did not restore the delta to stock");
+  }
+
+  // Case I: reassigning a SaleItem to a different product restores the old
+  // product's stock and reduces the new product's stock by the full
+  // quantity, rejecting (with no partial change) if the new product lacks
+  // enough stock.
+  {
+    const oldProductId = await makeProduct(10);
+    const newProductId = await makeProduct(2);
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId: oldProductId, quantity: 4 }] },
+      },
+      include: { items: true },
+    });
+    const itemId = sale.items[0].id;
+
+    await assertRejected(
+      () => prisma.saleItem.update({ where: { id: itemId }, data: { productId: newProductId } }),
+      "reassigning a SaleItem to a product without enough stock",
+    );
+    const [oldAfterRejected, newAfterRejected] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: oldProductId } }),
+      prisma.product.findUniqueOrThrow({ where: { id: newProductId } }),
+    ]);
+    assert(oldAfterRejected.currentStock === 6, "rejected reassignment still restored the old product's stock");
+    assert(newAfterRejected.currentStock === 2, "rejected reassignment still reduced the new product's stock");
+
+    const roomyProductId = await makeProduct(10);
+    await prisma.saleItem.update({ where: { id: itemId }, data: { productId: roomyProductId } });
+    const [oldAfter, roomyAfter] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: oldProductId } }),
+      prisma.product.findUniqueOrThrow({ where: { id: roomyProductId } }),
+    ]);
+    assert(oldAfter.currentStock === 10, "successful reassignment did not restore the old product's stock");
+    assert(roomyAfter.currentStock === 6, "successful reassignment did not reduce the new product's stock");
+  }
+
   console.log("Sale stock transaction tests: PASS");
 } catch (error) {
   console.error("Sale stock transaction tests: FAIL");
