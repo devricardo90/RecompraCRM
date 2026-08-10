@@ -149,6 +149,13 @@ try {
   });
   assert(persisted?.items.length === 2, "Sale graph was not persisted in PostgreSQL");
 
+  const updatedSale = await prisma.sale.update({
+    where: { id: sale.id },
+    data: { notes: `TASK-07 updated notes ${suffix}` },
+  });
+  assert(updatedSale.id === sale.id, "Sale id changed after a non-id field update");
+  assert(updatedSale.notes === `TASK-07 updated notes ${suffix}`, "Sale field update without id change was not persisted");
+
   const [quantityConstraint] = await prisma.$queryRaw`
     SELECT convalidated AS "validated"
     FROM pg_constraint
@@ -161,10 +168,10 @@ try {
     SELECT COUNT(*)::int AS "count"
     FROM pg_trigger
     WHERE tgrelid IN ('"Sale"'::regclass, '"SaleItem"'::regclass)
-      AND tgname IN ('Sale_requires_item', 'SaleItem_preserves_sale_items', 'Sale_deletion_blocked')
+      AND tgname IN ('Sale_requires_item', 'SaleItem_preserves_sale_items', 'Sale_deletion_blocked', 'Sale_id_immutable')
       AND NOT tgisinternal
   `;
-  assert(triggerCount?.count === 3, "Sale integrity triggers were not created");
+  assert(triggerCount?.count === 4, "Sale integrity triggers were not created");
 
   await assertRejected(
     () => prisma.sale.create({ data: { customerId, soldAt, status: "MODEL_TEST" } }),
@@ -236,6 +243,15 @@ try {
       await transaction.sale.delete({ where: { id: sale.id } });
     }),
     "transactional Sale deletion after removing all items",
+  );
+  await assertRejected(
+    () => prisma.$transaction(async (transaction) => {
+      const created = await transaction.sale.create({
+        data: { customerId, soldAt, status: "MODEL_TEST" },
+      });
+      await transaction.$executeRaw`UPDATE "Sale" SET "id" = ${created.id + 1_000_000} WHERE "id" = ${created.id}`;
+    }),
+    "Sale.id mutation in the same transaction as its creation",
   );
 
   console.log("Sale persistence tests: PASS");
