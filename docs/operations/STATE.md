@@ -18,7 +18,7 @@ last_completed_task: TASK-06
 current_task: TASK-07
 current_task_status: VERIFIED_GREEN_AWAITING_FINAL_REVIEW
 next_eligible_task: TASK-07
-attempt: 6
+attempt: 7
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 branch: feat/TASK-07-sales-model
