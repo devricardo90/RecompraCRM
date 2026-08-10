@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const repoRoot = process.cwd();
 const schemaPath = resolve(repoRoot, "prisma", "schema.prisma");
@@ -253,6 +253,38 @@ try {
     }),
     "Sale.id mutation in the same transaction as its creation",
   );
+
+  {
+    let releaseFirst;
+    let releaseSecond;
+    const firstDeleted = new Promise((resolve) => { releaseFirst = resolve; });
+    const secondDeleted = new Promise((resolve) => { releaseSecond = resolve; });
+    const [itemA, itemB] = sale.items;
+
+    const attemptA = prisma.$transaction(
+      async (transaction) => {
+        await transaction.saleItem.delete({ where: { id: itemA.id } });
+        releaseFirst();
+        await secondDeleted;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    const attemptB = prisma.$transaction(
+      async (transaction) => {
+        await transaction.saleItem.delete({ where: { id: itemB.id } });
+        releaseSecond();
+        await firstDeleted;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+
+    const outcomes = await Promise.allSettled([attemptA, attemptB]);
+    const rejected = outcomes.filter((outcome) => outcome.status === "rejected").length;
+    assert(rejected === 1, "concurrent single-item removals from a two-item Sale did not conflict as expected");
+
+    const remainingItems = await prisma.saleItem.count({ where: { saleId: sale.id } });
+    assert(remainingItems === 1, "concurrent item removals left the Sale without any items");
+  }
 
   console.log("Sale persistence tests: PASS");
 } catch (error) {
