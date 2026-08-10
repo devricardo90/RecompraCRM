@@ -16,7 +16,7 @@ completed_tasks:
   - TASK-06
 last_completed_task: TASK-06
 current_task: TASK-07
-current_task_status: VERIFIED_GREEN_AWAITING_REVIEW
+current_task_status: VERIFIED_GREEN_AWAITING_FINAL_REVIEW
 next_eligible_task: TASK-07
 attempt: 3
 max_attempts: 3
@@ -35,9 +35,9 @@ working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: TASK_07_TECHNICAL_VERIFIED_GREEN
 review_status: AWAITING_CODEX_REVIEW
-ci_run: 31390596504
+ci_run: 31391071171
 ci_status: SUCCESS
-last_green_ci_run: 31390596504
+last_green_ci_run: 31391071171
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
@@ -84,12 +84,12 @@ task_07_branch: feat/TASK-07-sales-model
 task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
 task_07_implementation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_validation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_ci_run: 31390596504
+task_07_ci_run: 31391071171
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_evidence: docs/evidence/TASK-07-validation.md
-pr_11_status: DRAFT_AWAITING_DOCUMENTATION
-next_action: PUBLISH_TASK_07_DOCUMENTATION_AND_REQUEST_REVIEW
+pr_11_status: OPEN_AWAITING_FINAL_CODEX_REVIEW
+next_action: AWAIT_FINAL_CODEX_REVIEW_AND_MERGE_IF_CLEAN
 next_action_authorized: true
 updated_at: "2026-08-10T13:45:00+02:00"
 updated_by: ChatGPT

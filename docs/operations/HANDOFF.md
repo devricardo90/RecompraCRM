@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-03
-status: TASK_07_VERIFIED_GREEN_AWAITING_REVIEW
+status: TASK_07_VERIFIED_GREEN_AWAITING_FINAL_REVIEW
 task: TASK-07
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -105,12 +105,12 @@ task_07_branch: feat/TASK-07-sales-model
 task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
 task_07_implementation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_validation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_ci_run: 31390596504
+task_07_ci_run: 31391071171
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 evidence_task_07: docs/evidence/TASK-07-validation.md
-pr_11_status: DRAFT_AWAITING_DOCUMENTATION
-next_action: PUBLISH_TASK_07_DOCUMENTATION_AND_REQUEST_REVIEW
+pr_11_status: OPEN_AWAITING_FINAL_CODEX_REVIEW
+next_action: AWAIT_FINAL_CODEX_REVIEW_AND_MERGE_IF_CLEAN
 next_action_authorized: true
 restart_command: git switch feat/TASK-07-sales-model && npm install
 ```
