@@ -355,6 +355,20 @@ try {
     assert(roomyAfter.currentStock === 6, "successful reassignment did not reduce the new product's stock");
   }
 
+  // Case J: Product.id is immutable. Without this, SaleItem_productId_fkey's
+  // ON UPDATE CASCADE would rename referencing SaleItem rows, which would
+  // fire the stock-reconciliation trigger and double-charge stock for a
+  // reassignment that never actually happened.
+  {
+    const productId = await makeProduct(5);
+    await assertRejected(
+      () => prisma.$executeRaw`UPDATE "Product" SET "id" = ${productId + 1_000_000} WHERE "id" = ${productId}`,
+      "Product.id mutation",
+    );
+    const unchanged = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+    assert(unchanged.currentStock === 5, "rejected Product.id mutation still affected stock");
+  }
+
   console.log("Sale stock transaction tests: PASS");
 } catch (error) {
   console.error("Sale stock transaction tests: FAIL");
