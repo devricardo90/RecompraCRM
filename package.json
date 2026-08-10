@@ -18,6 +18,8 @@
     "test:product-api": "node scripts/product-api-integration-check.mjs",
     "test:customer-api": "node scripts/customer-api-integration-check.mjs",
     "test:migration-compat": "node scripts/customer-migration-compat-check.mjs",
+    "test:loop-controller": "node scripts/rick-loop-controller-check.mjs",
+    "loop:status": "node scripts/rick-loop-controller.mjs",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:generate": "prisma generate",
