@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 30
+state_version: 31
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -14,11 +14,12 @@ completed_tasks:
   - TASK-04
   - TASK-05
   - TASK-06
-last_completed_task: TASK-06
-current_task: TASK-07
-current_task_status: VERIFIED_GREEN_AWAITING_FINAL_REVIEW
-next_eligible_task: TASK-07
-attempt: 7
+  - TASK-07
+last_completed_task: TASK-07
+current_task: TASK-08
+current_task_status: READY_TO_START
+next_eligible_task: TASK-08
+attempt: 1
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 branch: feat/TASK-07-sales-model
@@ -35,10 +36,13 @@ p2_status: TECHNICALLY_CLOSED_CI_PASS
 working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: TASK_07_TECHNICAL_VERIFIED_GREEN
-review_status: AWAITING_CODEX_REVIEW
-ci_run: 31408117992
+review_status: REVIEW_CARRY_FORWARD_PASS
+review_carry_forward_reason: DOCS_ONLY_RECONCILIATION_OF_LAST_CODEX_FINDING
+technical_review_anchor: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
+administrative_tail_head: 691d89c13bfc770f59af54ec97bd0b90845ed3ab
+ci_run: 31418506819
 ci_status: SUCCESS
-last_green_ci_run: 31408117992
+last_green_ci_run: 31418506819
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
@@ -91,10 +95,12 @@ task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
 task_07_sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 task_07_evidence: docs/evidence/TASK-07-validation.md
-pr_11_status: OPEN_AWAITING_FINAL_CODEX_REVIEW
-next_action: AWAIT_FINAL_CODEX_REVIEW_AND_MERGE_IF_CLEAN
+pr_11_status: MERGED
+task_07_merge_main_head: e7fbb545d0640219846b55b0c23a9c0add878147
+task_07_main_ci_run: 31418506819
+next_action: START_TASK_08
 next_action_authorized: true
-updated_at: "2026-08-10T16:45:00Z"
+updated_at: "2026-08-10T18:22:00Z"
 updated_by: Claude Code
 ```
 
@@ -143,5 +149,18 @@ segunda transação a chegar ao commit; o harness ganhou um caso que dispara dua
 transações `RepeatableRead` concorrentes removendo itens distintos da mesma
 Sale e confirma que exatamente uma é rejeitada e ao menos um item sobrevive. O
 Validate #59 (`31408117992`) confirmou SUCCESS com o mesmo conjunto completo de
-gates. O segundo é corrigido por esta própria atualização. TASK-08 permanece
-não iniciada até revisão e merge da TASK-07.
+gates. Cinco rodadas de revisão adicionais corrigiram, em sequência, o mesmo
+padrão de defasagem documental em ROADMAP.md e no arquivo de evidência, um
+erro de proveniência no `LOOP-REGISTER.jsonl` append-only, uma violação do
+próprio append-only introduzida pela correção anterior (restaurada em
+`be35687244dda781d45a5e9446bf4068dba14acf`, com a correção movida para um novo
+`attempt: 7`) e contadores de tentativa desatualizados em STATE/HANDOFF
+(`691d89c13bfc770f59af54ec97bd0b90845ed3ab`). Como nenhum código de aplicação
+mudou desde `76c637c`, a política `REVIEW_CARRY_FORWARD` foi aplicada para o
+HEAD final: o diff `665ec0a..691d89c` foi verificado como contendo apenas
+STATE.md e HANDOFF.md, os contadores e o histórico append-only foram
+confirmados corretos, e o CI do HEAD estava `SUCCESS`, dispensando nova
+rodada de revisão puramente documental. O PR #11 foi mergeado em `main` no
+commit `e7fbb545d0640219846b55b0c23a9c0add878147`; o Validate pós-merge
+(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída. TASK-08 é a
+próxima task elegível.

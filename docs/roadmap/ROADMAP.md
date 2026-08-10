@@ -3,8 +3,8 @@
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
-current_task: TASK-07
-next_eligible_task: TASK-07
+current_task: TASK-08
+next_eligible_task: TASK-08
 
 ## Política
 
@@ -71,9 +71,9 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - merge_main: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
   - pr: #10 MERGED
   - done_when: fluxo de produtos e alertas básicos validados no navegador.
-- [ ] TASK-07 — Modelo de vendas
+- [x] TASK-07 — Modelo de vendas
   - depends_on: TASK-03, TASK-05
-  - status: VERIFIED_GREEN_AWAITING_REVIEW
+  - status: COMPLETED
   - branch: feat/TASK-07-sales-model
   - baseline: 5ce2365179b0b9519bb7312fed3990543043493c
   - baseline_ci: Validate #50 / 31329344342 SUCCESS
@@ -83,12 +83,17 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - technical_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
   - validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
   - validation: Validate #59 / 31408117992 SUCCESS
-  - docs_reconciled_through: ee90187ef23530a468b34d76f108dce2c3b73480
-  - pr: #11 OPEN_AWAITING_FINAL_CODEX_REVIEW
+  - docs_reconciled_through: 691d89c13bfc770f59af54ec97bd0b90845ed3ab
+  - review: REVIEW_CARRY_FORWARD_PASS (technical_review_anchor 76c637c, administrative_tail_head 691d89c)
+  - pr: #11 MERGED
+  - merge_main: e7fbb545d0640219846b55b0c23a9c0add878147
+  - main_ci: Validate 31418506819 SUCCESS
   - evidence: docs/evidence/TASK-07-validation.md
   - done_when: Sale e SaleItem persistidos com integridade.
 - [ ] TASK-08 — Transação de venda e estoque
   - depends_on: TASK-07
+  - status: READY_TO_START
+  - baseline: e7fbb545d0640219846b55b0c23a9c0add878147
   - done_when: venda reduz estoque atomicamente e falha sem atualização parcial.
 - [ ] TASK-09 — Previsão de recompra
   - depends_on: TASK-08

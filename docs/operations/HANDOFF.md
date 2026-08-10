@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-07
-status: TASK_07_VERIFIED_GREEN_AWAITING_FINAL_REVIEW
+status: TASK_07_COMPLETED_MERGED
 task: TASK-07
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -41,7 +41,9 @@ changes:
   - "Harness cobre remocao concorrente de itens distintos da mesma Sale sob RepeatableRead, exigindo que exatamente uma transacao seja rejeitada."
 validation: TASK_07_TECHNICAL_VERIFIED_GREEN
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
-review: AWAITING_CODEX_REVIEW
+review: REVIEW_CARRY_FORWARD_PASS
+technical_review_anchor: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
+administrative_tail_head: 691d89c13bfc770f59af54ec97bd0b90845ed3ab
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -111,13 +113,15 @@ task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
 task_07_implementation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 task_07_ci_run: 31408117992
+task_07_merge_main_head: e7fbb545d0640219846b55b0c23a9c0add878147
+task_07_main_ci_run: 31418506819
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
 task_07_sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 evidence_task_07: docs/evidence/TASK-07-validation.md
-pr_11_status: OPEN_AWAITING_FINAL_CODEX_REVIEW
-next_action: AWAIT_FINAL_CODEX_REVIEW_AND_MERGE_IF_CLEAN
+pr_11_status: MERGED
+next_action: START_TASK_08
 next_action_authorized: true
 restart_command: git switch feat/TASK-07-sales-model && npm install
 ```
@@ -153,6 +157,15 @@ handoff em relação ao HEAD revisado. O primeiro foi corrigido em
 `76c637cc9d31fb53acdc5ff492e1e2951dddeca6`, trocando o lock somente-leitura por
 um `UPDATE` real que força falha de serialização Postgres na segunda
 transação; harness cobre o cenário concorrente. Validate #59 (`31408117992`)
-passou com o conjunto completo de gates. O segundo é corrigido por esta própria
-atualização. TASK-08 não foi iniciada; o próximo gate é a revisão final do
-PR #11 sobre o HEAD `76c637c`.
+passou com o conjunto completo de gates. Cinco rodadas adicionais corrigiram
+defasagens equivalentes em ROADMAP.md, no arquivo de evidência, um erro de
+proveniência e uma violação de append-only no `LOOP-REGISTER.jsonl` (restaurada
+em `be35687244dda781d45a5e9446bf4068dba14acf`, com a correção movida para
+`attempt: 7`) e contadores de tentativa desatualizados
+(`691d89c13bfc770f59af54ec97bd0b90845ed3ab`). Nenhum código de aplicação mudou
+desde `76c637c` em nenhuma dessas rodadas. Como o diff `665ec0a..691d89c`
+continha apenas STATE.md e HANDOFF.md, a política `REVIEW_CARRY_FORWARD` foi
+aplicada e o PR #11 foi mergeado em `main` no commit
+`e7fbb545d0640219846b55b0c23a9c0add878147`; o Validate pós-merge
+(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída. TASK-08 é a
+próxima task elegível.
