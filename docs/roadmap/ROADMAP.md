@@ -81,8 +81,9 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - deletion_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
   - sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
   - technical_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-  - validation_head: 2f0bc7a8914219977710d7eaa821f2eb45abe773
-  - validation: Validate #61 / 31409131924 SUCCESS
+  - validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
+  - validation: Validate #59 / 31408117992 SUCCESS
+  - docs_reconciled_through: ee90187ef23530a468b34d76f108dce2c3b73480
   - pr: #11 OPEN_AWAITING_FINAL_CODEX_REVIEW
   - evidence: docs/evidence/TASK-07-validation.md
   - done_when: Sale e SaleItem persistidos com integridade.

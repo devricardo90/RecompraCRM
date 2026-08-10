@@ -12,7 +12,10 @@
 - Isolated-harness fix head: `940fce6fad7262aae7579a999c5fedb102a2233b`
 - Sale.id immutability fix head: `c4bfbc40b73470ca4e919e3b098bf4a95b78c620`
 - Sale-item-guard write-conflict fix head: `76c637cc9d31fb53acdc5ff492e1e2951dddeca6`
-- Current validated head: `2f0bc7a8914219977710d7eaa821f2eb45abe773`
+  (last commit that changed application code or tests; this is the validated
+  head — no code changed after it)
+- Docs reconciled through: `ee90187ef23530a468b34d76f108dce2c3b73480`
+  (docs-only commits; each individually re-validated by CI, see timeline below)
 - Pull request: #11
 
 The local SDD and the canonical Google Doc `Fonte da Verdade - Recompra CRM`
@@ -127,14 +130,30 @@ matter and the equivalent stale record in `docs/roadmap/ROADMAP.md` that
 later review rounds surfaced.
 
 Validate #59 / run `31408117992` — `SUCCESS` for
-`76c637cc9d31fb53acdc5ff492e1e2951dddeca6`.
+`76c637cc9d31fb53acdc5ff492e1e2951dddeca6`. This is the validated head; no
+application code or test changed after it.
 
+Codex then found two docs-only staleness P2s: STATE.md/HANDOFF.md still
+pointed at the pre-write-skew-fix head, and a duplicated TASK-07 record
+further down HANDOFF.md's front matter still pointed at an even earlier head.
+Both were fixed, each individually re-validated by CI: Validate #60 / run
+`31408439908` — `SUCCESS` for `4324277b8c0f69c7eb119dc54d1cd522df89b143`;
 Validate #61 / run `31409131924` — `SUCCESS` for
 `2f0bc7a8914219977710d7eaa821f2eb45abe773`.
 
+A further review found the same staleness pattern in `docs/roadmap/ROADMAP.md`
+and this evidence file, plus a provenance error in the append-only
+`LOOP-REGISTER.jsonl` (an entry's `validation_head` referenced a docs commit
+that did not yet exist when its cited CI run executed). All were corrected;
+each doc-only commit was independently re-validated by CI through
+`ee90187ef23530a468b34d76f108dce2c3b73480`.
+
 ## Status
 
-TASK-07 is technically verified green after four correction rounds (the
-original transactional-deletion and isolated-harness fixes, plus the
-Sale.id-immutability and write-skew recovery fixes) and awaits a clean final
-independent Codex review. TASK-08 has not been started.
+TASK-07's code is technically verified green (validated head
+`76c637cc9d31fb53acdc5ff492e1e2951dddeca6`) after four code-level correction
+rounds: the original transactional-deletion and isolated-harness fixes, plus
+the Sale.id-immutability and write-skew recovery fixes. Three further
+docs-only rounds reconciled STATE/HANDOFF/ROADMAP/evidence/LOOP-REGISTER to
+that head. It awaits a clean final independent Codex review. TASK-08 has not
+been started.
