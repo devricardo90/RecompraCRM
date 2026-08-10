@@ -21,6 +21,7 @@ model Customer {
   phone     String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  sales     Sale[]
 }
 
 model Product {
@@ -32,4 +33,33 @@ model Product {
   consumptionDays      Int
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  saleItems            SaleItem[]
+}
+
+model Sale {
+  id         Int        @id @default(autoincrement())
+  customerId Int
+  soldAt     DateTime
+  status     String
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items      SaleItem[]
+
+  @@index([customerId])
+}
+
+model SaleItem {
+  id                   Int       @id @default(autoincrement())
+  saleId               Int
+  productId            Int
+  quantity             Int
+  unitPrice            Decimal?
+  expectedRepurchaseAt DateTime?
+  sale                 Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product              Product   @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([saleId])
+  @@index([productId])
 }
