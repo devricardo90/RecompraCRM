@@ -9,6 +9,7 @@
 - Baseline CI: Validate #50 / `31329344342` — `SUCCESS`
 - Initial technical head: `693c4504a6799fefdb28e0fff70fe37c1c780495`
 - Transactional-deletion fix head: `e1f4899f0425232dbc76c4236e654792f86e5835`
+- Isolated-harness fix head: `940fce6fad7262aae7579a999c5fedb102a2233b`
 - Pull request: #11
 
 The local SDD and the canonical Google Doc `Fonte da Verdade - Recompra CRM`
@@ -77,8 +78,17 @@ that exact sequence and proves rejection.
 Validate #53 / run `31332166675` — `SUCCESS` for
 `e1f4899f0425232dbc76c4236e654792f86e5835`.
 
+Codex then found that the deletion block prevented the former fixture cleanup
+on persistent local databases. The harness now creates a unique PostgreSQL
+schema, applies the real migration chain there and drops the entire schema in
+`finally`. Two consecutive local runs passed and a catalog query returned zero
+remaining `sale_model_check_%` schemas.
+
+Validate #55 / run `31390596504` — `SUCCESS` for
+`940fce6fad7262aae7579a999c5fedb102a2233b`.
+
 ## Status
 
-TASK-07 is technically verified green after correction attempt 1 and awaits a
-new independent Codex review.
+TASK-07 is technically verified green after correction attempt 2 (protocol
+attempt 3) and awaits the final independent Codex review.
 TASK-08 has not been started.
