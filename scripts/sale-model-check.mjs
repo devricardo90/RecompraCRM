@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
+
+const repoRoot = process.cwd();
+const schemaPath = resolve(repoRoot, "prisma", "schema.prisma");
+const migrationCli = resolve(repoRoot, "node_modules", "prisma", "build", "index.js");
 
 function loadLocalEnvironment() {
   if (process.env.DATABASE_URL || !existsSync(join(process.cwd(), ".env"))) {
@@ -36,6 +41,31 @@ async function assertRejected(operation, label) {
   assert(error, `${label} was accepted`);
 }
 
+function quoteSchemaName(schemaName) {
+  assert(/^[a-z0-9_]+$/.test(schemaName), "Generated schema name contains unsafe characters");
+  return `"${schemaName}"`;
+}
+
+function runMigrations(targetUrl) {
+  assert(existsSync(migrationCli), `Prisma CLI not found at ${migrationCli}`);
+
+  const result = spawnSync(
+    process.execPath,
+    [migrationCli, "migrate", "deploy", "--schema", schemaPath],
+    {
+      cwd: repoRoot,
+      env: { ...process.env, DATABASE_URL: targetUrl },
+      stdio: "inherit",
+    },
+  );
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  assert(result.status === 0, `Migration deploy failed with exit code ${result.status}`);
+}
+
 loadLocalEnvironment();
 
 if (!process.env.DATABASE_URL) {
@@ -44,13 +74,20 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const prisma = new PrismaClient();
 const suffix = `${Date.now()}-${process.pid}`;
+const schemaName = `sale_model_check_${Date.now()}_${process.pid}`;
+const isolatedUrl = new URL(process.env.DATABASE_URL);
+isolatedUrl.searchParams.set("schema", schemaName);
+const admin = new PrismaClient();
+const prisma = new PrismaClient({ datasources: { db: { url: isolatedUrl.toString() } } });
 let customerId;
 let productAId;
 let productBId;
 
 try {
+  await admin.$executeRawUnsafe(`CREATE SCHEMA ${quoteSchemaName(schemaName)}`);
+  runMigrations(isolatedUrl.toString());
+
   const customer = await prisma.customer.create({
     data: { name: `TASK-07 Customer ${suffix}` },
   });
@@ -208,4 +245,11 @@ try {
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();
+  try {
+    await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
+  } catch (error) {
+    console.error(`Could not drop isolated schema ${schemaName}:`, error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
+  await admin.$disconnect();
 }
