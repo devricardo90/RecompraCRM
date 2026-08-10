@@ -13,7 +13,7 @@ baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
 branch: feat/TASK-07-sales-model
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 940fce6fad7262aae7579a999c5fedb102a2233b
+last_green_validated_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
 plan:
@@ -36,6 +36,9 @@ changes:
   - "Harness Sale integrado ao npm test e ao Validate."
   - "Trigger BEFORE DELETE bloqueia exclusão da Sale mesmo após remoção transacional dos itens."
   - "Harness Sale aplica migrations em schema único e remove schema/fixtures no finally."
+  - "Trigger BEFORE UPDATE OF id ON Sale rejeita qualquer mudança de chave primária (c4bfbc4)."
+  - "ensure_sale_has_items agora escreve na linha da Sale (UPDATE em vez de SELECT FOR UPDATE) para gerar conflito MVCC real sob REPEATABLE READ (76c637c)."
+  - "Harness cobre remocao concorrente de itens distintos da mesma Sale sob RepeatableRead, exigindo que exatamente uma transacao seja rejeitada."
 validation: TASK_07_TECHNICAL_VERIFIED_GREEN
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
 review: AWAITING_CODEX_REVIEW
@@ -69,16 +72,18 @@ lessons_created:
   - LESSON-RCRM-0008
 evidence: docs/evidence/TASK-07-validation.md
 pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31390596504
+ci_run: 31408117992
 ci_status: SUCCESS
-last_green_ci_run: 31390596504
+last_green_ci_run: 31408117992
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
 current_task: TASK-07
 next_eligible_task: TASK-07
 technical_commit: 940fce6fad7262aae7579a999c5fedb102a2233b
-validation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
+validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
+sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
+sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 pr_8_status: MERGED
 merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
 local_validation_blocker: NONE
@@ -135,5 +140,17 @@ próxima task elegível. A TASK-07 está implementada em
 corrigido em `e1f4899f0425232dbc76c4236e654792f86e5835`. O harness foi isolado
 sem fixtures persistentes em `940fce6fad7262aae7579a999c5fedb102a2233b`; o
 Validate #55 (`31390596504`) passou. Sale/SaleItem possuem relações restritivas,
-quantidade positiva, ao menos um item e bloqueio de exclusão da Sale. TASK-08
-não foi iniciada; o próximo gate é a revisão final do PR #11.
+quantidade positiva, ao menos um item e bloqueio de exclusão da Sale. O Codex
+revisou `940fce6` e apontou um P2 de mutação de `Sale.id` mid-transação,
+corrigido em `c4bfbc40b73470ca4e919e3b098bf4a95b78c620` (trigger
+`BEFORE UPDATE OF "id"`); Validate #58 (`31403871488`) passou. A revisão
+seguinte apontou dois P2 adicionais: um gap de write-skew no gatilho
+`ensure_sale_has_items` sob `REPEATABLE READ` (dois deletes concorrentes de
+itens distintos da mesma Sale podiam ambos commitar) e a defasagem deste
+handoff em relação ao HEAD revisado. O primeiro foi corrigido em
+`76c637cc9d31fb53acdc5ff492e1e2951dddeca6`, trocando o lock somente-leitura por
+um `UPDATE` real que força falha de serialização Postgres na segunda
+transação; harness cobre o cenário concorrente. Validate #59 (`31408117992`)
+passou com o conjunto completo de gates. O segundo é corrigido por esta própria
+atualização. TASK-08 não foi iniciada; o próximo gate é a revisão final do
+PR #11 sobre o HEAD `76c637c`.

@@ -18,13 +18,14 @@ last_completed_task: TASK-06
 current_task: TASK-07
 current_task_status: VERIFIED_GREEN_AWAITING_FINAL_REVIEW
 next_eligible_task: TASK-07
-attempt: 3
-max_attempts: 3
+attempt: 5
+max_stagnant_attempts: 3
+stagnant_attempt: 0
 branch: feat/TASK-07-sales-model
 baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
 atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
 validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 940fce6fad7262aae7579a999c5fedb102a2233b
+last_green_validated_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 merge_task_02: 712aae5f193e61cea6508b01d165480f3abe8e74
 merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
 p1_finding: P1_LEGACY_UNSAFE_CUSTOMER_NAME_CONSTRAINT
@@ -35,9 +36,9 @@ working_tree: clean
 baseline_status: VERIFIED_GREEN
 validation_status: TASK_07_TECHNICAL_VERIFIED_GREEN
 review_status: AWAITING_CODEX_REVIEW
-ci_run: 31391071171
+ci_run: 31408117992
 ci_status: SUCCESS
-last_green_ci_run: 31391071171
+last_green_ci_run: 31408117992
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
@@ -83,16 +84,18 @@ pr_10_status: MERGED
 task_07_branch: feat/TASK-07-sales-model
 task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
 task_07_implementation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_validation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_ci_run: 31391071171
+task_07_validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
+task_07_ci_run: 31408117992
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
+task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
+task_07_sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 task_07_evidence: docs/evidence/TASK-07-validation.md
 pr_11_status: OPEN_AWAITING_FINAL_CODEX_REVIEW
 next_action: AWAIT_FINAL_CODEX_REVIEW_AND_MERGE_IF_CLEAN
 next_action_authorized: true
-updated_at: "2026-08-10T13:45:00+02:00"
-updated_by: ChatGPT
+updated_at: "2026-08-10T16:20:00Z"
+updated_by: Claude Code
 ```
 
 TASK-01, TASK-02, TASK-03 e TASK-04 estão concluídas e integradas em `main`.
@@ -120,5 +123,25 @@ descartável no commit `940fce6fad7262aae7579a999c5fedb102a2233b`; o Validate #5
 (`31390596504`) confirmou as seis migrations, health,
 compatibilidade, persistência Customer/Product/Sale, APIs existentes, lint,
 typecheck e build contra PostgreSQL real. Playwright não é aplicável porque não
-houve alteração de UI. TASK-08 permanece não iniciada até revisão e merge da
-TASK-07.
+houve alteração de UI. O Codex revisou o HEAD `940fce6` e apontou um novo P2:
+uma transação poderia alterar o `Sale.id` antes do COMMIT, deixando o gatilho
+diferido validar o item count sob o id antigo enquanto a linha renomeada chega
+ao COMMIT sem nenhum SaleItem. Corrigido em
+`c4bfbc40b73470ca4e919e3b098bf4a95b78c620` com um trigger
+`BEFORE UPDATE OF "id" ON "Sale"` que rejeita imediatamente qualquer mudança de
+chave primária; o Validate #58 (`31403871488`) confirmou SUCCESS. Uma nova
+revisão do Codex sobre esse HEAD apontou dois P2 adicionais: (1) o
+`SELECT ... FOR UPDATE` usado no gatilho `ensure_sale_has_items` não escreve na
+linha da Sale, então sob `REPEATABLE READ` duas transações que removem itens
+diferentes da mesma Sale de dois itens podem cada uma enxergar o item da outra
+pelo próprio snapshot e ambas commitarem, deixando a Sale sem itens; e (2) este
+arquivo estava desatualizado em relação ao HEAD de recuperação revisado. O
+primeiro foi corrigido em `76c637cc9d31fb53acdc5ff492e1e2951dddeca6`,
+substituindo o lock somente-leitura por um `UPDATE` real na linha da Sale, o
+que faz o PostgreSQL levantar uma falha de serialização (`40001`) para a
+segunda transação a chegar ao commit; o harness ganhou um caso que dispara duas
+transações `RepeatableRead` concorrentes removendo itens distintos da mesma
+Sale e confirma que exatamente uma é rejeitada e ao menos um item sobrevive. O
+Validate #59 (`31408117992`) confirmou SUCCESS com o mesmo conjunto completo de
+gates. O segundo é corrigido por esta própria atualização. TASK-08 permanece
+não iniciada até revisão e merge da TASK-07.
