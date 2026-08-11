@@ -67,6 +67,9 @@ jobs:
       - name: Test Sale stock transaction
         run: npm run test:sale-stock
 
+      - name: Test Sale repurchase forecast
+        run: npm run test:repurchase-forecast
+
       - name: Test Product API integration
         run: npm run test:product-api
 
