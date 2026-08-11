@@ -1,7 +1,7 @@
-import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, renameSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { dirname } from "node:path";
+import { dirname, basename, join } from "node:path";
 
 const repoRoot = process.cwd();
 const RUNTIME_STATE_PATH = ".rick/tmp/loop-runtime.json";
@@ -120,14 +120,24 @@ export function loadRuntimeState(path = RUNTIME_STATE_PATH) {
   }
 }
 
+// Codex P2: writeFileSync truncates the destination before writing, so a
+// process death mid-write - the exact restart scenario this persistence is
+// meant to survive - could leave truncated JSON that loadRuntimeState's
+// parse failure silently converts to null, losing the wait's backoff/task
+// identity. Write to a temp file in the same directory and rename it over
+// the target: rename is atomic, so a reader always sees either the old
+// complete file or the new complete file, never a partial one.
 export function saveRuntimeState(runtimeOrNull, path = RUNTIME_STATE_PATH) {
   if (runtimeOrNull === null) {
     if (existsSync(path)) unlinkSync(path);
     return;
   }
 
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(runtimeOrNull, null, 2)}\n`, "utf8");
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+  const tempPath = join(dir, `.${basename(path)}.${process.pid}.tmp`);
+  writeFileSync(tempPath, `${JSON.stringify(runtimeOrNull, null, 2)}\n`, "utf8");
+  renameSync(tempPath, path);
 }
 
 function sh(cmd, args) {

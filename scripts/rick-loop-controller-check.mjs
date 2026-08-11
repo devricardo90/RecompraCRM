@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -118,6 +118,10 @@ completed_tasks:
 
     saveRuntimeState(wait1, runtimePath);
     assert(existsSync(runtimePath), "saveRuntimeState must create the runtime file");
+    assert(
+      readdirSync(tmpDir).length === 1,
+      "saveRuntimeState must leave no temp file behind after the atomic rename",
+    );
     const reloaded = loadRuntimeState(runtimePath);
     assert(reloaded.poll_count === wait1.poll_count, "reloaded runtime state lost poll_count");
     assert(reloaded.next_poll_at === wait1.next_poll_at, "reloaded runtime state lost next_poll_at");
