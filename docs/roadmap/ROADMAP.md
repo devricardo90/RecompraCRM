@@ -3,8 +3,8 @@
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
-current_task: TASK-08
-next_eligible_task: TASK-08
+current_task: TASK-09
+next_eligible_task: TASK-09
 
 ## Política
 
@@ -90,13 +90,23 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - main_ci: Validate 31418506819 SUCCESS
   - evidence: docs/evidence/TASK-07-validation.md
   - done_when: Sale e SaleItem persistidos com integridade.
-- [ ] TASK-08 — Transação de venda e estoque
+- [x] TASK-08 — Transação de venda e estoque
   - depends_on: TASK-07
-  - status: READY_TO_START
-  - baseline: e7fbb545d0640219846b55b0c23a9c0add878147
+  - status: COMPLETED
+  - branch: feat/TASK-08-sale-stock-transaction
+  - baseline: 9d050028cd2dbc95bacfc8dd6b91e32c13d345b9
+  - implementation_head: 00c3b0bbdda5eac8b1dc0f2a739d037d82ba98a0
+  - validation_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
+  - review: CODEX_REVIEW_CLEAN (3 rounds; 2 findings fixed)
+  - pr: #12 MERGED
+  - merge_main: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
+  - main_ci: Validate 31480804711 SUCCESS
+  - evidence: docs/evidence/TASK-08-validation.md
   - done_when: venda reduz estoque atomicamente e falha sem atualização parcial.
 - [ ] TASK-09 — Previsão de recompra
   - depends_on: TASK-08
+  - status: READY_TO_START
+  - baseline: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
   - done_when: fórmula canônica coberta por testes.
 - [ ] TASK-10 — Interface de registro de venda
   - depends_on: TASK-04, TASK-06, TASK-09

@@ -15,10 +15,11 @@ completed_tasks:
   - TASK-05
   - TASK-06
   - TASK-07
-last_completed_task: TASK-07
-current_task: TASK-08
+  - TASK-08
+last_completed_task: TASK-08
+current_task: TASK-09
 current_task_status: READY_TO_START
-next_eligible_task: TASK-08
+next_eligible_task: TASK-09
 attempt: 1
 max_stagnant_attempts: 3
 stagnant_attempt: 0
@@ -38,11 +39,11 @@ baseline_status: VERIFIED_GREEN
 validation_status: TASK_07_TECHNICAL_VERIFIED_GREEN
 review_status: REVIEW_CARRY_FORWARD_PASS
 review_carry_forward_reason: DOCS_ONLY_RECONCILIATION_OF_LAST_CODEX_FINDING
-technical_review_anchor: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-administrative_tail_head: 691d89c13bfc770f59af54ec97bd0b90845ed3ab
-ci_run: 31418506819
+technical_review_anchor: 827f2fdc51c6d7a882ab51213c8504dde231667e
+administrative_tail_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
+ci_run: 31480804711
 ci_status: SUCCESS
-last_green_ci_run: 31418506819
+last_green_ci_run: 31480804711
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
@@ -98,9 +99,19 @@ task_07_evidence: docs/evidence/TASK-07-validation.md
 pr_11_status: MERGED
 task_07_merge_main_head: e7fbb545d0640219846b55b0c23a9c0add878147
 task_07_main_ci_run: 31418506819
-next_action: START_TASK_08
+task_08_branch: feat/TASK-08-sale-stock-transaction
+task_08_baseline: 9d050028cd2dbc95bacfc8dd6b91e32c13d345b9
+task_08_implementation_head: 00c3b0bbdda5eac8b1dc0f2a739d037d82ba98a0
+task_08_update_delete_reconcile_fix_head: dc03d6ea6c2c4edab4baa750e89c0d96c600478d
+task_08_product_id_immutable_fix_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
+task_08_validation_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
+task_08_evidence: docs/evidence/TASK-08-validation.md
+pr_12_status: MERGED
+task_08_merge_main_head: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
+task_08_main_ci_run: 31480804711
+next_action: START_TASK_09
 next_action_authorized: true
-updated_at: "2026-08-10T18:22:00Z"
+updated_at: "2026-08-11T10:15:00Z"
 updated_by: Claude Code
 ```
 
@@ -162,5 +173,21 @@ STATE.md e HANDOFF.md, os contadores e o histórico append-only foram
 confirmados corretos, e o CI do HEAD estava `SUCCESS`, dispensando nova
 rodada de revisão puramente documental. O PR #11 foi mergeado em `main` no
 commit `e7fbb545d0640219846b55b0c23a9c0add878147`; o Validate pós-merge
-(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída. TASK-08 é a
+(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída.
+
+TASK-08 (transação de venda e estoque) foi implementada em `00c3b0b`: um
+trigger `AFTER INSERT` reduz o estoque do Product via `UPDATE` real
+(row-locked, não read-then-write no app), alimentando um CHECK
+`Product_currentStock_non_negative`. O Codex apontou que o trigger era
+somente-insert e não reconciliava `UPDATE`/`DELETE` de SaleItem (já
+permitidos pela TASK-07); corrigido em `dc03d6e` com triggers de
+reconciliação por delta. Uma segunda rodada apontou que
+`SaleItem_productId_fkey` usa `ON UPDATE CASCADE`, então renomear
+`Product.id` cobraria estoque em dobro através desses mesmos triggers;
+corrigido em `827f2fdc51c6d7a882ab51213c8504dde231667e` tornando `Product.id`
+imutável, no mesmo padrão do `Sale.id` da TASK-07. O harness cobre 10 casos,
+estável em 12 execuções locais. O Codex não apontou mais problemas nesse
+HEAD. O PR #12 foi mergeado em `main` no commit
+`0b31d5b13aab763b2bd87f0eaf109b8b21c1941f`; o Validate pós-merge
+(`31480804711`) confirmou `SUCCESS`. TASK-08 está concluída. TASK-09 é a
 próxima task elegível.

@@ -4,7 +4,7 @@
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
 loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-07
-status: TASK_07_COMPLETED_MERGED
+status: TASK_08_COMPLETED_MERGED
 task: TASK-07
 mode: CONTROLLED_AUTONOMOUS
 previous_agent: ChatGPT
@@ -41,9 +41,9 @@ changes:
   - "Harness cobre remocao concorrente de itens distintos da mesma Sale sob RepeatableRead, exigindo que exatamente uma transacao seja rejeitada."
 validation: TASK_07_TECHNICAL_VERIFIED_GREEN
 playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
-review: REVIEW_CARRY_FORWARD_PASS
-technical_review_anchor: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-administrative_tail_head: 691d89c13bfc770f59af54ec97bd0b90845ed3ab
+review: CODEX_REVIEW_CLEAN
+technical_review_anchor: 827f2fdc51c6d7a882ab51213c8504dde231667e
+administrative_tail_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
 findings:
   - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
   - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
@@ -80,8 +80,8 @@ last_green_ci_run: 31408117992
 previous_main_ci_run: 31117339641
 previous_main_ci_status: INFRASTRUCTURE_FAILURE
 pr_number: 11
-current_task: TASK-07
-next_eligible_task: TASK-07
+current_task: TASK-09
+next_eligible_task: TASK-09
 technical_commit: 940fce6fad7262aae7579a999c5fedb102a2233b
 validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
@@ -115,15 +115,22 @@ task_07_validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 task_07_ci_run: 31408117992
 task_07_merge_main_head: e7fbb545d0640219846b55b0c23a9c0add878147
 task_07_main_ci_run: 31418506819
+task_08_branch: feat/TASK-08-sale-stock-transaction
+task_08_baseline: 9d050028cd2dbc95bacfc8dd6b91e32c13d345b9
+task_08_validation_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
+task_08_evidence: docs/evidence/TASK-08-validation.md
+pr_12_status: MERGED
+task_08_merge_main_head: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
+task_08_main_ci_run: 31480804711
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
 task_07_sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
 evidence_task_07: docs/evidence/TASK-07-validation.md
 pr_11_status: MERGED
-next_action: START_TASK_08
+next_action: START_TASK_09
 next_action_authorized: true
-restart_command: git switch feat/TASK-07-sales-model && npm install
+restart_command: git switch main && git pull --ff-only && npm install
 ```
 
 TASK-04 foi mergeada pelo PR #8 em `main` no commit
@@ -167,5 +174,17 @@ desde `76c637c` em nenhuma dessas rodadas. Como o diff `665ec0a..691d89c`
 continha apenas STATE.md e HANDOFF.md, a política `REVIEW_CARRY_FORWARD` foi
 aplicada e o PR #11 foi mergeado em `main` no commit
 `e7fbb545d0640219846b55b0c23a9c0add878147`; o Validate pós-merge
-(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída. TASK-08 é a
+(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída.
+
+TASK-08 foi implementada em `00c3b0b`: trigger `AFTER INSERT` reduz estoque
+via `UPDATE` real, alimentando um CHECK `Product_currentStock_non_negative`.
+O Codex apontou que o trigger não reconciliava `UPDATE`/`DELETE` de SaleItem
+(já permitidos pela TASK-07); corrigido em `dc03d6e`. Uma segunda rodada
+apontou que `ON UPDATE CASCADE` em `SaleItem_productId_fkey` cobraria estoque
+em dobro ao renomear `Product.id`; corrigido em
+`827f2fdc51c6d7a882ab51213c8504dde231667e` tornando `Product.id` imutável. O
+harness cobre 10 casos. O Codex não apontou mais problemas nesse HEAD. O PR
+#12 foi mergeado em `main` no commit
+`0b31d5b13aab763b2bd87f0eaf109b8b21c1941f`; o Validate pós-merge
+(`31480804711`) confirmou `SUCCESS`. TASK-08 está concluída. TASK-09 é a
 próxima task elegível.
