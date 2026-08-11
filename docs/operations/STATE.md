@@ -2,11 +2,17 @@
 
 ```yaml
 schema_version: "1.0"
-state_version: 31
+state_version: 32
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
+loop_version: RICK_LOOP_V1_2_WAIT_STATE_ENGINE
+loop_upgrade_01b_status: MERGED
+loop_upgrade_01b_merge_main_head: 53c330811747d51fdebc8ff4851ca8d3bba8582e
+loop_upgrade_01b_main_ci_run: 31485257281
+executor_bridge: SCHEDULE_WAKEUP
+executor_bridge_note: "claude -p --dangerously-skip-permissions confirmed technically available but deliberately not used - disables all permission checks for a headless process with GitHub write/merge access on a non-sandboxed machine, a materially different risk than anything authorized in this project"
 completed_tasks:
   - TASK-01
   - TASK-02

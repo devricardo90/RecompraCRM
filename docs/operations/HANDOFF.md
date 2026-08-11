@@ -3,10 +3,12 @@
 ```yaml
 schema_version: "1.0"
 run_id: RCRM-MVP01-RUN-002
-loop_id: RCRM-TASK-07-SALES-MODEL-ATTEMPT-07
-status: TASK_08_COMPLETED_MERGED
-task: TASK-07
+loop_id: RCRM-LOOP-UPGRADE-01B-WAIT-STATE-ENGINE
+status: LOOP_UPGRADE_01B_COMPLETED_MERGED
+task: TASK-09
 mode: CONTROLLED_AUTONOMOUS
+loop_version: RICK_LOOP_V1_2_WAIT_STATE_ENGINE
+executor_bridge: SCHEDULE_WAKEUP
 previous_agent: ChatGPT
 next_role: Autonomous Agent
 baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
@@ -122,6 +124,11 @@ task_08_evidence: docs/evidence/TASK-08-validation.md
 pr_12_status: MERGED
 task_08_merge_main_head: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
 task_08_main_ci_run: 31480804711
+pr_13_status: MERGED
+loop_upgrade_01b_branch: infra/rick-loop-wait-state-engine
+loop_upgrade_01b_validation_head: 2de75145894bead1808dda7c0658305ed7643413
+loop_upgrade_01b_merge_main_head: 53c330811747d51fdebc8ff4851ca8d3bba8582e
+loop_upgrade_01b_main_ci_run: 31485257281
 task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
 task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
 task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
@@ -186,5 +193,23 @@ em dobro ao renomear `Product.id`; corrigido em
 harness cobre 10 casos. O Codex não apontou mais problemas nesse HEAD. O PR
 #12 foi mergeado em `main` no commit
 `0b31d5b13aab763b2bd87f0eaf109b8b21c1941f`; o Validate pós-merge
-(`31480804711`) confirmou `SUCCESS`. TASK-08 está concluída. TASK-09 é a
-próxima task elegível.
+(`31480804711`) confirmou `SUCCESS`. TASK-08 está concluída.
+
+LOOP-UPGRADE-01B (motor de wait-state/backoff) foi implementado em
+`586e76b`: backoff limitado (30/30/60/60/120/300/600s) e estado de runtime
+persistido em `.rick/tmp/loop-runtime.json` (gitignored), sobrevivendo a
+reinícios de processo. Antes de construir, foi investigado
+`claude -p --dangerously-skip-permissions` como ponte para um executor
+totalmente autônomo; é tecnicamente real, mas desabilitar toda checagem de
+permissão para um processo headless com acesso de escrita/merge no GitHub em
+uma máquina não isolada é um risco materialmente diferente do já autorizado
+neste projeto, então essa via foi deliberadamente descartada.
+`ScheduleWakeup` permanece como a ponte executora. O Codex apontou que
+`writeFileSync` não é atômico — uma queda de processo durante a escrita (o
+cenário exato que essa persistência existe para sobreviver) poderia deixar
+JSON truncado, e `loadRuntimeState` convertia a falha de parse em `null`
+silenciosamente, perdendo a identidade do wait ativo; corrigido em
+`2de7514` com escrita em arquivo temporário seguida de rename atômico. O
+Codex não apontou mais problemas. O PR #13 foi mergeado em `main` no commit
+`53c330811747d51fdebc8ff4851ca8d3bba8582e`; o Validate pós-merge
+(`31485257281`) confirmou `SUCCESS`. TASK-09 é a próxima task elegível.
