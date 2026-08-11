@@ -64,6 +64,9 @@ jobs:
       - name: Test Sale persistence
         run: npm run test:sale
 
+      - name: Test Sale stock transaction
+        run: npm run test:sale-stock
+
       - name: Test Product API integration
         run: npm run test:product-api
 
