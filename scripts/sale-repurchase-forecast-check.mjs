@@ -308,6 +308,67 @@ try {
     assert(salesAfter === salesBefore, "rejected overflow still persisted a Sale");
   }
 
+  // Case I: soldAt itself already near PostgreSQL's timestamp boundary
+  // must still be rejected, even with a day count well inside the
+  // day-count-only bound the previous fix relied on. JavaScript's own Date
+  // range tops out around year 275760 (below PostgreSQL's ~294276 limit),
+  // so a soldAt this far out can only be constructed via raw SQL - it is
+  // not reachable through the Prisma/application path, but the SQL
+  // function must still be correct for any caller.
+  {
+    let error;
+    try {
+      await prisma.$queryRaw`SELECT "compute_expected_repurchase_at"('294270-01-01'::timestamp(3), 1, 100000000)`;
+    } catch (caught) {
+      error = caught;
+    }
+    assert(
+      error,
+      "a day count within the old bound still overflowed when soldAt was already near the timestamp boundary, and should have been rejected",
+    );
+  }
+
+  // Case J: changing a Product's consumptionDays through the same mutation
+  // the PUT /api/products/:id route performs recomputes every SaleItem
+  // already referencing that product, not just future sales.
+  {
+    const productId = await makeProduct(10);
+    const saleOne = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId, quantity: 2 }] },
+      },
+      include: { items: true },
+    });
+    const laterSoldAt = new Date("2026-08-08T00:00:00.000Z");
+    const saleTwo = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt: laterSoldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId, quantity: 3 }] },
+      },
+      include: { items: true },
+    });
+
+    await prisma.product.update({ where: { id: productId }, data: { consumptionDays: 25 } });
+
+    const [itemOne, itemTwo] = await Promise.all([
+      prisma.saleItem.findUniqueOrThrow({ where: { id: saleOne.items[0].id } }),
+      prisma.saleItem.findUniqueOrThrow({ where: { id: saleTwo.items[0].id } }),
+    ]);
+    assert(
+      itemOne.expectedRepurchaseAt.getTime() === soldAt.getTime() + 2 * 25 * DAY_MS,
+      "consumptionDays update did not recompute the first sale's item forecast",
+    );
+    assert(
+      itemTwo.expectedRepurchaseAt.getTime() === laterSoldAt.getTime() + 3 * 25 * DAY_MS,
+      "consumptionDays update did not recompute the second sale's item forecast",
+    );
+  }
+
   console.log("Sale repurchase forecast tests: PASS");
 } catch (error) {
   console.error("Sale repurchase forecast tests: FAIL");
