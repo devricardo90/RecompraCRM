@@ -211,6 +211,103 @@ try {
     );
   }
 
+  // Case F: rows written while the SaleItem trigger is absent (simulating
+  // pre-TASK-09 data) are backfilled by the same computation the migration
+  // runs once, not left NULL forever.
+  {
+    const productId = await makeProduct(12);
+    await prisma.$executeRaw`DROP TRIGGER "SaleItem_computes_expected_repurchase" ON "SaleItem"`;
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: { create: [{ productId, quantity: 5 }] },
+      },
+      include: { items: true },
+    });
+    const itemId = sale.items[0].id;
+    const beforeBackfill = await prisma.saleItem.findUniqueOrThrow({ where: { id: itemId } });
+    assert(beforeBackfill.expectedRepurchaseAt === null, "test setup must produce a NULL forecast without the trigger");
+
+    await prisma.$executeRaw`
+      UPDATE "SaleItem" si
+      SET "expectedRepurchaseAt" = "compute_expected_repurchase_at"(s."soldAt", si."quantity", p."consumptionDays")
+      FROM "Sale" s, "Product" p
+      WHERE si."saleId" = s."id" AND si."productId" = p."id" AND si."id" = ${itemId}
+    `;
+    const afterBackfill = await prisma.saleItem.findUniqueOrThrow({ where: { id: itemId } });
+    assert(
+      afterBackfill.expectedRepurchaseAt?.getTime() === soldAt.getTime() + 5 * 12 * DAY_MS,
+      "backfill did not compute the same formula as the trigger",
+    );
+
+    await prisma.$executeRaw`
+      CREATE TRIGGER "SaleItem_computes_expected_repurchase"
+      BEFORE INSERT OR UPDATE OF "quantity", "productId", "saleId" ON "SaleItem"
+      FOR EACH ROW EXECUTE FUNCTION "compute_sale_item_expected_repurchase"()
+    `;
+  }
+
+  // Case G: correcting a Sale's soldAt propagates to every one of its
+  // items' forecasts, not just future SaleItem mutations.
+  {
+    const productAId = await makeProduct(20);
+    const productBId = await makeProduct(6);
+    const sale = await prisma.sale.create({
+      data: {
+        customerId,
+        soldAt,
+        status: "MODEL_TEST",
+        items: {
+          create: [
+            { productId: productAId, quantity: 3 },
+            { productId: productBId, quantity: 2 },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const correctedSoldAt = new Date("2026-08-05T00:00:00.000Z");
+    await prisma.sale.update({ where: { id: sale.id }, data: { soldAt: correctedSoldAt } });
+
+    const items = await prisma.saleItem.findMany({ where: { saleId: sale.id } });
+    const itemA = items.find((item) => item.productId === productAId);
+    const itemB = items.find((item) => item.productId === productBId);
+    assert(
+      itemA.expectedRepurchaseAt.getTime() === correctedSoldAt.getTime() + 3 * 20 * DAY_MS,
+      "correcting Sale.soldAt did not recompute item A's forecast",
+    );
+    assert(
+      itemB.expectedRepurchaseAt.getTime() === correctedSoldAt.getTime() + 2 * 6 * DAY_MS,
+      "correcting Sale.soldAt did not recompute item B's forecast",
+    );
+  }
+
+  // Case H: a quantity/consumptionDays combination that would produce a
+  // non-representable forecast is rejected with a clear error instead of
+  // a low-level arithmetic or timestamp-range failure, and changes nothing.
+  {
+    const productId = await makeProduct(2147483647);
+    const salesBefore = await prisma.sale.count();
+    let error;
+    try {
+      await prisma.sale.create({
+        data: {
+          customerId,
+          soldAt,
+          status: "MODEL_TEST",
+          items: { create: [{ productId, quantity: 1 }] },
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    assert(error, "an overflowing quantity x consumptionDays combination was accepted");
+    const salesAfter = await prisma.sale.count();
+    assert(salesAfter === salesBefore, "rejected overflow still persisted a Sale");
+  }
+
   console.log("Sale repurchase forecast tests: PASS");
 } catch (error) {
   console.error("Sale repurchase forecast tests: FAIL");
