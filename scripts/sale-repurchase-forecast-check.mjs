@@ -369,6 +369,50 @@ try {
     );
   }
 
+  // Case K: a forecast PostgreSQL can represent but a JavaScript Date
+  // cannot (Prisma exposes this column as a JS Date, and application code
+  // - including this harness - calls methods like getTime() on it) must
+  // still be rejected. Tested via the SQL function directly since neither
+  // JavaScript's Date range nor the application layer can even express an
+  // input this large.
+  {
+    let error;
+    try {
+      await prisma.$queryRaw`SELECT "compute_expected_repurchase_at"('2026-01-01'::timestamp(3), 1, 100000000)`;
+    } catch (caught) {
+      error = caught;
+    }
+    assert(
+      error,
+      "a forecast within PostgreSQL's range but beyond JavaScript Date's representable range was still accepted",
+    );
+  }
+
+  // Case L: a SaleItem insert racing a concurrent update of its product's
+  // consumptionDays must not leave the item forecast from a stale value
+  // regardless of which side wins the row-lock race - either the insert
+  // waits and reads the fresh value directly, or the update waits and its
+  // own propagation trigger corrects the item afterward.
+  {
+    const productId = await makeProduct(10);
+    const [sale] = await Promise.all([
+      prisma.sale.create({
+        data: {
+          customerId,
+          soldAt,
+          status: "MODEL_TEST",
+          items: { create: [{ productId, quantity: 2 }] },
+        },
+      }),
+      prisma.product.update({ where: { id: productId }, data: { consumptionDays: 40 } }),
+    ]);
+    const item = await prisma.saleItem.findFirstOrThrow({ where: { saleId: sale.id } });
+    assert(
+      item.expectedRepurchaseAt.getTime() === soldAt.getTime() + 2 * 40 * DAY_MS,
+      "a SaleItem insert racing a concurrent consumptionDays update ended up forecast from the stale value",
+    );
+  }
+
   console.log("Sale repurchase forecast tests: PASS");
 } catch (error) {
   console.error("Sale repurchase forecast tests: FAIL");

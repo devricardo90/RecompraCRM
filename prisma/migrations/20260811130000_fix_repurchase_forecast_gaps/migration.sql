@@ -13,6 +13,11 @@
 -- Factor the formula into a shared, guarded function so both the
 -- SaleItem-level trigger and the new Sale.soldAt-level trigger compute it
 -- identically, then use it to backfill existing rows.
+-- The backfill at the end of this migration calls this function against
+-- every existing row, so it must already be exact - an intermediate,
+-- overly-strict version here would abort this migration's own backfill on
+-- legitimate historical data before a later migration could ever replace
+-- it, blocking deploy entirely.
 CREATE FUNCTION "compute_expected_repurchase_at"(
   "sold_at" TIMESTAMP(3),
   "quantity" INTEGER,
@@ -20,25 +25,38 @@ CREATE FUNCTION "compute_expected_repurchase_at"(
 ) RETURNS TIMESTAMP(3) AS $$
 DECLARE
   v_total_days BIGINT;
+  v_result TIMESTAMP(3);
 BEGIN
   IF "sold_at" IS NULL OR "consumption_days" IS NULL THEN
     RETURN NULL;
   END IF;
 
-  -- Cast to bigint before multiplying so this can't overflow INTEGER, then
-  -- reject anything that would still overflow PostgreSQL's representable
-  -- TIMESTAMP range (roughly +/-292,000 years) with a clear error instead
-  -- of a low-level arithmetic/timestamp-range one.
+  -- bigint avoids INTEGER overflow in the multiplication itself.
   v_total_days := "quantity"::BIGINT * "consumption_days";
 
-  IF v_total_days > 100000000 OR v_total_days < -100000000 THEN
+  BEGIN
+    v_result := "sold_at" + (v_total_days::text || ' days')::interval;
+  EXCEPTION
+    WHEN datetime_field_overflow THEN
+      v_result := NULL;
+  END;
+
+  -- PostgreSQL's own TIMESTAMP range (~4713 BC to ~294276 AD) is wider than
+  -- what a JavaScript Date can represent (~271821 BC to 275760 AD), and
+  -- Prisma exposes this column as a JS Date that the application calls
+  -- methods like getTime() on. Bound to the tighter of the two ranges so a
+  -- forecast PostgreSQL accepts can't still be undecodable by the app.
+  -- PostgreSQL's floor is already stricter than JS's floor, so the
+  -- exception above covers that side; only the ceiling needs an explicit
+  -- check here.
+  IF v_result IS NULL OR v_result > TIMESTAMP '275760-09-13' THEN
     RAISE EXCEPTION
-      'Cannot compute a repurchase forecast this far out (quantity % x consumptionDays % = % days)',
-      "quantity", "consumption_days", v_total_days
+      'Cannot compute a repurchase forecast this far out (soldAt=%, quantity=%, consumptionDays=%)',
+      "sold_at", "quantity", "consumption_days"
       USING ERRCODE = '22003';
   END IF;
 
-  RETURN "sold_at" + (v_total_days::text || ' days')::interval;
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

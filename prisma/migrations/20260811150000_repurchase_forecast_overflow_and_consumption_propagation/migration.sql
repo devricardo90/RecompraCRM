@@ -1,48 +1,13 @@
--- Codex found two more gaps after the previous fix migration:
+-- Codex found that Product.consumptionDays can be changed through the
+-- existing PUT /api/products/:id route, but nothing recomputed the
+-- forecasts of SaleItems already referencing that product - only
+-- Sale.soldAt propagation was added, not Product.consumptionDays.
 --
--- P2: the day-count bound (+/-100,000,000 days) only protects against a
---     large day count in isolation. If sold_at is itself already near
---     PostgreSQL's representable TIMESTAMP boundary, adding even a
---     "safely bounded" day count can still overflow - the bound checked
---     the wrong thing. Replace it with catching the actual overflow the
---     addition itself would raise (SQLSTATE 22008,
---     datetime_field_overflow), which is exact for both directions
---     instead of an approximation.
---
--- P2: Product.consumptionDays can be changed through the existing
---     PUT /api/products/:id route, but nothing recomputed the forecasts of
---     SaleItems already referencing that product - only Sale.soldAt
---     propagation was added, not Product.consumptionDays.
-CREATE OR REPLACE FUNCTION "compute_expected_repurchase_at"(
-  "sold_at" TIMESTAMP(3),
-  "quantity" INTEGER,
-  "consumption_days" INTEGER
-) RETURNS TIMESTAMP(3) AS $$
-DECLARE
-  v_total_days BIGINT;
-  v_result TIMESTAMP(3);
-BEGIN
-  IF "sold_at" IS NULL OR "consumption_days" IS NULL THEN
-    RETURN NULL;
-  END IF;
-
-  -- bigint avoids INTEGER overflow in the multiplication itself.
-  v_total_days := "quantity"::BIGINT * "consumption_days";
-
-  BEGIN
-    v_result := "sold_at" + (v_total_days::text || ' days')::interval;
-  EXCEPTION
-    WHEN datetime_field_overflow THEN
-      RAISE EXCEPTION
-        'Cannot compute a repurchase forecast this far out (soldAt=%, quantity=%, consumptionDays=%)',
-        "sold_at", "quantity", "consumption_days"
-        USING ERRCODE = '22003';
-  END;
-
-  RETURN v_result;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
+-- (compute_expected_repurchase_at's overflow handling was corrected
+-- directly in 20260811130000_fix_repurchase_forecast_gaps rather than
+-- layered here - that migration's own backfill calls it, so an
+-- intermediate, overly-strict version there would have aborted deploy on
+-- legitimate historical data before this migration could ever run.)
 CREATE FUNCTION "recompute_sale_items_expected_repurchase_for_product"() RETURNS TRIGGER AS $$
 BEGIN
   UPDATE "SaleItem" si
