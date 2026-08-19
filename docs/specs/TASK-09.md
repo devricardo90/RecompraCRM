@@ -1,10 +1,12 @@
 # TASK-09 Spec — Previsão de recompra
 
-Status: RECOVERY_ACTIVE
+Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Current reviewed HEAD: `3344d6a3ff7bd25fbd9eacebc14473a071b31508`
+Last independently reviewed HEAD: `3344d6a3ff7bd25fbd9eacebc14473a071b31508`
+Current technical HEAD: `a352de7affd6d331c992282f61ac4f335e6783b2`
+Validation: Validate #87 / `32257807500` SUCCESS
 
 ## Outcome
 
@@ -31,9 +33,17 @@ A multi-product sale has an independent forecast for each item.
 
 ## Recovery policy for current review findings
 
-1. Concurrent SaleItem writes and Product updates must serialize without shared-lock upgrade deadlocks. Forecast reads that must later coexist with Product stock updates use update-strength locking rather than compatible shared locks.
-2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. During legacy backfill, such a row remains `expectedRepurchaseAt = NULL`; new or subsequently modified writes with an unrepresentable forecast are rejected with a clear domain error.
-3. Representable legacy rows must be backfilled correctly; the exception policy must not weaken normal formula correctness.
+1. Concurrent SaleItem writes and Product updates must serialize without shared-lock upgrade deadlocks. Product forecast reads acquire `FOR NO KEY UPDATE` because the same SaleItem write later updates Product stock; Sale.soldAt reads remain `FOR SHARE`.
+2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
+3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
+
+## Validation added for recovery
+
+- recreate a real database using only migrations before TASK-09;
+- persist an unrepresentable but previously valid historical SaleItem;
+- deploy the complete TASK-09 migration chain and require success with that legacy forecast remaining NULL;
+- prove the strict runtime helper still rejects the same unrepresentable forecast;
+- run two concurrent same-Product sales with sufficient stock and require both to commit, decrement stock twice, and produce correct forecasts.
 
 ## Done when
 
