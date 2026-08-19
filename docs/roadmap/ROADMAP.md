@@ -4,8 +4,8 @@ status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
-current_task: TASK-09
-next_eligible_task: TASK-09
+current_task: TASK-10
+next_eligible_task: TASK-10
 
 ## Política
 
@@ -104,19 +104,26 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - main_ci: Validate 31480804711 SUCCESS
   - evidence: docs/evidence/TASK-08-validation.md
   - done_when: venda reduz estoque atomicamente e falha sem atualização parcial.
-- [ ] TASK-09 — Previsão de recompra
+- [x] TASK-09 — Previsão de recompra
   - depends_on: TASK-08
-  - status: RECOVERING
+  - status: COMPLETED
   - baseline: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
   - branch: feat/TASK-09-repurchase-forecast
-  - pr: #14 OPEN
-  - reviewed_head: 3344d6a3ff7bd25fbd9eacebc14473a071b31508
-  - validation: Validate #82 / 31587932203 SUCCESS
-  - blocking_review_findings: 2 P1
+  - pr: #14 MERGED (squash)
+  - technical_head: 82c68a7e6c73a0f141a2c8b30ae7d7632b750dee
+  - branch_ci: Validate 32274791956 SUCCESS
+  - review: CODEX_REVIEW_CLEAN on 82c68a7e6c73a0f141a2c8b30ae7d7632b750dee (9 rounds; 11 findings fixed, 1 residual accepted)
+  - merge_main: e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d
+  - main_ci: Validate 32282972720 SUCCESS
   - spec: docs/specs/TASK-09.md
+  - evidence: docs/evidence/TASK-09-validation.md
+  - accepted_residual: per-row lock ordering leaves a retryable 40P01 for multi-item SaleItem statements; contracted away in TASK-10
+  - architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL (9 review rounds) -> ARCH-01
   - done_when: fórmula canônica coberta por testes, migration segura para legado e revisão sem bloqueios.
 - [ ] TASK-10 — Interface de registro de venda
   - depends_on: TASK-04, TASK-06, TASK-09
+  - spec: docs/specs/TASK-10.md
+  - concurrency_contract: obrigatório — ver TASK-09 accepted_residual e a seção "Contrato de concorrência" do spec
   - done_when: fluxo mobile-first validado com Playwright efêmero.
 - [ ] TASK-11 — Histórico do cliente
   - depends_on: TASK-10
@@ -139,3 +146,23 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 - [ ] TASK-17 — Fechamento do roadmap MVP-01
   - depends_on: TASK-16
   - done_when: 17/17 tasks verificadas e estado ROADMAP_COMPLETED_WAITING_HUMAN.
+
+## Itens de arquitetura (não bloqueantes)
+
+Itens levantados por evidência de execução. Não reabrem tasks concluídas e não
+autorizam refatoração imediata.
+
+- [ ] ARCH-01 — Avaliar previsão de recompra persistida vs calculada
+  - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-09 (9 rodadas de revisão com defeitos distintos e confirmados)
+  - subsystem: SaleItem.expectedRepurchaseAt e a malha de triggers Sale/SaleItem/Product
+  - blocking: false
+  - status: OPEN
+  - decide_before: TASK-12 — Dashboard de recompra (primeiro consumidor forte do campo)
+  - question: `expectedRepurchaseAt` deve continuar sendo um campo derivado persistido de forma síncrona por triggers PostgreSQL?
+  - options:
+      - A. modelo atual, persistido e mantido por triggers
+      - B. cálculo na leitura (view ou expressão de consulta)
+      - C. projeção assíncrona/materializada, se justificável
+  - criteria: complexidade de concorrência; superfície de deadlock; amplificação de escrita; desempenho de leitura/consulta; requisitos de histórico e dashboard; consistência dos dados; complexidade de migração; observabilidade; manutenibilidade
+  - evidence: docs/evidence/TASK-09-validation.md; LESSON-RCRM-0009..0014
+  - non_goal: não refatorar a TASK-09 agora

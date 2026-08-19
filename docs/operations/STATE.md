@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 42
+state_version: 43
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -24,12 +24,13 @@ completed_tasks:
   - TASK-06
   - TASK-07
   - TASK-08
-last_completed_task: TASK-08
-current_task: TASK-09
-current_task_status: RECOVERING
-next_eligible_task: TASK-09
-branch: feat/TASK-09-repurchase-forecast
-pr_number: 14
+  - TASK-09
+last_completed_task: TASK-09
+current_task: TASK-10
+current_task_status: NOT_STARTED
+next_eligible_task: TASK-10
+branch: main
+pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -48,7 +49,7 @@ task_09_round7_findings_status: REVIEW_CLOSED_P1_RESOLVED
 task_09_round8_findings: 1 P1 interval overflow in legacy backfill, 1 P2 per-row lock-order scope
 task_09_round8_findings_status: REVIEW_CLOSED_BOTH_RESOLVED
 task_09_round9_findings: 1 P2 expectedRepurchaseAt writable directly
-task_09_round9_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round9_findings_status: REVIEW_CLOSED_P2_RESOLVED
 task_09_round9_migration: prisma/migrations/20260820000000_recompute_forecast_on_direct_write
 task_09_round8_p2_disposition: SCOPE_CORRECTED_RESIDUAL_ACCEPTED_RETRYABLE_40P01
 task_09_round7_migration: prisma/migrations/20260819220000_lock_both_products_before_sale
@@ -61,128 +62,60 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-09.md
+task_spec: docs/specs/TASK-10.md
+task_09_status: COMPLETED
+task_09_technical_head: 82c68a7e6c73a0f141a2c8b30ae7d7632b750dee
+task_09_branch_ci: 32274791956
+task_09_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_09_review_rounds: 9
+task_09_pr: 14 MERGED_SQUASH
+task_09_merge_main_head: e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d
+task_09_main_ci_run: 32282972720
+task_09_main_ci_status: SUCCESS
+task_09_accepted_residual: RETRYABLE_40P01_ON_MULTI_ITEM_SALEITEM_STATEMENTS
+task_09_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL
+task_09_architecture_item: ARCH-01
+external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND9_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: START_TASK_10
 next_action_authorized: true
-updated_at: "2026-08-19T17:55:00Z"
+updated_at: "2026-08-19T17:45:00Z"
 updated_by: Claude Code
 ```
 
-TASK-01 through TASK-08 remain completed. Rick Loop v1.3 is merged and frozen
-through TASK-17. TASK-09 resumed from its existing PR #14 rather than
-restarting.
+TASK-01 through TASK-09 are completed and integrated into `main`. Rick Loop
+v1.3 is merged and frozen through TASK-17.
 
-The round-2 P1s (legacy backfill and lock upgrade) were fixed in `a352de7` and
-are no longer reported. An independent review then landed on `e3be67a` — the
-exact current PR head, with Validate #88 (`32258132550`) green — and reported
-two *new* P1 findings, both real deadlock cycles: `Product <-> SaleItem` from
-the consumptionDays propagation meeting TASK-08's stock reconciliation, and
-`Sale <-> SaleItem` from the soldAt propagation meeting TASK-07's "at least one
-item" guard. Each pair locks the same two tables in opposite order.
+TASK-09 (previsão de recompra) persists a per-SaleItem forecast using the
+canonical formula, computed and maintained entirely in the persistence layer:
+computed on insert, recomputed when quantity/productId/saleId change,
+propagated when `Sale.soldAt` or `Product.consumptionDays` change, and
+recomputed rather than stored when a caller writes the column directly.
+Representable historical rows are backfilled; unrepresentable legacy rows stay
+NULL instead of blocking deployment, while new unrepresentable writes are
+rejected.
 
-Neither cycle can be fixed by reordering row locks, and the child->parent
-direction belongs to TASK-07/08 and stays. The fix instead prevents the two
-*directions* from overlapping: a statement-level BEFORE trigger — the only
-point preceding every row lock — takes one transaction-scoped advisory lock,
-shared for SaleItem writes (so same-direction concurrency is unchanged) and
-exclusive for the two propagating parent statements. Only `UPDATE OF` the
-propagating column arms the exclusive lock, so TASK-08 stock updates and the
-TASK-07 guard never attempt a shared->exclusive upgrade from inside the child
-direction.
+Nine independent review rounds hardened the concurrency behaviour of that
+trigger web against TASK-07's item guard and TASK-08's stock reconciliation.
+Eleven findings were confirmed and fixed; the final review of the exact head
+`82c68a7e6c73a0f141a2c8b30ae7d7632b750dee` reported no major issues. PR #14 was squash-merged into `main` at
+`e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d`, and the post-merge Validate run `32282972720` is SUCCESS.
 
-A plain global mutex was tried first and rejected: it removed the deadlocks but
-serialized whole transactions and deadlocked the TASK-07 harness case where two
-transactions must both delete an item before either commits.
-`scripts/sale-forecast-lock-order-check.mjs` reproduces both cycles on a
-database built from the migrations preceding the fix, then requires the
-identical interleavings to commit once the fix is deployed. All local gates are
-green.
+One residual is accepted and recorded rather than hidden: the lock ordering is
+a per-row guarantee, so a multi-item SaleItem statement or transaction can
+still produce a retryable `40P01`. No current application path issues one, and
+TASK-10's spec now carries a binding concurrency contract that must be settled
+before its implementation.
 
-The round-3 fix is `e7cfff0980954bab06db5da5ebe98e0050083904`, Validate
-`32263724994` SUCCESS. The independent review of that exact head confirmed both
-P1s resolved and reported one new P2: two transactions moving items in opposite
-directions between two multi-item sales still deadlocked. Both are the child
-direction, so the shared gate admits both by design, but each forecast trigger
-took `FOR SHARE` on its destination Sale while the deferred TASK-07 guard
-updates its source Sale at commit.
+The nine rounds also produced an `ARCHITECTURE_COMPLEXITY_SIGNAL`, recorded as
+the non-blocking `ARCH-01` roadmap item: whether `expectedRepurchaseAt` should
+remain a synchronously persisted derived field. It must be decided before
+TASK-12 couples a dashboard to the current persistence design. It does not
+reopen TASK-09.
 
-`20260819160000_drop_redundant_sale_share_lock` dropped that share lock, and
-Validate `32265214581` was SUCCESS on `7b78b92`.
-
-The review of `7b78b92` then cleared that P2 and reported one more: a
-`REPEATABLE READ` writer whose snapshot predates a committed `soldAt`
-correction still persisted a forecast built on the old date. The gate cannot
-help - the correction is already committed, so there is no overlap to exclude -
-and the propagation cannot repair a row that was not attached to the sale when
-it ran.
-
-`20260819180000_order_sale_locks_for_forecast` restores a locking read strong
-enough to reject that writer while keeping the round-4 cycle closed. The
-review's suggested `FOR KEY SHARE` was tried and empirically rejected: a
-`soldAt` correction is a non-key update, so KEY SHARE does not conflict with it
-and the stale snapshot is still served. What reconciles both rounds is a fixed
-lock order - a move touches two sale rows, so the trigger locks both with
-`FOR NO KEY UPDATE`, lowest id first, and opposite-direction moves then wait
-instead of deadlocking.
-
-Validate `32268303782` was SUCCESS on `f89e225`. The review of that head then
-cleared the round-5 P2 and reported one P1: round-5's own Sale-before-Product
-order deadlocks against the delete path, which reaches Product first (TASK-08
-stock restoration, AFTER DELETE) and Sale last (TASK-07 guard, at COMMIT) and
-cannot be reordered.
-
-`20260819200000_lock_product_before_sale_for_forecast` therefore locks Product
-before Sale, the only order both child paths can share. Round-5's other
-properties are untouched: the sales are still locked `FOR NO KEY UPDATE`, which
-is what rejects a stale `REPEATABLE READ` writer, and a move still locks source
-and destination lowest id first. The child direction now has one global order -
-Product, then Sale by ascending id.
-
-Validate `32271278329` was SUCCESS on `2d004f4`. The review of that head cleared
-the round-6 P1 and reported one more: round 6 locked only `NEW."productId"`,
-while TASK-08's reconciliation updates both products on a reassignment, so the
-old product was reached only after the Sale and the cycle returned for that
-mutation.
-
-`20260819220000_lock_both_products_before_sale` locks every Product the
-statement can touch, lowest id first, before any Sale. The child direction now
-has a complete global order - every Product by ascending id, then every Sale by
-ascending id - of which the delete path is a prefix.
-
-Validate `32272322645` was SUCCESS on `52653c7`. The review of that head cleared
-the round-7 P1 and reported two more.
-
-The P1 is a deployment blocker: with quantity and consumptionDays both at the
-INTEGER ceiling the day count overflows the `interval` cast (22015) before the
-addition can overflow the timestamp (22008), and only the latter was caught, so
-the legacy backfill aborted for data that was legal before TASK-09. The helper
-now catches both, fixed inside `20260811130000_fix_repurchase_forecast_gaps`
-because that migration's own backfill is the failing caller.
-
-The P2 is accepted as accurate and its scope corrected rather than removed: the
-round-7 ordering is per affected row, not per statement or transaction. Both
-ways to close it are worse - statement-wide prelocking needs the affected rows
-before any row is locked and PostgreSQL gives transition tables only to AFTER
-triggers, and serializing child statements reintroduces the global mutex round
-3 had to abandon. The residual is a retryable 40P01 on multi-item SaleItem
-writes, which no current path issues.
-
-Validate `32273716527` was SUCCESS on `f6541e1`. The review of that head cleared
-both round-8 findings, including the accepted scope correction, and reported one
-more P2: `expectedRepurchaseAt` could be written directly, because the trigger
-did not fire on updates of the forecast column itself while the schema exposes
-it as writable.
-
-`20260820000000_recompute_forecast_on_direct_write` adds the column to the
-trigger's list so a direct write is recomputed rather than stored. It is a
-separate, later migration on purpose: the same column list is in force while
-`20260811130000` runs its legacy backfill, which is itself an UPDATE of that
-column, and arming the trigger there would abort deployment on the very legacy
-data the backfill exists to tolerate.
-
-The harness reproduces each defect at the exact migration depth it lives at -
-seven classes now - and requires correct behaviour on the full chain. All local
-gates are green.
+TASK-10 (interface de registro de venda) is the next eligible task: its
+dependencies TASK-04, TASK-06 and TASK-09 are all satisfied, and it is the
+lowest-numbered pending task with dependencies met. TASK-13 is also unblocked
+but comes later in roadmap order.

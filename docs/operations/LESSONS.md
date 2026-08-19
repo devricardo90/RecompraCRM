@@ -164,3 +164,129 @@ early_detection: "Escrever um harness que reconstrói o banco sem a correção, 
 limits: "Um mutex exclusivo global remove os deadlocks mas serializa transações inteiras e trava padrões legítimos em que duas transações precisam escrever antes de qualquer commit - foi tentado na TASK-09 e rejeitado por travar o caso concorrente da TASK-07. Resta o caso de uma única transação que escreve SaleItem e também altera consumptionDays/soldAt: ela pediria exclusive segurando shared e seria abortada como deadlock normal e retentável; nenhuma rota da aplicação faz essa combinação."
 evidence: "TASK-09: scripts/sale-forecast-lock-order-check.mjs reproduz os dois ciclos antes da migration 20260819140000_serialize_forecast_lock_order e exige commit correto depois; gates locais completos PASS incluindo test:sale (caso concorrente da TASK-07)."
 ```
+
+### LESSON-RCRM-0010 — Propagação pai->filho reabre ciclos a cada mutação suportada
+
+```yaml
+id: LESSON-RCRM-0010
+status: validated
+type: concurrency
+severity: high
+source_task: TASK-09
+class: REVIEW_FINDING
+symptom: "Seis ciclos de deadlock distintos apareceram em rodadas sucessivas na mesma malha de triggers: Product<->SaleItem, Sale<->SaleItem, movimentação cruzada de itens em direções opostas, escrita vs exclusão, e reatribuição de productId deixando o produto antigo travado depois da Sale."
+root_cause: "Cada mutação suportada de SaleItem (INSERT, quantity, productId, saleId, DELETE) toca um conjunto diferente de linhas pai, e cada correção anterior ordenava apenas o subconjunto conhecido naquela rodada."
+fix: "Ordem global de locks na direção filho: todo Product que o statement toca, por id crescente, e só então toda Sale que ele toca, por id crescente. A direção pai fica mutuamente exclusiva via advisory lock exclusive contra o shared dos filhos."
+prevention: "Antes de adicionar propagação pai->filho, enumerar TODAS as mutações suportadas do filho e, para cada uma, o conjunto de linhas pai que os triggers existentes tocarão - inclusive as tocadas por triggers AFTER e por constraint triggers deferred."
+early_detection: "Para cada mutação suportada, escrever um caso concorrente contra a exclusão e contra a mutação inversa antes de considerar a task pronta."
+limits: "A ordem é garantida por linha afetada, não por statement nem por transação; ver LESSON-RCRM-0013."
+evidence: "TASK-09 rodadas 3 a 7; migrations 20260819140000, 20260819160000, 20260819180000, 20260819200000, 20260819220000; scripts/sale-forecast-lock-order-check.mjs."
+```
+
+### LESSON-RCRM-0011 — Snapshot REPEATABLE READ obsoleto persiste valor derivado errado
+
+```yaml
+id: LESSON-RCRM-0011
+status: validated
+type: concurrency
+severity: high
+source_task: TASK-09
+class: REVIEW_FINDING
+symptom: "Uma transação REPEATABLE READ cujo snapshot precede um commit de correção de Sale.soldAt inseria um item e gravava a previsão calculada com a data antiga; a propagação do pai não conseguia corrigir a linha porque ela ainda não estava ligada à venda quando a propagação rodou."
+root_cause: "Exclusão mútua no tempo (advisory lock) não cobre o caso em que o pai JÁ commitou: não há sobreposição a excluir, e a leitura simples continua servindo o snapshot antigo."
+fix: "Ler a linha pai com um row lock que conflite com UPDATE não-chave (FOR NO KEY UPDATE), o que faz o PostgreSQL levantar 40001 para o escritor obsoleto em vez de aceitar o valor errado."
+prevention: "Campo derivado calculado a partir de outra tabela exige leitura com lock que conflite com a atualização daquela tabela, não apenas exclusão temporal entre caminhos."
+early_detection: "Testar explicitamente: fixar snapshot RR, commitar a alteração do insumo, e só então escrever o filho."
+limits: "FOR KEY SHARE não serve para insumo alterado por UPDATE não-chave; ver LESSON-RCRM-0012."
+evidence: "TASK-09 rodada 5; migration 20260819180000_order_sale_locks_for_forecast."
+```
+
+### LESSON-RCRM-0012 — Sugestão de revisor é hipótese: FOR KEY SHARE reprovado pelo banco real
+
+```yaml
+id: LESSON-RCRM-0012
+status: validated
+type: process
+severity: medium
+source_task: TASK-09
+class: REVIEW_FINDING
+symptom: "O revisor apontou corretamente o defeito de snapshot obsoleto e recomendou reter uma leitura com lock compatível, especificamente FOR KEY SHARE, alegando que forçaria falha de serialização sem bloquear o UPDATE não-chave diferido."
+root_cause: "A correção de Sale.soldAt é um UPDATE não-chave; FOR KEY SHARE conflita apenas com FOR UPDATE. O PostgreSQL trava a versão mais nova sem levantar nada e o snapshot obsoleto continua sendo servido."
+fix: "Implementar a sugestão, provar contra banco real que ela não fecha o defeito, rejeitá-la e adotar FOR NO KEY UPDATE com ordem de locks fixa, que satisfaz simultaneamente a rodada anterior e esta."
+prevention: "Diagnóstico do revisor e remédio do revisor são coisas separadas. Aceitar o diagnóstico quando reproduzido; submeter o remédio ao mesmo teste de evidência que qualquer outra hipótese."
+early_detection: "O harness pré/pós-correção acusou na primeira execução: a reprodução pré-correção passou e a asserção pós-correção falhou."
+limits: "Não generaliza para revisores humanos com contexto de domínio não codificado no repositório; o critério continua sendo evidência, não autoridade."
+evidence: "TASK-09 rodada 5; comentário de revisão 3814013346; correção registrada no PR #14."
+```
+
+### LESSON-RCRM-0013 — Ordem de locks por linha não é garantia por statement
+
+```yaml
+id: LESSON-RCRM-0013
+status: validated
+type: concurrency
+severity: medium
+source_task: TASK-09
+class: ACCEPTED_RESIDUAL
+symptom: "A migration afirmava ordem de locks válida para o statement inteiro, mas um trigger FOR EACH ROW só ordena o que aquela linha toca; um statement multi-linha pode travar uma Sale para a primeira linha e só então alcançar um Product para a segunda."
+root_cause: "Trigger de linha não conhece o conjunto de linhas do statement, e o PostgreSQL expõe transition tables apenas para triggers AFTER, quando os locks já foram tomados."
+fix: "Corrigir a afirmação para o escopo real (por linha) e aceitar o residual explicitamente: falha 40P01 retentável em escrita multi-item de SaleItem."
+prevention: "Declarar o escopo exato de uma garantia de concorrência. Uma afirmação larga demais é dívida: some na revisão seguinte e custa uma rodada."
+early_detection: "Perguntar de qual objeto a garantia é propriedade - linha, statement ou transação - antes de escrevê-la no comentário da migration."
+limits: "Serializar statements filhos fecharia o residual mas reintroduz o mutex global rejeitado em LESSON-RCRM-0014. Contratado na TASK-10: forma segura de mutação e/ou retry limitado."
+evidence: "TASK-09 rodadas 7 e 8; migration 20260819220000; docs/specs/TASK-10.md."
+```
+
+### LESSON-RCRM-0014 — Mutex global remove deadlock e quebra concorrência exigida
+
+```yaml
+id: LESSON-RCRM-0014
+status: validated
+type: concurrency
+severity: high
+source_task: TASK-09
+class: AGENT_FAILED_ATTEMPT
+symptom: "A primeira tentativa de fechar os dois primeiros ciclos usou um advisory lock exclusive em todo statement do cluster Sale/SaleItem/Product. Os deadlocks sumiram e o harness da TASK-07 travou indefinidamente."
+root_cause: "O caso da TASK-07 exige que duas transações executem cada uma a sua remoção de item antes de qualquer commit. Um lock exclusive mantido até o commit torna esse encontro impossível por construção: a segunda transação fica presa esperando a primeira commitar, e a primeira espera a segunda escrever."
+fix: "Não foi enviado. Substituído por shared para escritas de SaleItem e exclusive apenas para os dois statements pai que propagam, armados por UPDATE OF da coluna propagante para não forçar upgrade shared->exclusive vindo de dentro do caminho filho."
+prevention: "Antes de introduzir exclusão mútua, verificar quais padrões de concorrência JÁ são exigidos por tasks concluídas. Uma correção que passa nos testes novos e trava um teste antigo não é uma correção."
+early_detection: "Rodar a suíte completa, não apenas o harness da correção. O travamento apareceu como npm test parado, diagnosticado por pg_stat_activity: idle in transaction segurando o advisory, outro backend esperando por ele."
+limits: "Registrado como tentativa reprovada do próprio agente, não como finding de revisão; nenhuma implementação com mutex global foi enviada."
+evidence: "TASK-09 rodada 3, pré-push; diagnóstico via pg_stat_activity; substituída por 20260819140000_serialize_forecast_lock_order."
+```
+
+### LESSON-RCRM-0015 — Overflow de interval precede overflow de timestamp em backfill legado
+
+```yaml
+id: LESSON-RCRM-0015
+status: validated
+type: migration_safety
+severity: high
+source_task: TASK-09
+class: REVIEW_FINDING
+symptom: "Com quantity e consumptionDays ambos no teto de INTEGER - combinação aceita pelas constraints existentes - a contagem de dias chega a 4.6e18 e o cast para interval falha com interval_field_overflow (22015) ANTES que a soma possa falhar com datetime_field_overflow (22008). O handler cobria só o segundo, então o backfill abortava o deploy para dados legais antes da TASK-09."
+root_cause: "O tratamento de overflow foi desenhado olhando o limite do tipo de destino (timestamp) e não o limite do tipo intermediário (interval) usado no cálculo."
+fix: "Capturar as duas condições no mesmo handler. A correção foi feita dentro de 20260811130000, a própria migration cujo backfill é o chamador que falha - uma migration posterior nunca chegaria a rodar."
+prevention: "Ao converter valores para calcular, enumerar os limites de TODOS os tipos intermediários, não só o do resultado."
+early_detection: "Semear dados legados nos extremos aceitos pelas constraints e exigir que a cadeia completa de migrations faça deploy sobre eles."
+limits: "Corrigir a migration já aplicada exige reconciliar checksum em bancos de desenvolvimento; aceitável porque a branch nunca foi implantada em ambiente persistente."
+evidence: "TASK-09 rodada 8; confirmado nos dois sentidos: revertendo o handler o deploy aborta com 22015."
+```
+
+### LESSON-RCRM-0016 — Campo derivado precisa ser inescrevível, não só calculado
+
+```yaml
+id: LESSON-RCRM-0016
+status: validated
+type: data_integrity
+severity: medium
+source_task: TASK-09
+class: REVIEW_FINDING
+symptom: "expectedRepurchaseAt era gravável diretamente: o trigger disparava em INSERT e em UPDATE OF quantity/productId/saleId, mas não em atualizações da própria coluna, enquanto o schema Prisma a expõe como campo gravável. Um caller que atualizasse só essa coluna persistia valor arbitrário, que sobrevivia até algum insumo da fórmula mudar."
+root_cause: "A lista de colunas do trigger enumerava os insumos da fórmula e esquecia o próprio resultado."
+fix: "Incluir a coluna derivada na lista do trigger, recalculando em vez de rejeitar - os dois triggers de propagação atualizam essa mesma coluna e rejeitar os quebraria. Feito em migration posterior e separada, porque a mesma lista vale enquanto 20260811130000 roda o backfill legado, que é ele próprio um UPDATE dessa coluna."
+prevention: "Ao criar coluna derivada mantida por trigger, incluir a própria coluna entre os eventos que disparam o recálculo."
+early_detection: "Testar a escrita direta do campo derivado e exigir que o valor canônico prevaleça."
+limits: "Recalcular, e não rejeitar, é o comportamento correto aqui; rejeitar quebraria a propagação."
+evidence: "TASK-09 rodada 9; migration 20260820000000_recompute_forecast_on_direct_write."
+```
