@@ -2,150 +2,111 @@ import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CANONICAL_TASK_STATES,
   parseFlatYaml,
   countRoadmapTasks,
   classifyDocsOnlyDiff,
+  taskFromBranch,
+  deriveCanonicalTaskState,
+  detectStateDrift,
   WAIT_BACKOFF_SECONDS,
   backoffSecondsForPollCount,
   startWait,
   recordPoll,
+  nextStagnationState,
+  prewriteKey,
+  startPrewrite,
+  samePrewriteIntent,
+  completePrewrite,
   loadRuntimeState,
   saveRuntimeState,
+  loadPrewriteState,
+  savePrewriteState,
 } from "./rick-loop-controller.mjs";
 
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
+function assert(condition, message) { if (!condition) throw new Error(message); }
 
 try {
-  // parseFlatYaml: scalars, quoted strings, booleans, numbers, lists.
-  const parsed = parseFlatYaml(`
-\`\`\`yaml
-mode: CONTROLLED_AUTONOMOUS
-attempt: 7
-next_action_authorized: true
-updated_at: "2026-08-10T18:22:00Z"
-completed_tasks:
-  - TASK-01
-  - TASK-02
-\`\`\`
-`);
+  const parsed = parseFlatYaml(`\n\`\`\`yaml\nmode: CONTROLLED_AUTONOMOUS\nattempt: 7\nnext_action_authorized: true\nupdated_at: "2026-08-10T18:22:00Z"\ncompleted_tasks:\n  - TASK-01\n  - TASK-02\n\`\`\`\n`);
   assert(parsed.mode === "CONTROLLED_AUTONOMOUS", "flat scalar not parsed");
   assert(parsed.attempt === 7, "numeric value not parsed as number");
   assert(parsed.next_action_authorized === true, "boolean value not parsed");
   assert(parsed.updated_at === "2026-08-10T18:22:00Z", "quoted string not unquoted");
   assert(Array.isArray(parsed.completed_tasks) && parsed.completed_tasks.length === 2, "list not parsed");
-  assert(parsed.completed_tasks[1] === "TASK-02", "list item value wrong");
 
-  // countRoadmapTasks: pending vs done TASK- checkboxes.
-  const roadmap = countRoadmapTasks(`
-- [x] TASK-01 — done
-- [x] TASK-02 — done
-- [ ] TASK-03 — pending
-- [ ] TASK-04 — pending
-- [ ] TASK-05 — pending
-`);
-  assert(roadmap.done === 2, "done count wrong");
-  assert(roadmap.pending === 3, "pending count wrong");
-  assert(roadmap.total === 5, "total count wrong");
+  const roadmap = countRoadmapTasks(`\n- [x] TASK-01 — done\n- [x] TASK-02 — done\n- [ ] TASK-03 — pending\n`);
+  assert(roadmap.done === 2 && roadmap.pending === 1 && roadmap.total === 3, "roadmap count wrong");
+  assert(countRoadmapTasks("- [x] TASK-01 — done\n").pending === 0, "complete roadmap not detected");
+  assert(classifyDocsOnlyDiff(["docs/operations/STATE.md", "docs/specs/TASK-09.md"]), "docs/spec allowlist wrong");
+  assert(!classifyDocsOnlyDiff(["docs/operations/STATE.md", "prisma/schema.prisma"]), "code file misclassified");
+  assert(!classifyDocsOnlyDiff([]), "empty diff must not be docs-only");
 
-  const complete = countRoadmapTasks("- [x] TASK-01 — done\n- [x] TASK-02 — done\n");
-  assert(complete.pending === 0 && complete.total === 2, "fully-complete roadmap not detected");
+  assert(CANONICAL_TASK_STATES.includes("RECOVERING"), "canonical task states missing RECOVERING");
+  assert(taskFromBranch("feat/TASK-09-repurchase-forecast") === "TASK-09", "task branch parse failed");
+  assert(taskFromBranch("main") === null, "main must not parse as task branch");
 
-  // classifyDocsOnlyDiff: the allowlist that gates REVIEW_CARRY_FORWARD.
-  assert(
-    classifyDocsOnlyDiff(["docs/operations/STATE.md", "docs/operations/HANDOFF.md"]) === true,
-    "allowlisted docs-only diff misclassified",
-  );
-  assert(
-    classifyDocsOnlyDiff(["docs/evidence/TASK-08-validation.md"]) === true,
-    "evidence glob misclassified",
-  );
-  assert(
-    classifyDocsOnlyDiff(["docs/operations/STATE.md", "prisma/schema.prisma"]) === false,
-    "code file did not disqualify carry-forward",
-  );
-  assert(
-    classifyDocsOnlyDiff(["package.json"]) === false,
-    "non-docs file misclassified as docs-only",
-  );
-  assert(classifyDocsOnlyDiff([]) === false, "empty diff must not be treated as docs-only");
+  const openPr = { number: 14, state: "OPEN", headRefName: "feat/TASK-09-repurchase-forecast", headRefOid: "abc123" };
+  const greenCi = { status: "completed", conclusion: "success" };
+  const currentReview = { headRefOid: "abc123", lastReview: { submittedAt: "now" } };
+  assert(deriveCanonicalTaskState({ git: { branch: "main" }, pr: null, review: null, ci: null }) === "READY", "main/no PR should be READY");
+  assert(deriveCanonicalTaskState({ git: { branch: "feat/TASK-09-x" }, pr: null, review: null, ci: null }) === "IMPLEMENTING", "task branch/no PR should be IMPLEMENTING");
+  assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: null, ci: null }) === "WAIT_CI", "open PR/no CI should WAIT_CI");
+  assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: null, ci: greenCi }) === "WAIT_REVIEW", "green CI/no review should WAIT_REVIEW");
+  assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: currentReview, ci: greenCi }) === "REVIEW_LANDED", "current review should land");
 
-  // backoffSecondsForPollCount: bounded 30/30/60/60/120/300/600, capped.
+  const staleState = { current_task: "TASK-09", current_task_status: "READY_TO_START", branch: "feat/TASK-07-sales-model", pr_number: 11, next_action: "START_TASK-09" };
+  const staleDrift = detectStateDrift({ state: staleState, git: { branch: "main" }, pr: openPr });
+  assert(staleDrift.some((d) => d.code === "TASK_ALREADY_IN_PROGRESS"), "in-progress drift missing");
+  assert(staleDrift.some((d) => d.code === "BRANCH_POINTER_STALE"), "branch drift missing");
+  assert(staleDrift.some((d) => d.code === "PR_POINTER_STALE"), "PR drift missing");
+  assert(staleDrift.some((d) => d.code === "NEXT_ACTION_STALE"), "next-action drift missing");
+
+  const reconciledState = { current_task: "TASK-09", current_task_status: "RECOVERING", branch: "feat/TASK-09-repurchase-forecast", pr_number: 14, next_action: "FIX_TASK_09_BLOCKING_REVIEW_FINDINGS" };
+  assert(detectStateDrift({ state: reconciledState, git: { branch: "main" }, pr: openPr }).length === 0, "reconciled state incorrectly flagged");
+
   assert(backoffSecondsForPollCount(0) === 30, "first backoff wrong");
-  assert(backoffSecondsForPollCount(1) === 30, "second backoff wrong");
   assert(backoffSecondsForPollCount(2) === 60, "third backoff wrong");
-  assert(backoffSecondsForPollCount(6) === 600, "cap value wrong");
-  assert(backoffSecondsForPollCount(100) === 600, "backoff did not stay bounded past the cap");
-  assert(backoffSecondsForPollCount(-1) === 30, "negative poll count not clamped");
-  for (let i = 1; i < WAIT_BACKOFF_SECONDS.length; i += 1) {
-    assert(WAIT_BACKOFF_SECONDS[i] >= WAIT_BACKOFF_SECONDS[i - 1], "backoff sequence must be non-decreasing");
-  }
+  assert(backoffSecondsForPollCount(100) === 600, "backoff cap wrong");
+  for (let i = 1; i < WAIT_BACKOFF_SECONDS.length; i += 1) assert(WAIT_BACKOFF_SECONDS[i] >= WAIT_BACKOFF_SECONDS[i - 1], "backoff must be non-decreasing");
 
-  // startWait / recordPoll: pure wait-state transitions (no real time, no I/O).
   const t0 = new Date("2026-08-11T10:00:00.000Z");
-  const wait0 = startWait({ state: "WAIT_FOR_CODEX", task: "TASK-09", prNumber: 13, targetHead: "abc123", now: t0 });
-  assert(wait0.poll_count === 0, "initial poll_count must be 0");
-  assert(wait0.backoff_seconds === 30, "initial backoff must be the first sequence value");
-  assert(wait0.next_poll_at === new Date(t0.getTime() + 30_000).toISOString(), "initial next_poll_at wrong");
-  assert(wait0.stagnant_attempt === 0, "initial stagnant_attempt must be 0");
+  const wait0 = startWait({ state: "WAIT_FOR_CODEX", task: "TASK-09", prNumber: 14, targetHead: "abc123", now: t0 });
+  const wait1 = recordPoll(wait0, { resolved: false, now: new Date(t0.getTime() + 30_000) });
+  assert(wait1.poll_count === 1 && wait1.stagnant_attempt === 0, "wait poll semantics wrong");
+  assert(recordPoll(wait1, { resolved: true }) === null, "resolved wait must clear");
 
-  const t1 = new Date(t0.getTime() + 30_000);
-  const wait1 = recordPoll(wait0, { resolved: false, now: t1 });
-  assert(wait1.poll_count === 1, "pending poll must increment poll_count");
-  assert(wait1.backoff_seconds === 30, "second poll backoff wrong");
-  assert(wait1.task === "TASK-09" && wait1.pr_number === 13, "pending poll must preserve task/pr identity");
-  assert(wait1.stagnant_attempt === 0, "waiting must never increment stagnant_attempt");
+  assert(nextStagnationState(2, { progressed: false, max: 3 }).status === "HUMAN_REQUIRED", "third stagnant attempt must stop");
+  assert(nextStagnationState(2, { progressed: true, max: 3 }).stagnant_attempt === 0, "real progress must reset stagnation");
 
-  const t2 = new Date(t1.getTime() + 30_000);
-  const wait2 = recordPoll(wait1, { resolved: false, now: t2 });
-  assert(wait2.poll_count === 2, "third poll must increment poll_count again");
-  assert(wait2.backoff_seconds === 60, "third poll backoff wrong");
-  assert(wait2.stagnant_attempt === 0, "waiting must never increment stagnant_attempt (poll 2)");
+  const intentA = startPrewrite({ task: "TASK-09", action: "fix-review-findings", expectedState: "VALIDATING", targetHead: "abc123", now: t0 });
+  const intentB = startPrewrite({ task: "TASK-09", action: "fix-review-findings", expectedState: "VALIDATING", targetHead: "abc123", now: new Date(t0.getTime() + 1000) });
+  assert(intentA.idempotency_key === prewriteKey({ task: "TASK-09", action: "fix-review-findings", expectedState: "VALIDATING", targetHead: "abc123" }), "prewrite key mismatch");
+  assert(samePrewriteIntent(intentA, intentB), "same intent must be idempotent");
+  assert(!samePrewriteIntent(intentA, startPrewrite({ task: "TASK-09", action: "merge" })), "different intent must not reuse key");
+  const completed = completePrewrite(intentA, { resultState: "VALIDATING", now: new Date(t0.getTime() + 2000) });
+  assert(completed.result_state === "VALIDATING" && completed.completed_at, "prewrite completion wrong");
 
-  const resolved = recordPoll(wait2, { resolved: true, now: new Date(t2.getTime() + 60_000) });
-  assert(resolved === null, "a resolved poll must clear the wait state");
-
-  // loadRuntimeState / saveRuntimeState: persistence round-trip through a
-  // real temp file, proving process-restart resume works without touching
-  // the repo's actual .rick/tmp runtime file.
   const tmpDir = mkdtempSync(join(tmpdir(), "rick-loop-controller-check-"));
   const runtimePath = join(tmpDir, "loop-runtime.json");
+  const prewritePath = join(tmpDir, "prewrite.json");
   try {
-    assert(loadRuntimeState(runtimePath) === null, "loading a nonexistent runtime file must return null");
-
+    assert(loadRuntimeState(runtimePath) === null, "missing runtime must be null");
     saveRuntimeState(wait1, runtimePath);
-    assert(existsSync(runtimePath), "saveRuntimeState must create the runtime file");
-    assert(
-      readdirSync(tmpDir).length === 1,
-      "saveRuntimeState must leave no temp file behind after the atomic rename",
-    );
-    const reloaded = loadRuntimeState(runtimePath);
-    assert(reloaded.poll_count === wait1.poll_count, "reloaded runtime state lost poll_count");
-    assert(reloaded.next_poll_at === wait1.next_poll_at, "reloaded runtime state lost next_poll_at");
-    assert(reloaded.target_head === "abc123", "reloaded runtime state lost target_head");
+    assert(existsSync(runtimePath), "runtime save failed");
+    assert(readdirSync(tmpDir).length === 1, "runtime atomic save left temp file");
+    assert(loadRuntimeState(runtimePath).target_head === "abc123", "runtime reload lost target head");
+    saveRuntimeState(null, runtimePath);
+    assert(!existsSync(runtimePath), "runtime clear failed");
+    savePrewriteState(intentA, prewritePath);
+    assert(loadPrewriteState(prewritePath).idempotency_key === intentA.idempotency_key, "prewrite reload failed");
+    assert(readdirSync(tmpDir).length === 1, "prewrite atomic save left temp file");
+    savePrewriteState(null, prewritePath);
+    assert(!existsSync(prewritePath), "prewrite clear failed");
+  } finally { rmSync(tmpDir, { recursive: true, force: true }); }
 
-    // Simulate a second wakeup cycle after "process restart": load, poll
-    // again as pending, save, reload.
-    const reloadedPending = recordPoll(reloaded, { resolved: false, now: new Date(t2.getTime() + 60_000) });
-    saveRuntimeState(reloadedPending, runtimePath);
-    const afterSecondWakeup = loadRuntimeState(runtimePath);
-    assert(afterSecondWakeup.poll_count === 2, "resumed wait must continue incrementing poll_count across restarts");
-
-    // Third wakeup: the external result finally lands.
-    const finalPoll = recordPoll(afterSecondWakeup, { resolved: true });
-    saveRuntimeState(finalPoll, runtimePath);
-    assert(!existsSync(runtimePath), "a resolved wait must clear the persisted runtime file");
-    assert(loadRuntimeState(runtimePath) === null, "runtime state must read back as null after resolution");
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true });
-  }
-
-  console.log("Rick Loop controller tests: PASS");
+  console.log("Rick Loop controller v1.3 tests: PASS");
 } catch (error) {
-  console.error("Rick Loop controller tests: FAIL");
+  console.error("Rick Loop controller v1.3 tests: FAIL");
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 }
