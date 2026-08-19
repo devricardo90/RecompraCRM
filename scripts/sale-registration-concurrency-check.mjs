@@ -1,12 +1,25 @@
 import { PrismaClient } from "@prisma/client";
 import { spawnSync } from "node:child_process";
 
-import {
+// This harness imports the production TypeScript module directly, so it relies
+// on Node's native type stripping. package.json therefore requires Node >= 24,
+// the only line CI validates. Fail with an explanation rather than a cryptic
+// parse error if someone runs it on an older runtime.
+const [nodeMajor] = process.versions.node.split(".").map(Number);
+if (nodeMajor < 22) {
+  console.error("Sale registration concurrency tests: FAIL");
+  console.error(
+    `Node ${process.versions.node} cannot import TypeScript directly. This harness drives the production module in lib/sales/saleTransaction.ts and needs Node >= 24 (see package.json engines).`,
+  );
+  process.exit(1);
+}
+
+const {
   MAX_SALE_ATTEMPTS,
   classifySaleError,
   normalizeSaleItems,
   runSaleRegistration,
-} from "../lib/sales/saleTransaction.ts";
+} = await import("../lib/sales/saleTransaction.ts");
 
 /**
  * Proves TASK-10's concurrency contract against real PostgreSQL.
@@ -141,6 +154,10 @@ try {
   assert(
     classifySaleError(new Error("Database error code: `23514`")) === "invariant",
     "a CHECK violation must be a domain invariant",
+  );
+  assert(
+    classifySaleError(new Error("Database error code: `22003`")) === "invariant",
+    "an unrepresentable forecast (22003) must be a domain invariant, not a generic failure",
   );
   assert(
     classifySaleError(new Error("something else entirely")) === "fatal",
@@ -458,6 +475,32 @@ try {
     `missing product should be a domain invariant, got ${fkError.name}: ${fkError.message}`,
   );
   await fkClient.$disconnect();
+
+  // A forecast that cannot be represented is a deterministic consequence of the
+  // submitted values, so it must be a readable domain error, not a generic 503.
+  const farProduct = await makeProduct("far-forecast", 5, 2147483647);
+  const farClient = clientFor(urlForSchema(schemaName, true));
+  let farError;
+  try {
+    await runSaleRegistration(farClient, {
+      customerId: customer.id,
+      soldAt,
+      status: "CONFIRMED",
+      items: [{ productId: farProduct.id, quantity: 2 }],
+    });
+  } catch (error) {
+    farError = error;
+  }
+  assert(farError, "an unrepresentable forecast was accepted");
+  assert(
+    farError.name === "SaleInvariantError",
+    `unrepresentable forecast should be a domain invariant, got ${farError.name}: ${farError.message}`,
+  );
+  assert(
+    /previsão de recompra/i.test(farError.message),
+    `unhelpful message for an unrepresentable forecast: ${farError.message}`,
+  );
+  await farClient.$disconnect();
 
   // -----------------------------------------------------------------
   // 5. Exhausted retries surface an error rather than being swallowed.

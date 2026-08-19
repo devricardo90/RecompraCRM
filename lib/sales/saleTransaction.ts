@@ -26,6 +26,13 @@ const PRISMA_FOREIGN_KEY = "P2003";
 /** Domain invariants from TASK-07/08/09: deterministic answers, never retried. */
 const CHECK_VIOLATION = "23514";
 const FOREIGN_KEY_VIOLATION = "23503";
+/**
+ * TASK-09's forecast helper raises this on purpose when quantity x
+ * consumptionDays puts the forecast outside the representable range. It is a
+ * deterministic consequence of the submitted values, not contention, so it must
+ * reach the user as a readable 4xx rather than a generic 503.
+ */
+const NUMERIC_OUT_OF_RANGE = "22003";
 
 export const MAX_SALE_ATTEMPTS = 3;
 /** Short, bounded, jitter-free so the concurrency harness stays deterministic. */
@@ -113,7 +120,13 @@ export function classifySaleError(error: unknown): "retryable" | "invariant" | "
   if (prismaCode === PRISMA_WRITE_CONFLICT) return "retryable";
   if (prismaCode === PRISMA_FOREIGN_KEY) return "invariant";
 
-  if (sqlState === CHECK_VIOLATION || sqlState === FOREIGN_KEY_VIOLATION) return "invariant";
+  if (
+    sqlState === CHECK_VIOLATION ||
+    sqlState === FOREIGN_KEY_VIOLATION ||
+    sqlState === NUMERIC_OUT_OF_RANGE
+  ) {
+    return "invariant";
+  }
   return "fatal";
 }
 
@@ -159,6 +172,9 @@ function describeInvariant(error: unknown): string {
 
   if (sqlState === FOREIGN_KEY_VIOLATION || prismaCode === PRISMA_FOREIGN_KEY) {
     return "Cliente ou produto informado não existe mais.";
+  }
+  if (sqlState === NUMERIC_OUT_OF_RANGE || /repurchase forecast this far out/i.test(message)) {
+    return "A previsão de recompra ficaria fora do intervalo suportado. Reduza a quantidade ou a duração de consumo do produto.";
   }
   if (/Product_currentStock_non_negative/.test(message)) {
     return "Estoque insuficiente para concluir a venda.";

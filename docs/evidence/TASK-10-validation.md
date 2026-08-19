@@ -76,6 +76,23 @@ invariant.
 each aggregate with `Number.isSafeInteger` and the PostgreSQL maximum before the
 transaction opens, returning 400.
 
+## Review round 2 — two findings, both confirmed and fixed
+
+**P1 — the harness was unrunnable on the Node version `package.json` advertised.**
+It imports the production TypeScript module directly, which needs Node's native
+type stripping (Node 22.6+), while `engines` claimed `>=20.9.0`. CI runs Node 24,
+so the incompatibility was masked. `engines` is now `>=24.0.0` — the only line CI
+actually validates, so the declaration matches what is verified rather than what
+is hoped — and the harness fails fast with an explanation instead of a cryptic
+parse error on an older runtime.
+
+**P2 — a deliberate forecast-range failure returned 503.** A product with a legal
+`consumptionDays` of `2147483647` and a quantity of 2 makes TASK-09's helper
+raise `22003` on purpose, because the forecast is unrepresentable. That is a
+deterministic consequence of the submitted values, not contention, so it now
+classifies as a domain invariant with a readable message telling the user to
+reduce the quantity or the product's consumption duration.
+
 ## Concurrency harness
 
 `scripts/sale-registration-concurrency-check.mjs`
@@ -84,7 +101,7 @@ isolated PostgreSQL schema per run, real database throughout.
 
 | # | Case | Assertion |
 | --- | --- | --- |
-| 0 | error classification | `P2034` and raw `40P01`/`40001` ⇒ retryable; `P2003` and `23514` ⇒ invariant; anything else ⇒ fatal |
+| 0 | error classification | `P2034` and raw `40P01`/`40001` ⇒ retryable; `P2003`, `23514` and `22003` ⇒ invariant; anything else ⇒ fatal |
 | 0 | aggregate overflow | duplicate total above the INTEGER range raises `SaleValidationError` before any transaction |
 | 1 | multi-item sale, unsorted input with a duplicate | 3 items, duplicate quantities summed, stock and forecast from the canonical formula |
 | 1 | emitted shape | exactly **one** `INSERT INTO "SaleItem"` per item, and the **actual write order** reconstructed from statement parameters is ascending `productId` |
@@ -93,6 +110,7 @@ isolated PostgreSQL schema per run, real database throughout.
 | 3b | attempt 1 always `40P01`, attempt 2 succeeds | succeeds on attempt 2, **exactly one** sale, stock charged once |
 | 4 | insufficient stock | `SaleInvariantError` on attempt 1 (not retried), stock unchanged |
 | 4 | missing product | `SaleInvariantError`, not a generic failure |
+| 4 | unrepresentable forecast (`22003`) | `SaleInvariantError` with a readable message, not a 503 |
 | 5 | every attempt raises `40P01` | `SaleConcurrencyError` after exactly 3 attempts, SQLSTATE preserved, no itemless `Sale` |
 | 6 | whole run | no product ended with negative stock |
 
