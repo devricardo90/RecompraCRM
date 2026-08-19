@@ -1,23 +1,11 @@
--- Codex found three gaps in the previous migration's repurchase-forecast
--- trigger:
+-- TASK-09 review recovery: centralize the strict forecast formula, keep
+-- normal writes fail-closed, and give the one-time legacy backfill an
+-- explicit compatibility policy.
 --
--- P1: it only affects future INSERT/UPDATE on SaleItem, so rows created
---     under TASK-07/08 (before this feature existed) keep NULL forever.
--- P2: it listens only to SaleItem changes, so correcting a persisted
---     Sale.soldAt never propagates to that sale's item forecasts.
--- P2: quantity/consumptionDays are currently unbounded (up to PostgreSQL's
---     INTEGER max), and "quantity x consumptionDays" days can exceed both
---     INTEGER range and PostgreSQL's representable TIMESTAMP range, which
---     would abort an otherwise valid sale with a low-level arithmetic error.
---
--- Factor the formula into a shared, guarded function so both the
--- SaleItem-level trigger and the new Sale.soldAt-level trigger compute it
--- identically, then use it to backfill existing rows.
--- The backfill at the end of this migration calls this function against
--- every existing row, so it must already be exact - an intermediate,
--- overly-strict version here would abort this migration's own backfill on
--- legitimate historical data before a later migration could ever replace
--- it, blocking deploy entirely.
+-- Historical SaleItems may contain Product.consumptionDays values that were
+-- valid before TASK-09 but yield a timestamp outside Prisma/JavaScript's
+-- usable DateTime range. Such legacy data must not make migrate deploy
+-- impossible. New writes and later mutations remain strict.
 CREATE FUNCTION "compute_expected_repurchase_at"(
   "sold_at" TIMESTAMP(3),
   "quantity" INTEGER,
@@ -41,14 +29,9 @@ BEGIN
       v_result := NULL;
   END;
 
-  -- PostgreSQL's own TIMESTAMP range (~4713 BC to ~294276 AD) is wider than
-  -- what a JavaScript Date can represent (~271821 BC to 275760 AD), and
-  -- Prisma exposes this column as a JS Date that the application calls
-  -- methods like getTime() on. Bound to the tighter of the two ranges so a
-  -- forecast PostgreSQL accepts can't still be undecodable by the app.
-  -- PostgreSQL's floor is already stricter than JS's floor, so the
-  -- exception above covers that side; only the ceiling needs an explicit
-  -- check here.
+  -- PostgreSQL's TIMESTAMP ceiling is wider than JavaScript Date's. Prisma
+  -- exposes DateTime as a JS Date, so persisted forecasts must fit the
+  -- tighter application range as well.
   IF v_result IS NULL OR v_result > TIMESTAMP '275760-09-13' THEN
     RAISE EXCEPTION
       'Cannot compute a repurchase forecast this far out (soldAt=%, quantity=%, consumptionDays=%)',
@@ -57,6 +40,22 @@ BEGIN
   END IF;
 
   RETURN v_result;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Legacy/backfill-only compatibility wrapper. It deliberately converts only
+-- the strict helper's domain overflow (22003) into NULL. Any other database
+-- error still aborts the migration. Runtime triggers never call this helper.
+CREATE FUNCTION "compute_legacy_expected_repurchase_at"(
+  "sold_at" TIMESTAMP(3),
+  "quantity" INTEGER,
+  "consumption_days" INTEGER
+) RETURNS TIMESTAMP(3) AS $$
+BEGIN
+  RETURN "compute_expected_repurchase_at"("sold_at", "quantity", "consumption_days");
+EXCEPTION
+  WHEN SQLSTATE '22003' THEN
+    RETURN NULL;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -89,7 +88,10 @@ CREATE TRIGGER "Sale_recomputes_item_forecasts_on_soldAt_update"
 AFTER UPDATE OF "soldAt" ON "Sale"
 FOR EACH ROW EXECUTE FUNCTION "recompute_sale_items_expected_repurchase"();
 
+-- Backfill representable historical forecasts. Rows whose pre-TASK-09 data
+-- cannot be represented by Prisma/JavaScript remain NULL instead of blocking
+-- deployment; future writes/updates still go through the strict helper.
 UPDATE "SaleItem" si
-SET "expectedRepurchaseAt" = "compute_expected_repurchase_at"(s."soldAt", si."quantity", p."consumptionDays")
+SET "expectedRepurchaseAt" = "compute_legacy_expected_repurchase_at"(s."soldAt", si."quantity", p."consumptionDays")
 FROM "Sale" s, "Product" p
 WHERE si."saleId" = s."id" AND si."productId" = p."id";
