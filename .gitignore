@@ -17,3 +17,6 @@ blob-report/
 *.log
 
 *.tsbuildinfo
+
+# Ephemeral migration projects built by the TASK-09 harnesses.
+.tmp-task09-*/

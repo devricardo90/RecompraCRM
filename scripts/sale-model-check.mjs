@@ -140,7 +140,16 @@ try {
   assert(sale.items.some((item) => item.product.id === productBId), "Product B relation was not persisted");
   assert(sale.items.some((item) => item.unitPrice === null), "optional unitPrice was not persisted as null");
   assert(sale.items.some((item) => item.unitPrice?.toString() === "19.9"), "optional unitPrice value was not persisted");
-  assert(sale.items[0].expectedRepurchaseAt === null, "Repurchase calculation was started in TASK-07");
+  const itemA = sale.items.find((item) => item.product.id === productAId);
+  const itemB = sale.items.find((item) => item.product.id === productBId);
+  assert(
+    itemA.expectedRepurchaseAt.getTime() === soldAt.getTime() + itemA.quantity * 30 * 24 * 60 * 60 * 1000,
+    "expectedRepurchaseAt was not computed as soldAt + quantity * product.consumptionDays days (item A)",
+  );
+  assert(
+    itemB.expectedRepurchaseAt.getTime() === soldAt.getTime() + itemB.quantity * 15 * 24 * 60 * 60 * 1000,
+    "expectedRepurchaseAt was not computed as soldAt + quantity * product.consumptionDays days (item B)",
+  );
   assert(sale.createdAt instanceof Date && sale.updatedAt instanceof Date, "Sale timestamps were not returned as dates");
 
   const persisted = await prisma.sale.findUnique({
