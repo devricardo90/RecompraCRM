@@ -147,3 +147,20 @@ early_detection: "Adicionar casos imediatamente acima do limite do banco e confi
 limits: "Revalidar se os campos migrarem para BIGINT, Decimal ou outro tipo de armazenamento."
 evidence: "TASK-06: Product API integration local PASS; Validate #46 run 31325836264 SUCCESS no head técnico 7e1c9670535421af7bfce2e040bf306a2e783a08; Validate #49 run 31328149760 SUCCESS na main mergeada c9cb0fba8a907ce46d385c2e03fa7411b48c03c8."
 ```
+
+### LESSON-RCRM-0009 — Propagação bidirecional entre tabelas exige exclusão mútua de direções, não um mutex global
+
+```yaml
+id: LESSON-RCRM-0009
+status: validated
+type: concurrency
+severity: high
+source_task: TASK-09
+symptom: "Triggers de propagação pai->filho (Product.consumptionDays e Sale.soldAt recalculando SaleItem) fecharam ciclos de deadlock com o caminho filho->pai já existente (leitura de previsão, estoque da TASK-08 e guarda de itens da TASK-07)."
+root_cause: "Cada par de tabelas passou a ser travado nas duas ordens. A linha do pai já está travada pelo statement cujo trigger AFTER propaga, e a linha do filho pelo statement cujo trigger BEFORE lê o pai, então não sobra ponto onde reordenar row locks."
+fix: "Tomar um advisory lock transacional em trigger BEFORE ... FOR EACH STATEMENT - o único ponto que antecede todo row lock - em modo shared para escritas do filho e exclusive apenas para os statements do pai que propagam, armados por UPDATE OF da coluna propagante."
+prevention: "Ao adicionar propagação pai->filho onde já existe escrita filho->pai, mapear o grafo de ordens de lock antes de implementar e excluir mutuamente as direções, preservando concorrência dentro de cada direção."
+early_detection: "Escrever um harness que reconstrói o banco sem a correção, reproduz o ciclo com um terceiro transaction pinando uma linha via SELECT ... FOR UPDATE (que não dispara triggers) e exige 40P01; depois exigir commit limpo com a correção."
+limits: "Um mutex exclusivo global remove os deadlocks mas serializa transações inteiras e trava padrões legítimos em que duas transações precisam escrever antes de qualquer commit - foi tentado na TASK-09 e rejeitado por travar o caso concorrente da TASK-07. Resta o caso de uma única transação que escreve SaleItem e também altera consumptionDays/soldAt: ela pediria exclusive segurando shared e seria abortada como deadlock normal e retentável; nenhuma rota da aplicação faz essa combinação."
+evidence: "TASK-09: scripts/sale-forecast-lock-order-check.mjs reproduz os dois ciclos antes da migration 20260819140000_serialize_forecast_lock_order e exige commit correto depois; gates locais completos PASS incluindo test:sale (caso concorrente da TASK-07)."
+```

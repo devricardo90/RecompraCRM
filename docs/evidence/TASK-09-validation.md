@@ -1,0 +1,131 @@
+# TASK-09 — Repurchase Forecast Evidence
+
+## Scope and baseline
+
+- Task: `TASK-09 — Previsão de recompra`
+- Mode: `CONTROLLED_AUTONOMOUS`
+- Loop: `RICK_LOOP_V1_3`
+- Branch: `feat/TASK-09-repurchase-forecast`
+- Spec: `docs/specs/TASK-09.md`
+- Pull request: #14
+- Initial implementation head: `626953c` (compute forecast per SaleItem)
+- Review round 1 fixes: `87904a3`, `e497162`, `3344d6a`
+- Review round 2 fixes (legacy backfill + lock upgrade P1s): `a352de7`
+- Review round 3 fix (lock-order P1s): this head
+
+Canonical rule covered:
+`expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
+independently per item of a multi-product sale. Scope stays at the persistence
+layer — the sale registration UI is TASK-10.
+
+## Review round 3 — two P1 lock-order findings
+
+The independent review of `e3be67a` reported two blocking findings, both real
+deadlock cycles introduced by TASK-09's propagation triggers meeting the
+child→parent writes that TASK-07 and TASK-08 already depended on:
+
+| Finding | Cycle |
+| --- | --- |
+| Use one lock order for product forecast propagation | `Product → SaleItem` (consumptionDays propagation) vs `SaleItem → Product` (forecast read + TASK-08 stock reconciliation) |
+| Avoid reversing Sale and SaleItem locks | `Sale → SaleItem` (soldAt propagation) vs `SaleItem → Sale` (forecast read + TASK-07 "at least one item" guard) |
+
+Each pair locks the same two tables in opposite order, so once the two
+operations overlap PostgreSQL aborts one of them with `40P01`.
+
+### Why reordering row locks could not fix it
+
+In both cycles the parent row is already locked by the very statement whose
+`AFTER` trigger performs the propagation, and the child row is already locked
+by the statement whose `BEFORE` trigger reads the parent. Neither side has a
+point left at which it could take its locks in the other order. The
+child→parent direction is also not removable: it is what TASK-07's guard and
+TASK-08's stock reconciliation are built on.
+
+### Fix
+
+`prisma/migrations/20260819140000_serialize_forecast_lock_order` stops the two
+*directions* from overlapping while keeping writers of the same direction
+concurrent. A statement-level `BEFORE` trigger runs before its statement locks
+any row, which is the only remaining point that precedes every row lock, so
+both directions take one transaction-scoped advisory lock there in different
+modes:
+
+- SaleItem `INSERT`/`UPDATE`/`DELETE` take it **shared** — they stay concurrent
+  with each other exactly as before, still arbitrated by the row locks and MVCC
+  conflicts TASK-07 and TASK-08 rely on.
+- `UPDATE OF "soldAt"` on Sale and `UPDATE OF "consumptionDays"` on Product take
+  it **exclusive** — while one runs, no SaleItem write is inside the cluster.
+
+Only `UPDATE OF` the propagating column arms the exclusive lock. This is load
+bearing: TASK-08's stock reconciliation updates `Product.currentStock` and
+TASK-07's guard updates `Sale.updatedAt` from *inside* the child direction, and
+neither may try to upgrade the shared lock it already holds. Because neither
+statement names `consumptionDays` or `soldAt`, neither exclusive trigger fires.
+
+An earlier attempt used a single exclusive lock for every statement in the
+cluster. It removed the deadlocks but serialized whole transactions, which
+deadlocked the TASK-07 harness case where two transactions must both delete an
+item before either commits. That is why the shared/exclusive split, not a plain
+mutex, is the shipped design.
+
+Residual, deliberately not covered: a single transaction that both writes a
+SaleItem and updates `consumptionDays`/`soldAt` would request the exclusive lock
+while holding the shared one. Two such transactions racing would be aborted by
+PostgreSQL as a normal, retryable deadlock rather than corrupting anything. No
+application path performs that combination — the product and sale routes are
+separate transactions.
+
+## Deterministic validation
+
+`scripts/sale-forecast-lock-order-check.mjs`, wired into
+`npm run test:repurchase-forecast` and therefore into Validate, proves the
+defect and the fix on a real database rather than arguing about them:
+
+1. builds a database from every migration *preceding* the fix;
+2. reproduces both reported cycles and requires PostgreSQL to abort one side;
+3. deploys the full chain over that same populated database;
+4. requires the identical interleavings to commit, with the forecasts and stock
+   the canonical formula demands.
+
+The parent operations are single statements — the shapes the review actually
+described (a product `PUT` changing `consumptionDays`, a correction of
+`Sale.soldAt`). The window between "the parent row is locked" and "the parent
+updates the items" cannot be hit by timing alone, so a third transaction pins
+one affected item with a plain `SELECT … FOR UPDATE`, holding the parent inside
+exactly that window. That statement fires no triggers, so it never enters the
+cluster and can never itself be part of a cycle. Every step advances on a
+`pg_stat_activity` lock-wait condition, never on a sleep.
+
+Assertions after the fixed runs:
+
+- product cycle: propagated item = `soldAt + 7 days`, updated item =
+  `soldAt + 14 days`, stock `97`;
+- sale cycle: propagated item = corrected `soldAt + 5 days`, updated item =
+  corrected `soldAt + 15 days`, stock `97`.
+
+## Local gate results
+
+Local PostgreSQL (docker compose, isolated schema per harness):
+
+| Gate | Result |
+| --- | --- |
+| `db:migrate` (16 migrations) | PASS |
+| `db:health` | PASS |
+| `test:migration-compat` (clean + legacy) | PASS |
+| `test:customer` | PASS |
+| `test:product` | PASS |
+| `test:sale` (TASK-07 concurrency) | PASS |
+| `test:sale-stock` | PASS |
+| `test:repurchase-forecast` (forecast + recovery + lock-order) | PASS |
+| `test:product-api` | PASS |
+| `test:customer-api` | PASS |
+| `test:loop-controller` | PASS |
+| `lint` | PASS |
+| `typecheck` | PASS |
+| `build` | PASS |
+
+The lock-order harness was run repeatedly to confirm the interleaving is
+reproducible rather than timing-dependent.
+
+Playwright ephemeral: not applicable — TASK-09 changes no UI. The sale
+registration interface and its mobile-first Playwright run belong to TASK-10.

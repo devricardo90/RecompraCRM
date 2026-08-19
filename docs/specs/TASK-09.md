@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `3344d6a3ff7bd25fbd9eacebc14473a071b31508`
-Current technical HEAD: `a352de7affd6d331c992282f61ac4f335e6783b2`
-Validation: Validate #87 / `32257807500` SUCCESS
+Last independently reviewed HEAD: `e3be67a1d1cff634798ddaa59de6be16038be23d`
+Current technical HEAD: pending push of the round-3 lock-order fix
+Validation: Validate #88 / `32258132550` SUCCESS on `e3be67a`; round-3 head revalidated below
 
 ## Outcome
 
@@ -31,13 +31,47 @@ A multi-product sale has an independent forecast for each item.
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
 
-## Recovery policy for current review findings
+## Recovery policy for round-3 review findings (lock order)
+
+The independent review of `e3be67a` reported two P1 deadlock cycles:
+`Product <-> SaleItem` (consumptionDays propagation against the forecast read
+plus TASK-08 stock reconciliation) and `Sale <-> SaleItem` (soldAt propagation
+against the forecast read plus the TASK-07 "at least one item" guard).
+
+1. Row locks cannot be reordered out of either cycle: the parent row is
+   already held by the statement whose AFTER trigger propagates, and the child
+   row by the statement whose BEFORE trigger reads the parent. The
+   child->parent direction is what TASK-07 and TASK-08 are built on and stays.
+2. The two directions instead take one transaction-scoped advisory lock in a
+   statement-level BEFORE trigger, which is the only point preceding every row
+   lock. SaleItem writes take it shared, so same-direction concurrency is
+   unchanged; the two propagating parent statements take it exclusive.
+3. Only `UPDATE OF` the propagating column arms the exclusive lock, so TASK-08
+   stock updates and the TASK-07 guard never attempt a shared->exclusive
+   upgrade from inside the child direction.
+4. A plain global mutex is rejected: it removes the deadlocks but serializes
+   whole transactions and breaks the TASK-07 case where two transactions must
+   both write before either commits.
+
+## Recovery policy for round-2 review findings
 
 1. Concurrent SaleItem writes and Product updates must serialize without shared-lock upgrade deadlocks. Product forecast reads acquire `FOR NO KEY UPDATE` because the same SaleItem write later updates Product stock; Sale.soldAt reads remain `FOR SHARE`.
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
-## Validation added for recovery
+## Validation added for round-3 recovery
+
+- rebuild a database from every migration preceding the lock-order fix;
+- reproduce both reported cycles with single-statement parent operations,
+  using a third transaction that pins one affected item with a trigger-free
+  `SELECT ... FOR UPDATE` so the parent stalls inside its propagation window;
+- require PostgreSQL to abort one side without the fix;
+- deploy the full chain over that same populated database and require the
+  identical interleavings to commit with the canonical forecasts and stock;
+- advance every step on a real `pg_stat_activity` lock-wait condition, never a
+  sleep.
+
+## Validation added for round-2 recovery
 
 - recreate a real database using only migrations before TASK-09;
 - persist an unrepresentable but previously valid historical SaleItem;
@@ -53,6 +87,8 @@ A multi-product sale has an independent forecast for each item.
 - unrepresentable legacy rows do not abort deployment;
 - new unrepresentable writes fail clearly;
 - concurrent sales do not deadlock because of forecast lock upgrades;
+- forecast propagation and SaleItem writes cannot deadlock on reversed lock
+  order, while SaleItem writes stay concurrent with each other;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.
