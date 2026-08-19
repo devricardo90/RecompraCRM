@@ -1,6 +1,8 @@
 # TASK-10 Spec — Interface de registro de venda
 
-Status: SPEC_DERIVED_NOT_STARTED
+Status: CONCURRENCY_DECIDED_IMPLEMENTING
+Branch: `feat/TASK-10-sale-registration-ui`
+Baseline: `7bf2dd0df9c873576bdb17c81c92e819f4587822`
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-04 (interface Customer), TASK-06 (interface Product), TASK-09 (previsão de recompra)
 Baseline: `e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d` (main, pós-merge do PR #14)
@@ -54,28 +56,82 @@ PostgreSQL aborta com `40P01` retentável.
 Nenhum caminho atual da aplicação faz isso. A TASK-10 é o primeiro que pode fazer,
 porque uma venda com vários itens é o caso normal.
 
-**A implementação não pode começar antes de esta seção registrar a estratégia
-escolhida.** Escolher uma das duas, ou ambas:
+**Decisão registrada antes da implementação: adotar A e B juntas.** A sozinha
+evita a forma perigosa nos caminhos que controlamos; B cobre o que não
+controlamos, porque a exclusão concorrente de itens continua sendo uma operação
+legal do banco e pode fechar um ciclo mesmo com a forma segura.
 
-### Estratégia A — forma de mutação segura
+### Estratégia A — forma de mutação segura (ADOTADA)
 
-Emitir as mutações de `SaleItem` em uma forma suportada e determinística, em vez
-de um statement multi-linha irrestrito. Exige registrar aqui:
+Forma exata emitida pelo registro de venda:
 
-- a forma exata emitida (por exemplo, uma linha por statement, em ordem
-  determinística de `productId`);
-- como isso é garantido no código, e não apenas por convenção;
-- o que impede uma regressão silenciosa caso o ORM passe a agrupar as escritas.
+1. abrir uma transação interativa única;
+2. criar a `Sale` sem itens aninhados;
+3. ordenar os itens por `productId` crescente antes de persistir;
+4. inserir **um `SaleItem` por statement**, em sequência, dentro da mesma
+   transação — nunca `createMany` nem `create` aninhado, que emitem um statement
+   multi-linha;
+5. a transação inteira é atômica: qualquer falha aborta a venda completa;
+6. `expectedRepurchaseAt` nunca é enviado nem calculado na aplicação.
 
-### Estratégia B — retry limitado
+A ordem por `productId` crescente é a mesma ordem que o trigger de previsão usa
+para travar linhas de `Product`, então duas vendas concorrentes que compartilham
+produtos os requisitam na mesma ordem relativa.
 
-Implementar retry limitado para falhas de concorrência retentáveis do PostgreSQL:
-`40P01` (deadlock) e, quando aplicável, `40001` (falha de serialização). Exige
-registrar aqui:
+**Garantia estrutural, não convenção.** A regra vive em um único ponto,
+`lib/sales/registerSale.ts`, que é o único caminho autorizado a persistir
+`Sale`/`SaleItem`. Ele recebe os itens já normalizados, ordena internamente e
+emite os inserts em laço. A rota de API não monta escrita própria: ela valida a
+entrada e delega.
 
-- número máximo de tentativas e política de espera;
-- que a transação inteira é refeita, nunca continuada de um estado parcial;
-- que apenas esses SQLSTATEs são retentados.
+**O que impede regressão silenciosa.** O harness de concorrência afirma
+explicitamente a forma emitida, não apenas o resultado: conta os statements
+`INSERT INTO "SaleItem"` realmente enviados ao PostgreSQL via `pg_stat_statements`
+não está disponível por padrão, então a contagem é feita pelo log de queries do
+próprio Prisma (evento `query`), exigindo um statement por item e ordem crescente
+de `productId`. Se alguém trocar o laço por `createMany`, o número de statements
+cai para um e o teste falha.
+
+Duplicidade de produto na mesma venda é normalizada **antes** da persistência:
+seleções repetidas do mesmo `productId` são somadas em um único item, o que
+mantém um item por produto, preserva a quantidade total pretendida e evita duas
+linhas concorrendo pelo mesmo `Product` dentro da mesma transação.
+
+### Estratégia B — retry limitado (ADOTADA)
+
+Política exata:
+
+- **máximo de 3 tentativas no total** (a primeira mais 2 repetições);
+- retenta **apenas** `40P01` (deadlock detectado) e `40001` (falha de
+  serialização); qualquer outro erro falha imediatamente;
+- a transação **inteira** é refeita do zero a cada tentativa, incluindo a criação
+  da `Sale`. Nada é continuado a partir de estado parcial, e uma tentativa
+  abortada não deixa `Sale` órfã porque o rollback do PostgreSQL desfaz tudo;
+- espera limitada entre tentativas: 20 ms e depois 40 ms (backoff linear curto),
+  sem jitter aleatório para manter o teste determinístico e sem laço ilimitado;
+- ao esgotar as tentativas, propaga um erro dedicado
+  (`SaleConcurrencyError`) que a API traduz em **HTTP 503** com mensagem legível
+  pedindo nova tentativa — falha visível, nunca silenciosa;
+- o SQLSTATE original é preservado no erro para diagnóstico e para permitir
+  distinguir falha de concorrência de erro de domínio.
+
+**Distinção entre concorrência e invariante de domínio.** As invariantes das
+TASK-07/08/09 chegam como erros do PostgreSQL com SQLSTATE próprio — `23514`
+para `CHECK` (estoque negativo, quantidade não positiva, venda sem itens) e
+`23503` para chave estrangeira. Esses **não** são retentáveis: são resposta
+determinística do domínio e viram **HTTP 409** com mensagem específica. Retentar
+um deles apenas repetiria a mesma falha três vezes e mascararia a causa.
+
+### Mapa de erros da API
+
+| Origem | SQLSTATE | HTTP | Comportamento |
+| --- | --- | --- | --- |
+| entrada inválida | — | 400 | falha imediata, mensagem de validação |
+| cliente ou produto inexistente | `23503` | 409 | falha imediata |
+| invariante de domínio (estoque negativo, quantidade, venda sem itens) | `23514` | 409 | falha imediata, mensagem específica |
+| deadlock | `40P01` | 503 após 3 tentativas | retenta a transação inteira |
+| falha de serialização | `40001` | 503 após 3 tentativas | retenta a transação inteira |
+| indisponibilidade/erro inesperado | outros | 503 | falha imediata |
 
 ### Regras que valem para qualquer estratégia
 
