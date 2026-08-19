@@ -16,7 +16,8 @@
 - Review round 5 fix (stale REPEATABLE READ snapshot P2): `f89e225`
 - Review round 6 fix (write vs delete lock order P1): `2d004f4`
 - Review round 7 fix (old product on reassignment P1): `52653c7`
-- Review round 8 fix (interval overflow P1 + lock-order scope P2): this head
+- Review round 8 fix (interval overflow P1 + lock-order scope P2): `f6541e1`
+- Review round 9 fix (derived column writable P2): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -244,6 +245,31 @@ corruption, and no current application path issues multi-item SaleItem writes.
 The sale registration flow arrives in TASK-10 and should keep one item per
 statement, or retry on `40P01`.
 
+## Review round 9 — derived column was writable P2
+
+The review of `f6541e1` cleared both round-8 findings and reported that
+`expectedRepurchaseAt` could be written directly. The trigger fired on INSERT
+and on `UPDATE OF quantity/productId/saleId`, but not on the forecast column
+itself, while `prisma/schema.prisma` exposes it as a writable nullable field. A
+caller updating only that column therefore stored an arbitrary value, which
+survived until one of the formula inputs happened to change — silently
+bypassing the persistence-layer computation this task exists to guarantee.
+
+`prisma/migrations/20260820000000_recompute_forecast_on_direct_write` adds the
+column to the trigger's list, so any attempt to write it recomputes it from
+`Sale.soldAt`, `SaleItem.quantity` and `Product.consumptionDays` and the
+caller's value is replaced rather than persisted. Recomputing is preferred over
+rejecting because both propagation triggers update this very column, and
+rejecting would break them.
+
+It has to be a separate, later migration rather than an edit to
+`20260811110000`. That migration's column list is also in force while
+`20260811130000` runs its one-time legacy backfill, which is itself an `UPDATE`
+of the forecast column — arming the trigger for that statement would route every
+historical row through the strict helper and abort deployment on exactly the
+unrepresentable legacy data the backfill is designed to tolerate. That is the
+round-8 P1 in a different disguise, and the staged harness would have caught it.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
@@ -288,6 +314,7 @@ Assertions after the fixed runs:
 - cross-sale moves: each moved item lands on its destination sale with a
   forecast recomputed against that sale's `soldAt`;
 - stale writer: rejected with `40001`, no SaleItem persisted;
+- direct forecast write: replaced by the canonical value rather than stored;
 - write vs delete: written item = `soldAt + 10 days`, stock `98` after both
   the restoration and the quantity change;
 - reassignment vs delete: item re-forecast against its new product
@@ -304,7 +331,7 @@ Local PostgreSQL (docker compose, isolated schema per harness):
 
 | Gate | Result |
 | --- | --- |
-| `db:migrate` (20 migrations) | PASS |
+| `db:migrate` (21 migrations) | PASS |
 | `db:health` | PASS |
 | `test:migration-compat` (clean + legacy) | PASS |
 | `test:customer` | PASS |

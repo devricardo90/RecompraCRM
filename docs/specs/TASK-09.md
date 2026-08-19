@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `52653c7ad9a82a4dd6fb84633a0fddfb25629e5c` (round-7 P1 cleared; one new P1, one new P2)
-Current technical HEAD: pending push of the round-8 interval-overflow fix
-Validation: Validate `32272322645` SUCCESS on `52653c7`; round-8 head revalidated below
+Last independently reviewed HEAD: `f6541e1878e30f693e3ee454f5284024f743d738` (round-8 findings cleared, one new P2)
+Current technical HEAD: pending push of the round-9 derived-column fix
+Validation: Validate `32273716527` SUCCESS on `f6541e1`; round-9 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,25 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-9 review finding (derived column writable)
+
+The review of `f6541e1` cleared both round-8 findings and reported that
+`expectedRepurchaseAt` could be written directly: the trigger fired on INSERT
+and on `UPDATE OF quantity/productId/saleId`, but not on the forecast column
+itself, while the schema exposes it as writable. A caller updating only that
+column stored an arbitrary value that survived until a formula input changed.
+
+1. The column is added to the trigger's list, so any attempt to write it
+   recomputes it from the canonical inputs and the caller's value is replaced.
+2. Recomputing is preferred over rejecting because both propagation triggers
+   update this very column; rejecting would break them.
+3. The change is a separate, later migration, not an edit to `20260811110000`.
+   That migration's column list is also in force while `20260811130000` runs
+   its one-time legacy backfill, which is itself an `UPDATE` of the forecast
+   column - arming the trigger for it would route every historical row through
+   the strict helper and abort deployment on exactly the unrepresentable legacy
+   data the backfill exists to tolerate.
 
 ## Recovery policy for round-8 review findings
 
@@ -164,6 +183,13 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
+## Validation added for round-9 recovery
+
+- at the round-8 head, write an arbitrary forecast directly and require it to
+  persist, proving the gap;
+- on the full chain, write the same arbitrary forecast and require it to be
+  replaced by the canonical value.
+
 ## Validation added for round-8 recovery
 
 - persist a second legacy shape whose day count overflows the interval cast
@@ -243,6 +269,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 - forecast writes and TASK-08 stock restoration share one lock order;
 - a productId reassignment locks both products before any sale;
 - legacy rows overflowing the interval cast do not abort deployment;
+- expectedRepurchaseAt cannot be set directly to a non-canonical value;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 41
+state_version: 42
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -46,7 +46,10 @@ task_09_round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
 task_09_round7_findings: 1 P1 old product locked after sale on reassignment
 task_09_round7_findings_status: REVIEW_CLOSED_P1_RESOLVED
 task_09_round8_findings: 1 P1 interval overflow in legacy backfill, 1 P2 per-row lock-order scope
-task_09_round8_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round8_findings_status: REVIEW_CLOSED_BOTH_RESOLVED
+task_09_round9_findings: 1 P2 expectedRepurchaseAt writable directly
+task_09_round9_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round9_migration: prisma/migrations/20260820000000_recompute_forecast_on_direct_write
 task_09_round8_p2_disposition: SCOPE_CORRECTED_RESIDUAL_ACCEPTED_RETRYABLE_40P01
 task_09_round7_migration: prisma/migrations/20260819220000_lock_both_products_before_sale
 task_09_round6_migration: prisma/migrations/20260819200000_lock_product_before_sale_for_forecast
@@ -62,9 +65,9 @@ task_spec: docs/specs/TASK-09.md
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND8_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: PUSH_ROUND9_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-19T17:25:00Z"
+updated_at: "2026-08-19T17:55:00Z"
 updated_by: Claude Code
 ```
 
@@ -167,5 +170,19 @@ triggers, and serializing child statements reintroduces the global mutex round
 3 had to abandon. The residual is a retryable 40P01 on multi-item SaleItem
 writes, which no current path issues.
 
-The harness reproduces each defect at the exact migration depth it lives at and
-requires correct behaviour on the full chain. All local gates are green.
+Validate `32273716527` was SUCCESS on `f6541e1`. The review of that head cleared
+both round-8 findings, including the accepted scope correction, and reported one
+more P2: `expectedRepurchaseAt` could be written directly, because the trigger
+did not fire on updates of the forecast column itself while the schema exposes
+it as writable.
+
+`20260820000000_recompute_forecast_on_direct_write` adds the column to the
+trigger's list so a direct write is recomputed rather than stored. It is a
+separate, later migration on purpose: the same column list is in force while
+`20260811130000` runs its legacy backfill, which is itself an UPDATE of that
+column, and arming the trigger there would abort deployment on the very legacy
+data the backfill exists to tolerate.
+
+The harness reproduces each defect at the exact migration depth it lives at -
+seven classes now - and requires correct behaviour on the full chain. All local
+gates are green.

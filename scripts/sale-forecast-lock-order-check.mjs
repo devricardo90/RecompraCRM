@@ -11,6 +11,7 @@ const SHARE_LOCK_MIGRATION = "20260819160000_drop_redundant_sale_share_lock";
 const SALE_LOCK_ORDER_MIGRATION = "20260819180000_order_sale_locks_for_forecast";
 const PRODUCT_FIRST_MIGRATION = "20260819200000_lock_product_before_sale_for_forecast";
 const BOTH_PRODUCTS_MIGRATION = "20260819220000_lock_both_products_before_sale";
+const DERIVED_COLUMN_MIGRATION = "20260820000000_recompute_forecast_on_direct_write";
 
 const repoRoot = process.cwd();
 const migrationsRoot = resolve(repoRoot, "prisma", "migrations");
@@ -671,6 +672,55 @@ async function seedReassignVsDeleteCase(client, label, soldAt, oldConsumptionDay
 }
 
 
+// A single sale item, used to check that the forecast column cannot be written
+// directly - it is derived, so a caller's value must be replaced by the
+// canonical one rather than persisted.
+async function seedDirectWriteCase(client, label, soldAt, consumptionDays) {
+  const customer = await client.customer.create({ data: { name: `TASK-09 direct-write ${label} customer` } });
+  const product = await client.product.create({
+    data: {
+      name: `TASK-09 direct-write ${label} product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays,
+    },
+  });
+  const sale = await client.sale.create({
+    data: {
+      customerId: customer.id,
+      soldAt,
+      status: "MODEL_TEST",
+      items: { create: [{ productId: product.id, quantity: 2 }] },
+    },
+    include: { items: true },
+  });
+  return { itemId: sale.items[0].id };
+}
+
+async function runDirectForecastWrite({ client, itemId, canonical, expectAccepted }) {
+  const bogus = "2099-01-01 00:00:00";
+  await client.$executeRawUnsafe(
+    `UPDATE "SaleItem" SET "expectedRepurchaseAt" = TIMESTAMP '${bogus}' WHERE "id" = ${integerLiteral(itemId, "itemId")}`,
+  );
+  const after = await client.saleItem.findUniqueOrThrow({ where: { id: itemId } });
+  const stored = after.expectedRepurchaseAt?.getTime();
+
+  if (expectAccepted) {
+    assert(
+      stored === Date.UTC(2099, 0, 1),
+      `expected the pre-fix run to persist the caller's arbitrary forecast, got ${after.expectedRepurchaseAt?.toISOString()}`,
+    );
+    return;
+  }
+
+  assert(
+    stored === canonical,
+    `direct write should have been recomputed to ${new Date(canonical).toISOString()}, got ${after.expectedRepurchaseAt?.toISOString()}`,
+  );
+}
+
+
 if (!baseUrl) {
   console.error("Sale forecast lock-order tests: FAIL");
   console.error("DATABASE_URL is not set.");
@@ -685,6 +735,7 @@ const preShareLockProject = createMigrationProjectBefore(SHARE_LOCK_MIGRATION);
 const preSaleLockOrderProject = createMigrationProjectBefore(SALE_LOCK_ORDER_MIGRATION);
 const preProductFirstProject = createMigrationProjectBefore(PRODUCT_FIRST_MIGRATION);
 const preBothProductsProject = createMigrationProjectBefore(BOTH_PRODUCTS_MIGRATION);
+const preDerivedColumnProject = createMigrationProjectBefore(DERIVED_COLUMN_MIGRATION);
 let client;
 
 try {
@@ -800,7 +851,25 @@ try {
   client = null;
 
   // ---------------------------------------------------------------
-  // 6. Deploy the full chain over that same populated database and require
+  // 6. Advance to the round-8 head and prove the forecast column was
+  //    directly writable, bypassing the canonical formula.
+  // ---------------------------------------------------------------
+  runMigrations(isolatedUrl, preDerivedColumnProject.schema);
+  client = clientFor(isolatedUrl);
+
+  const brokenDirectWrite = await seedDirectWriteCase(client, "broken", soldAt, 5);
+  await runDirectForecastWrite({
+    client,
+    itemId: brokenDirectWrite.itemId,
+    canonical: soldAt.getTime() + 2 * 5 * DAY_MS,
+    expectAccepted: true,
+  });
+
+  await client.$disconnect();
+  client = null;
+
+  // ---------------------------------------------------------------
+  // 7. Deploy the full chain over that same populated database and require
   //    every one of those interleavings to behave correctly.
   // ---------------------------------------------------------------
   runMigrations(isolatedUrl, schemaPath);
@@ -936,6 +1005,14 @@ try {
   const newProductAfter = await client.product.findUniqueOrThrow({ where: { id: fixedReassign.newProductId } });
   assert(newProductAfter.currentStock === 99, `new product stock is ${newProductAfter.currentStock}; expected 99`);
 
+  const fixedDirectWrite = await seedDirectWriteCase(client, "fixed", soldAt, 5);
+  await runDirectForecastWrite({
+    client,
+    itemId: fixedDirectWrite.itemId,
+    canonical: soldAt.getTime() + 2 * 5 * DAY_MS,
+    expectAccepted: false,
+  });
+
   console.log("Sale forecast lock-order tests: PASS");
 } catch (error) {
   console.error("Sale forecast lock-order tests: FAIL");
@@ -948,6 +1025,7 @@ try {
   rmSync(preSaleLockOrderProject.root, { recursive: true, force: true });
   rmSync(preProductFirstProject.root, { recursive: true, force: true });
   rmSync(preBothProductsProject.root, { recursive: true, force: true });
+  rmSync(preDerivedColumnProject.root, { recursive: true, force: true });
   try {
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
   } catch (error) {

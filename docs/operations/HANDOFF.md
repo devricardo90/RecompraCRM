@@ -26,7 +26,9 @@ round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
 round7_findings: 1 P1 old product locked after sale on reassignment
 round7_findings_status: REVIEW_CLOSED_P1_RESOLVED
 round8_findings: 1 P1 interval overflow in legacy backfill, 1 P2 per-row lock-order scope
-round8_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+round8_findings_status: REVIEW_CLOSED_BOTH_RESOLVED
+round9_findings: 1 P2 expectedRepurchaseAt writable directly
+round9_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
 round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
 round3_ci_run: 32263724994
 round3_ci_status: SUCCESS
@@ -34,18 +36,18 @@ evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-09.md
 loop_upgrade_02_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
-next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND8_HEAD
+next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND9_HEAD
 human_intermediate_approval_required: false
 ```
 
 ## Resume order
 
-1. Inspect PR #14 and confirm the current head is the round-8 interval-overflow fix.
+1. Inspect PR #14 and confirm the current head is the round-9 derived-column fix.
 2. Confirm the Validate run for that exact head is SUCCESS.
 3. Obtain an independent review for that exact head. Do not describe the
-   round-8 findings as review-closed until that happens. Rounds 3-7 *are*
+   round-9 finding as review-closed until that happens. Rounds 3-8 *are*
    review-closed: the reviews of `e7cfff0`, `7b78b92`, `f89e225`,
-   `2d004f4` and `52653c7` no longer report those findings.
+   `2d004f4`, `52653c7` and `f6541e1` no longer report those findings.
 4. If review finds a real defect, stay in RECOVERING, fix only that finding,
    reset stagnation on real progress, validate, and review again.
 5. If review is clean, reconcile evidence/STATE/HANDOFF/ROADMAP, merge PR #14,
@@ -182,6 +184,23 @@ tables only to AFTER triggers; serializing child statements reintroduces the
 global mutex round 3 had to abandon. The residual is a retryable 40P01 on
 multi-item SaleItem writes, which no current path issues. TASK-10 should keep
 one item per statement, or retry on 40P01.
+
+## Round-9 recovery (this loop)
+
+The review of `f6541e1` cleared both round-8 findings and reported one more P2:
+`expectedRepurchaseAt` could be written directly, since the trigger did not fire
+on updates of the forecast column while the schema exposes it as writable.
+
+`prisma/migrations/20260820000000_recompute_forecast_on_direct_write` adds the
+column to the trigger's list, so a direct write is recomputed from the canonical
+inputs rather than stored. Recomputing beats rejecting because both propagation
+triggers update that column themselves. It is a separate, later migration on
+purpose: the same column list is in force while `20260811130000` runs its legacy
+backfill - itself an UPDATE of that column - and arming the trigger there would
+abort deployment on the unrepresentable legacy data the backfill exists to
+tolerate.
+
+The harness now covers seven defect classes, each at its own migration depth.
 
 The v1.3 controller, task-level SDD, anti-drift reconciliation and recovery
 policy are part of this branch. TASK-09 was resumed, not restarted.
