@@ -4,11 +4,11 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-003
 loop_id: RCRM-TASK09-V1.3-RECOVERY
-status: RECOVERING
+status: WAIT_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
 current_task: TASK-09
-current_task_status: RECOVERING
+current_task_status: WAIT_REVIEW
 current_pr: 14
 current_branch: feat/TASK-09-repurchase-forecast
 last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -16,12 +16,15 @@ last_reviewed_ci_run: 32258132550
 last_reviewed_ci_status: SUCCESS
 round2_findings_status: REVIEW_CLOSED_NO_LONGER_REPORTED
 round3_findings: 2 P1 lock-order deadlock cycles
-round3_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+round3_findings_status: FIXED_CI_GREEN_AWAITING_INDEPENDENT_REVIEW
+round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
+round3_ci_run: 32263724994
+round3_ci_status: SUCCESS
 evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-09.md
 loop_upgrade_02_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
-next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND3_HEAD
+next_action: WAIT_FOR_INDEPENDENT_REVIEW_OF_e7cfff09
 human_intermediate_approval_required: false
 ```
 
@@ -67,7 +70,9 @@ why the shipped design is a shared/exclusive split.
 `test:repurchase-forecast`, therefore into Validate) reproduces both cycles on a
 database built from the migrations preceding the fix, then requires the
 identical interleavings to commit once the fix is deployed. All local gates are
-green, including the previously hanging `test:sale`.
+green, including the previously hanging `test:sale`. The fix is pushed as
+`e7cfff0980954bab06db5da5ebe98e0050083904`; Validate `32263724994` is SUCCESS on
+that exact head and an independent review of it was requested.
 
 The v1.3 controller, task-level SDD, anti-drift reconciliation and recovery
 policy are part of this branch. TASK-09 was resumed, not restarted.
