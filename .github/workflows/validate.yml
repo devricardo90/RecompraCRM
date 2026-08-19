@@ -70,6 +70,9 @@ jobs:
       - name: Test Sale repurchase forecast
         run: npm run test:repurchase-forecast
 
+      - name: Test sale registration concurrency
+        run: npm run test:sale-registration
+
       - name: Test Product API integration
         run: npm run test:product-api
 
