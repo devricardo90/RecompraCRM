@@ -189,6 +189,25 @@ global advisory mutex. It removed the deadlocks and hung the TASK-07 concurrency
 case, which requires two transactions to each write before either commits. It
 was never pushed; the shipped design is a shared/exclusive split.
 
+## G. Executable loop changes go through a PR
+
+Any change touching executable orchestration must use the full gate chain:
+
+> branch → tests → commit → push → PR → CI → exact-HEAD review → merge
+
+That covers the Rick Loop controller code, executable loop scripts, review-gate
+logic, orchestration logic, and CI or governance code that affects execution.
+Committing such a change directly to `main` bypasses the very review gate rule B
+exists to enforce, which is self-defeating.
+
+Pure task-closure documentation may continue to use the repository's existing
+closure policy, but only while it changes no executable behaviour. The test is
+behavioural, not by file extension: a Markdown file that configures execution is
+executable governance, and a script change is never "just documentation".
+
+Recorded after v1.3.1 itself was committed straight to `main` — it carried a
+controller fix and its tests, so it should have gone through a PR.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one
