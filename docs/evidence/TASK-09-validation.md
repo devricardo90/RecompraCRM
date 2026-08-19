@@ -12,7 +12,8 @@
 - Review round 1 fixes: `87904a3`, `e497162`, `3344d6a`
 - Review round 2 fixes (legacy backfill + lock upgrade P1s): `a352de7`
 - Review round 3 fix (lock-order P1s): `e7cfff0`
-- Review round 4 fix (cross-sale share lock P2): this head
+- Review round 4 fix (cross-sale share lock P2): `7b78b92`
+- Review round 5 fix (stale REPEATABLE READ snapshot P2): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -101,6 +102,39 @@ concurrent `consumptionDays` changes but about stopping two SaleItem writes for
 the same product from deadlocking while upgrading to TASK-08's stock `UPDATE`.
 Both are the child direction and run concurrently by design.
 
+## Review round 5 — stale REPEATABLE READ snapshot P2
+
+The review of `7b78b92` confirmed the round-4 P2 as resolved and reported one
+more. A `REPEATABLE READ` transaction takes its snapshot; a `soldAt` correction
+then commits; the transaction afterwards inserts an item into that sale, and the
+plain read serves the pre-correction date from its own snapshot — so the item
+commits a forecast against a superseded sale date. The advisory gate cannot help
+here: the correction is already committed, so there is no overlap in time to
+exclude. The parent's propagation cannot repair the row either, because it was
+not attached to the sale when the propagation ran. Nothing would ever correct it.
+
+Only a row lock conflicting with a non-key `UPDATE` rejects that writer, by
+making PostgreSQL raise `40001`. Two candidate modes were ruled out empirically
+rather than by argument:
+
+- **`FOR KEY SHARE`**, the mode the review proposed, is not sufficient.
+  Correcting `soldAt` is a non-key update, so KEY SHARE does not conflict with
+  it; PostgreSQL locks the newer version without raising anything and the stale
+  snapshot is still served. The harness caught this immediately — the fix was
+  tried and the post-fix assertion failed against a real database.
+- **`FOR SHARE`** is exactly what round 4 had to remove.
+
+What reconciles both rounds is not a weaker lock but a fixed lock order
+(`prisma/migrations/20260819180000_order_sale_locks_for_forecast`). A move
+touches two sale rows — the destination it reads and the source the deferred
+guard updates — so the trigger locks both with `FOR NO KEY UPDATE`, lowest id
+first. Opposite-direction moves request the same rows in the same order and one
+waits instead of deadlocking. Every other case touches a single sale.
+
+The trigger fires only on INSERT and on `UPDATE OF quantity/productId/saleId`,
+never on DELETE, so TASK-07's concurrent removal of two items of one sale keeps
+arbitrating through that guard's own update rather than through this lock.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
@@ -109,12 +143,19 @@ defect and the fix on a real database rather than arguing about them:
 
 1. builds a database from every migration *preceding* the round-3 fix and
    reproduces both P1 cycles, requiring PostgreSQL to abort one side;
-2. advances that same database to the reviewed head exactly — round-3 fix
-   present, round-4 fix absent — and reproduces the cross-sale P2 the shared
-   gate correctly let through;
-3. deploys the full chain over that same populated database;
-4. requires all three interleavings to commit, with the forecasts and stock the
-   canonical formula demands.
+2. advances that same database to the round-3 head exactly and reproduces the
+   cross-sale P2 the shared gate correctly let through;
+3. advances it to the round-4 head exactly and proves the stale
+   `REPEATABLE READ` writer commits a forecast against the superseded `soldAt`;
+4. deploys the full chain over that same populated database;
+5. requires every one of those interleavings to behave correctly — the moves
+   and updates committing with the forecasts and stock the canonical formula
+   demands, and the stale writer rejected with a serialization failure that
+   leaves no row behind.
+
+The racing insert is issued as raw SQL so the PostgreSQL SQLSTATE survives: the
+typed client collapses `40001` and `40P01` into one generic write-conflict
+error, and this case must assert a serialization failure specifically.
 
 The parent operations are single statements — the shapes the review actually
 described (a product `PUT` changing `consumptionDays`, a correction of
@@ -132,7 +173,8 @@ Assertions after the fixed runs:
 - sale cycle: propagated item = corrected `soldAt + 5 days`, updated item =
   corrected `soldAt + 15 days`, stock `97`;
 - cross-sale moves: each moved item lands on its destination sale with a
-  forecast recomputed against that sale's `soldAt`.
+  forecast recomputed against that sale's `soldAt`;
+- stale writer: rejected with `40001`, no SaleItem persisted.
 
 ## Local gate results
 
@@ -140,7 +182,7 @@ Local PostgreSQL (docker compose, isolated schema per harness):
 
 | Gate | Result |
 | --- | --- |
-| `db:migrate` (17 migrations) | PASS |
+| `db:migrate` (18 migrations) | PASS |
 | `db:health` | PASS |
 | `test:migration-compat` (clean + legacy) | PASS |
 | `test:customer` | PASS |

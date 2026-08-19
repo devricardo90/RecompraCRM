@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 37
+state_version: 38
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -38,7 +38,10 @@ task_09_round2_findings_status: REVIEW_CLOSED_NO_LONGER_REPORTED
 task_09_round3_findings: 2 P1 lock-order deadlock cycles
 task_09_round3_findings_status: REVIEW_CLOSED_BOTH_P1_RESOLVED
 task_09_round4_findings: 1 P2 cross-sale item move deadlock
-task_09_round4_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round4_findings_status: REVIEW_CLOSED_P2_RESOLVED
+task_09_round5_findings: 1 P2 stale REPEATABLE READ soldAt snapshot
+task_09_round5_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round5_migration: prisma/migrations/20260819180000_order_sale_locks_for_forecast
 task_09_round4_migration: prisma/migrations/20260819160000_drop_redundant_sale_share_lock
 task_09_round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
 task_09_round3_ci_run: 32263724994
@@ -50,9 +53,9 @@ task_spec: docs/specs/TASK-09.md
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND4_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: PUSH_ROUND5_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-19T15:20:00Z"
+updated_at: "2026-08-19T15:50:00Z"
 updated_by: Claude Code
 ```
 
@@ -94,11 +97,24 @@ direction, so the shared gate admits both by design, but each forecast trigger
 took `FOR SHARE` on its destination Sale while the deferred TASK-07 guard
 updates its source Sale at commit.
 
-`20260819160000_drop_redundant_sale_share_lock` drops that share lock. It only
-existed so a forecast read would conflict with a concurrent `soldAt`
-correction, and the round-3 gate now excludes that overlap entirely, so the
-lock contributed nothing but the cycle. `Product` stays on `FOR NO KEY UPDATE`,
-which serializes same-direction writers before TASK-08's stock update and is
-still required. The harness now reproduces all three cycles at the exact
-migration depth each one lives at, and requires all three to commit on the full
-chain. All local gates are green.
+`20260819160000_drop_redundant_sale_share_lock` dropped that share lock, and
+Validate `32265214581` was SUCCESS on `7b78b92`.
+
+The review of `7b78b92` then cleared that P2 and reported one more: a
+`REPEATABLE READ` writer whose snapshot predates a committed `soldAt`
+correction still persisted a forecast built on the old date. The gate cannot
+help - the correction is already committed, so there is no overlap to exclude -
+and the propagation cannot repair a row that was not attached to the sale when
+it ran.
+
+`20260819180000_order_sale_locks_for_forecast` restores a locking read strong
+enough to reject that writer while keeping the round-4 cycle closed. The
+review's suggested `FOR KEY SHARE` was tried and empirically rejected: a
+`soldAt` correction is a non-key update, so KEY SHARE does not conflict with it
+and the stale snapshot is still served. What reconciles both rounds is a fixed
+lock order - a move touches two sale rows, so the trigger locks both with
+`FOR NO KEY UPDATE`, lowest id first, and opposite-direction moves then wait
+instead of deadlocking.
+
+The harness reproduces each defect at the exact migration depth it lives at and
+requires correct behaviour on the full chain. All local gates are green.

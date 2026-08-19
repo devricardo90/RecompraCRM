@@ -18,7 +18,9 @@ round2_findings_status: REVIEW_CLOSED_NO_LONGER_REPORTED
 round3_findings: 2 P1 lock-order deadlock cycles
 round3_findings_status: REVIEW_CLOSED_BOTH_P1_RESOLVED
 round4_findings: 1 P2 cross-sale item move deadlock
-round4_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+round4_findings_status: REVIEW_CLOSED_P2_RESOLVED
+round5_findings: 1 P2 stale REPEATABLE READ soldAt snapshot
+round5_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
 round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
 round3_ci_run: 32263724994
 round3_ci_status: SUCCESS
@@ -26,17 +28,18 @@ evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-09.md
 loop_upgrade_02_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
-next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND4_HEAD
+next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND5_HEAD
 human_intermediate_approval_required: false
 ```
 
 ## Resume order
 
-1. Inspect PR #14 and confirm the current head is the round-4 share-lock fix.
+1. Inspect PR #14 and confirm the current head is the round-5 sale-lock-order fix.
 2. Confirm the Validate run for that exact head is SUCCESS.
 3. Obtain an independent review for that exact head. Do not describe the
-   round-4 P2 as review-closed until that happens. The round-3 P1s *are*
-   review-closed: the review of `e7cfff0` no longer reports them.
+   round-5 P2 as review-closed until that happens. The round-3 P1s and the
+   round-4 P2 *are* review-closed: the reviews of `e7cfff0` and `7b78b92` no
+   longer report them.
 4. If review finds a real defect, stay in RECOVERING, fix only that finding,
    reset stagnation on real progress, validate, and review again.
 5. If review is clean, reconcile evidence/STATE/HANDOFF/ROADMAP, merge PR #14,
@@ -96,6 +99,28 @@ two same-direction writers before TASK-08's stock update and is still needed.
 The harness now reproduces each cycle at the exact migration depth it lives at
 - the two P1s before the round-3 fix, the P2 at the reviewed head itself - and
 requires all three to commit on the full chain.
+
+## Round-5 recovery (this loop)
+
+The review of `7b78b92` cleared the round-4 P2 and reported one more: a
+`REPEATABLE READ` writer whose snapshot predates a committed `soldAt`
+correction still persisted a forecast built on the old date. The advisory gate
+cannot help - the correction is already committed, so there is no overlap in
+time to exclude - and the propagation cannot repair a row that was not attached
+to the sale when it ran.
+
+`prisma/migrations/20260819180000_order_sale_locks_for_forecast` restores a
+locking read strong enough to reject that writer while keeping the round-4
+cycle closed. The review suggested `FOR KEY SHARE`; that was implemented,
+tested against a real database, and rejected - a `soldAt` correction is a
+non-key update, so KEY SHARE does not conflict with it and the stale snapshot
+is still served. What reconciles both rounds is a fixed lock order: a move
+touches two sale rows, so the trigger locks both with `FOR NO KEY UPDATE`,
+lowest id first, and opposite-direction moves wait instead of deadlocking. The
+trigger never fires on DELETE, so TASK-07's concurrent removals are untouched.
+
+The harness now covers four defect classes, each reproduced at its own
+migration depth, and requires correct behaviour on the full chain.
 
 The v1.3 controller, task-level SDD, anti-drift reconciliation and recovery
 policy are part of this branch. TASK-09 was resumed, not restarted.

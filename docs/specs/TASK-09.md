@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `e7cfff0980954bab06db5da5ebe98e0050083904` (round-3 P1s cleared, one new P2)
-Current technical HEAD: pending push of the round-4 share-lock fix
-Validation: Validate `32263724994` SUCCESS on `e7cfff0`; round-4 head revalidated below
+Last independently reviewed HEAD: `7b78b92ede4c3520016b1b4a14a719dda533650d` (round-4 P2 cleared, one new P2)
+Current technical HEAD: pending push of the round-5 sale-lock-order fix
+Validation: Validate `32265214581` SUCCESS on `7b78b92`; round-5 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,29 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-5 review finding (stale REPEATABLE READ snapshot)
+
+The review of `7b78b92` reported that a `REPEATABLE READ` writer whose snapshot
+predates a committed `soldAt` correction still persists a forecast built on the
+old date. The advisory gate cannot help: the correction is already committed,
+so there is no overlap to exclude, and the parent's propagation cannot repair a
+row that was not attached to the sale when it ran.
+
+1. Only a row lock that conflicts with a non-key `UPDATE` rejects the stale
+   writer, by making PostgreSQL raise `40001` at `REPEATABLE READ`.
+2. `FOR KEY SHARE` - the mode the review suggested - is not sufficient:
+   correcting `soldAt` is a non-key update, so KEY SHARE does not conflict with
+   it and the stale snapshot is still served. This was confirmed against a real
+   database before choosing the lock.
+3. `FOR SHARE`/`FOR NO KEY UPDATE` conflict with the deferred TASK-07 guard's
+   update of the *source* sale, which is what produced the round-4 cycle. The
+   reconciliation is not a weaker lock but a fixed lock order: a move touches
+   two sale rows, so the trigger locks both with `FOR NO KEY UPDATE`, lowest id
+   first. Opposite-direction moves then request the same rows in the same order
+   and one waits instead of deadlocking.
+4. The trigger never fires on DELETE, so TASK-07's concurrent removal of two
+   items of one sale keeps arbitrating through that guard's own update.
 
 ## Recovery policy for round-4 review finding (cross-sale moves)
 
@@ -79,6 +102,16 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
+## Validation added for round-5 recovery
+
+- advance the harness database to the round-4 head exactly and prove the stale
+  `REPEATABLE READ` writer commits a forecast against the superseded `soldAt`;
+- deploy the full chain and require that same writer to be rejected with a
+  serialization failure, leaving no row behind;
+- issue the racing insert as raw SQL so the PostgreSQL SQLSTATE survives - the
+  typed client collapses `40001` and `40P01` into one generic write-conflict
+  error, and this case must assert a serialization failure specifically.
+
 ## Validation added for round-4 recovery
 
 - advance the harness database to the reviewed head exactly (round-3 fix
@@ -119,6 +152,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 - forecast propagation and SaleItem writes cannot deadlock on reversed lock
   order, while SaleItem writes stay concurrent with each other;
 - legal cross-sale item moves in opposite directions do not deadlock;
+- a REPEATABLE READ writer cannot persist a forecast from a superseded soldAt;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

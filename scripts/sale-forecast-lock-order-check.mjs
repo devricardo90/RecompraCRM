@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 // commit cleanly.
 const LOCK_ORDER_MIGRATION = "20260819140000_serialize_forecast_lock_order";
 const SHARE_LOCK_MIGRATION = "20260819160000_drop_redundant_sale_share_lock";
+const SALE_LOCK_ORDER_MIGRATION = "20260819180000_order_sale_locks_for_forecast";
 
 const repoRoot = process.cwd();
 const migrationsRoot = resolve(repoRoot, "prisma", "migrations");
@@ -306,16 +307,22 @@ async function runCrossSaleMove({ schemaName, moveForward, moveBackward, expectD
   const backwardMoved = deferred();
 
   try {
+    // The pre-fix cycle only closes if both statements run before either
+    // commits, so that case synchronises on a barrier. After the fix the two
+    // moves serialize on the ordered row locks, which makes that barrier
+    // unsatisfiable by construction - so it is used only to prove the defect.
+    const useBarrier = expectDeadlock;
+
     const forwardRun = forwardClient.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(moveForward);
       forwardMoved.resolve();
-      await backwardMoved.promise;
+      if (useBarrier) await backwardMoved.promise;
     }, TX_OPTIONS);
 
     const backwardRun = backwardClient.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(moveBackward);
       backwardMoved.resolve();
-      await forwardMoved.promise;
+      if (useBarrier) await forwardMoved.promise;
     }, TX_OPTIONS);
 
     const [forwardResult, backwardResult] = await Promise.allSettled([forwardRun, backwardRun]);
@@ -384,6 +391,138 @@ async function seedCrossSaleCase(client, label, soldAtA, soldAtB, consumptionDay
 }
 
 
+function isSerializationFailure(error) {
+  const text = `${error?.code ?? ""} ${error?.meta?.code ?? ""} ${error?.message ?? error ?? ""}`.toLowerCase();
+  return text.includes("40001") || text.includes("could not serialize");
+}
+
+/**
+ * Reproduces the reported REPEATABLE READ staleness: a writer whose snapshot
+ * predates a committed soldAt correction must not persist a forecast built on
+ * the old date. The advisory gate cannot help here - the correction is already
+ * committed, so there is no overlap in time to exclude, and the parent's
+ * propagation cannot repair the row because it was not attached to the sale
+ * when the propagation ran.
+ *
+ * Before the fix the plain read serves the stale snapshot and the wrong
+ * forecast commits. After it, the locking read makes PostgreSQL reject the
+ * stale writer with a serialization failure.
+ */
+async function runStaleSnapshotInsert({ schemaName, saleId, productId, staleSoldAt, correctedSoldAt, consumptionDays, expectStale }) {
+  const writerClient = clientFor(urlForSchema(schemaName, true));
+  const correctorClient = clientFor(urlForSchema(schemaName, true));
+  const reader = clientFor(urlForSchema(schemaName, true));
+
+  const snapshotTaken = deferred();
+  const correctionCommitted = deferred();
+
+  let createdItemId = null;
+  let writerError = null;
+
+  try {
+    const writerRun = writerClient
+      .$transaction(
+        async (tx) => {
+          // Fixes this transaction's snapshot before the correction commits.
+          await tx.$queryRawUnsafe(`SELECT "soldAt" FROM "Sale" WHERE "id" = ${integerLiteral(saleId, "saleId")}`);
+          snapshotTaken.resolve();
+          await correctionCommitted.promise;
+          // Raw insert so the PostgreSQL SQLSTATE survives: the typed client
+          // collapses 40001 and 40P01 into one generic write-conflict error,
+          // and this case must assert a serialization failure specifically.
+          const [created] = await tx.$queryRawUnsafe(
+            `INSERT INTO "SaleItem" ("saleId", "productId", "quantity")
+             VALUES (${integerLiteral(saleId, "saleId")}, ${integerLiteral(productId, "productId")}, 1)
+             RETURNING "id"`,
+          );
+          createdItemId = created.id;
+        },
+        { ...TX_OPTIONS, isolationLevel: "RepeatableRead" },
+      )
+      .catch((error) => {
+        writerError = error;
+      });
+
+    await snapshotTaken.promise;
+
+    await correctorClient.$transaction(
+      async (tx) =>
+        tx.$executeRawUnsafe(
+          `UPDATE "Sale" SET "soldAt" = TIMESTAMP '${correctedSoldAt}' WHERE "id" = ${integerLiteral(saleId, "saleId")}`,
+        ),
+      TX_OPTIONS,
+    );
+    correctionCommitted.resolve();
+    await writerRun;
+
+    if (expectStale) {
+      assert(!writerError, `stale writer unexpectedly failed before the fix: ${writerError?.message ?? writerError}`);
+      assert(createdItemId !== null, "stale writer did not create an item before the fix");
+      const [row] = await reader.$queryRawUnsafe(
+        `SELECT "expectedRepurchaseAt" AS f FROM "SaleItem" WHERE "id" = ${integerLiteral(createdItemId, "createdItemId")}`,
+      );
+      const expectedStale = staleSoldAt.getTime() + consumptionDays * DAY_MS;
+      assert(
+        row.f instanceof Date && row.f.getTime() === expectedStale,
+        `expected the pre-fix run to persist a stale forecast at ${new Date(expectedStale).toISOString()}, got ${row.f?.toISOString?.() ?? row.f}`,
+      );
+      return;
+    }
+
+    assert(
+      writerError && isSerializationFailure(writerError),
+      `expected a serialization failure for the stale REPEATABLE READ writer, got ${writerError?.message ?? "success"}`,
+    );
+    if (createdItemId !== null) {
+      const rows = await reader.$queryRawUnsafe(
+        `SELECT "id" FROM "SaleItem" WHERE "id" = ${integerLiteral(createdItemId, "createdItemId")}`,
+      );
+      assert(rows.length === 0, "rejected stale writer still left an item behind");
+    }
+  } finally {
+    snapshotTaken.resolve();
+    correctionCommitted.resolve();
+    await reader.$disconnect();
+    await correctorClient.$disconnect();
+    await writerClient.$disconnect();
+  }
+}
+
+
+// A sale that already has an item, so a soldAt correction has something to
+// propagate to, plus a product for the racing writer to insert.
+async function seedStaleSnapshotCase(client, label, soldAt, consumptionDays) {
+  const customer = await client.customer.create({ data: { name: `TASK-09 stale-snapshot ${label} customer` } });
+  const existingProduct = await client.product.create({
+    data: {
+      name: `TASK-09 stale-snapshot ${label} existing product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays,
+    },
+  });
+  const insertedProduct = await client.product.create({
+    data: {
+      name: `TASK-09 stale-snapshot ${label} inserted product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays,
+    },
+  });
+  const sale = await client.sale.create({
+    data: {
+      customerId: customer.id,
+      soldAt,
+      status: "MODEL_TEST",
+      items: { create: [{ productId: existingProduct.id, quantity: 1 }] },
+    },
+  });
+  return { saleId: sale.id, productId: insertedProduct.id };
+}
+
+
 if (!baseUrl) {
   console.error("Sale forecast lock-order tests: FAIL");
   console.error("DATABASE_URL is not set.");
@@ -395,6 +534,7 @@ const isolatedUrl = urlForSchema(schemaName);
 const admin = new PrismaClient();
 const preLockOrderProject = createMigrationProjectBefore(LOCK_ORDER_MIGRATION);
 const preShareLockProject = createMigrationProjectBefore(SHARE_LOCK_MIGRATION);
+const preSaleLockOrderProject = createMigrationProjectBefore(SALE_LOCK_ORDER_MIGRATION);
 let client;
 
 try {
@@ -451,8 +591,29 @@ try {
   client = null;
 
   // ---------------------------------------------------------------
-  // 3. Deploy the full chain over that same populated database and require
-  //    every one of those interleavings to commit with correct data.
+  // 3. Advance to the round-4 head (share lock dropped, key-share lock
+  //    absent) and reproduce the REPEATABLE READ stale-snapshot forecast.
+  // ---------------------------------------------------------------
+  runMigrations(isolatedUrl, preSaleLockOrderProject.schema);
+  client = clientFor(isolatedUrl);
+
+  const staleCase = await seedStaleSnapshotCase(client, "broken", soldAt, 5);
+  await runStaleSnapshotInsert({
+    schemaName,
+    saleId: staleCase.saleId,
+    productId: staleCase.productId,
+    staleSoldAt: soldAt,
+    correctedSoldAt: "2026-09-01 00:00:00",
+    consumptionDays: 5,
+    expectStale: true,
+  });
+
+  await client.$disconnect();
+  client = null;
+
+  // ---------------------------------------------------------------
+  // 4. Deploy the full chain over that same populated database and require
+  //    every one of those interleavings to behave correctly.
   // ---------------------------------------------------------------
   runMigrations(isolatedUrl, schemaPath);
   client = clientFor(isolatedUrl);
@@ -532,6 +693,17 @@ try {
     `backward moved forecast is ${movedBackward.expectedRepurchaseAt?.toISOString()}; expected sale A soldAt + 5 days`,
   );
 
+  const fixedStaleCase = await seedStaleSnapshotCase(client, "fixed", soldAt, 5);
+  await runStaleSnapshotInsert({
+    schemaName,
+    saleId: fixedStaleCase.saleId,
+    productId: fixedStaleCase.productId,
+    staleSoldAt: soldAt,
+    correctedSoldAt: "2026-09-01 00:00:00",
+    consumptionDays: 5,
+    expectStale: false,
+  });
+
   console.log("Sale forecast lock-order tests: PASS");
 } catch (error) {
   console.error("Sale forecast lock-order tests: FAIL");
@@ -541,6 +713,7 @@ try {
   if (client) await client.$disconnect();
   rmSync(preLockOrderProject.root, { recursive: true, force: true });
   rmSync(preShareLockProject.root, { recursive: true, force: true });
+  rmSync(preSaleLockOrderProject.root, { recursive: true, force: true });
   try {
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
   } catch (error) {
