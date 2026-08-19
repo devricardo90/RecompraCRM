@@ -5,7 +5,6 @@ Branch: `feat/TASK-10-sale-registration-ui`
 Baseline: `7bf2dd0df9c873576bdb17c81c92e819f4587822`
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-04 (interface Customer), TASK-06 (interface Product), TASK-09 (previsão de recompra)
-Baseline: `e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d` (main, pós-merge do PR #14)
 
 ## Outcome
 
@@ -84,13 +83,11 @@ produtos os requisitam na mesma ordem relativa.
 emite os inserts em laço. A rota de API não monta escrita própria: ela valida a
 entrada e delega.
 
-**O que impede regressão silenciosa.** O harness de concorrência afirma
-explicitamente a forma emitida, não apenas o resultado: conta os statements
-`INSERT INTO "SaleItem"` realmente enviados ao PostgreSQL via `pg_stat_statements`
-não está disponível por padrão, então a contagem é feita pelo log de queries do
-próprio Prisma (evento `query`), exigindo um statement por item e ordem crescente
-de `productId`. Se alguém trocar o laço por `createMany`, o número de statements
-cai para um e o teste falha.
+**O que impede regressão silenciosa.** O harness de concorrência afirma a forma
+emitida, não apenas o resultado. Ele assina o evento `query` do Prisma, coleta os
+statements `INSERT INTO "SaleItem"` realmente enviados ao PostgreSQL e exige um
+statement por item, na ordem crescente de `productId`. Trocar o laço por
+`createMany` derruba a contagem para um único statement e quebra o teste.
 
 Duplicidade de produto na mesma venda é normalizada **antes** da persistência:
 seleções repetidas do mesmo `productId` são somadas em um único item, o que
