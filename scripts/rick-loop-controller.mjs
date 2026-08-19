@@ -83,12 +83,66 @@ export function taskSpecPath(task) {
   return task ? `docs/specs/${task}.md` : null;
 }
 
+// A review satisfies the gate only when it is anchored to the exact HEAD under
+// judgement. Approval for an older SHA is evidence, never a gate. This is
+// deliberately strict: the previous implementation compared the PR head to
+// itself, so any review on any older commit passed the gate.
+export function selectAnchoredReview(reviews, headOid) {
+  if (!Array.isArray(reviews) || !headOid) return null;
+  const anchored = reviews.filter((entry) => entry?.commit?.oid === headOid);
+  return anchored.length ? anchored[anchored.length - 1] : null;
+}
+
+// The reviewer also signals "clean" as a PR comment naming the reviewed commit
+// rather than as a review object, and abbreviates the SHA there. That path is
+// valid, but only when the named commit is the exact HEAD.
+export function selectAnchoredCleanComment(comments, headOid) {
+  if (!Array.isArray(comments) || !headOid) return null;
+  const clean = comments.filter((entry) => {
+    const body = entry?.body ?? "";
+    if (!/(did\s*n.?t find any major issues|no major issues)/i.test(body)) return false;
+    const named = body.match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
+    return named ? headOid.startsWith(named[1]) : false;
+  });
+  return clean.length ? clean[clean.length - 1] : null;
+}
+
+// Item A: a task that needed many review rounds, each carrying a distinct
+// confirmed defect, is reporting an architecture problem rather than bad luck.
+// Non-blocking: it never restarts a task, never authorizes scope creep, and
+// never blocks convergence. The count is over review rounds, not comments, and
+// a new commit cannot reset it.
+export function evaluateArchitectureComplexitySignal(entries, task, threshold = 5) {
+  const rounds = new Set();
+  const classes = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || entry.task !== task) continue;
+    if (!entry.finding && !entry.finding_2) continue;
+    if (entry.review_round === undefined || entry.review_round === null) continue;
+    rounds.add(entry.review_round);
+    for (const key of ["finding", "finding_2"]) {
+      if (entry[key] && !classes.includes(entry[key])) classes.push(entry[key]);
+    }
+  }
+  const count = rounds.size;
+  if (count < threshold) return { signal: null, rounds: count, defect_classes: classes };
+  return {
+    signal: "ARCHITECTURE_COMPLEXITY_SIGNAL",
+    blocking: false,
+    task,
+    rounds: count,
+    threshold,
+    defect_classes: classes,
+    action: "record a follow-up architecture item; continue converging the current task",
+  };
+}
+
 export function deriveCanonicalTaskState({ git, pr, review, ci }) {
   if (!pr) return taskFromBranch(git?.branch) ? "IMPLEMENTING" : "READY";
   if (pr.state === "MERGED") return "POST_MERGE_VALIDATION";
   if (!ci || ci.status !== "completed") return "WAIT_CI";
   if (ci.conclusion !== "success") return "RECOVERING";
-  if (!review || review.headRefOid !== pr.headRefOid) return "WAIT_REVIEW";
+  if (!review || !review.anchored) return "WAIT_REVIEW";
   return "REVIEW_LANDED";
 }
 
@@ -255,9 +309,32 @@ function findPrForTask(task, repo) {
   return list.find((candidate) => taskFromBranch(candidate.headRefName) === task || candidate.title?.includes(task)) || null;
 }
 
+function readLoopRegister() {
+  try {
+    const raw = readFileSync(join(repoRoot, "docs", "operations", "LOOP-REGISTER.jsonl"), "utf8");
+    return raw
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => {
+        try { return JSON.parse(line); } catch { return null; }
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function prReview(number, repo) {
-  const data = parseJson(sh("gh", ["pr", "view", String(number), "--repo", repo, "--json", "reviews,headRefOid"]));
-  return data ? { headRefOid: data.headRefOid, lastReview: data.reviews?.at(-1) ?? null } : null;
+  const data = parseJson(sh("gh", ["pr", "view", String(number), "--repo", repo, "--json", "reviews,comments,headRefOid"]));
+  if (!data) return null;
+  const anchoredReview = selectAnchoredReview(data.reviews, data.headRefOid);
+  const anchoredClean = selectAnchoredCleanComment(data.comments, data.headRefOid);
+  return {
+    headRefOid: data.headRefOid,
+    lastReview: data.reviews?.at(-1) ?? null,
+    anchored: anchoredReview ?? anchoredClean,
+    anchoredVia: anchoredReview ? "review" : anchoredClean ? "clean_comment" : null,
+  };
 }
 
 function ciForSha(branch, sha, repo) {
@@ -277,8 +354,8 @@ function classify(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent 
   if (!ci) return { transition: "EXTERNAL_RETRYABLE", reason: "no CI run found yet for current PR HEAD" };
   if (ci.status !== "completed") return { transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` };
   if (ci.conclusion !== "success") return { transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` };
-  if (!review || review.headRefOid !== pr.headRefOid) return { transition: "WAIT_FOR_CODEX", reason: "no independent review yet for current PR HEAD; request @codex review and poll" };
-  return { transition: "REVIEW_LANDED", reason: "review exists for current PR HEAD; inspect inline findings and classify PASS vs RECOVERING", review: review.lastReview };
+  if (!review || !review.anchored) return { transition: "WAIT_FOR_CODEX", reason: "no independent review anchored to the exact current PR HEAD; request @codex review and poll. A result for an older SHA is evidence only and does not satisfy this gate" };
+  return { transition: "REVIEW_LANDED", reason: "review anchored to the exact current PR HEAD; inspect inline findings and classify PASS vs RECOVERING", review: review.anchored };
 }
 
 function reconcile() {
@@ -303,6 +380,7 @@ function reconcile() {
   const taskSpecPresent = taskSpec ? existsSync(taskSpec) : false;
   const canonicalTaskState = deriveCanonicalTaskState({ git, pr, review, ci });
   const decision = classify(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent });
+  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), state?.current_task);
   const writeTransitions = new Set(["PASS", "REVIEW_LANDED", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
   return {
     generated_at: new Date().toISOString(),
@@ -312,7 +390,12 @@ function reconcile() {
     git,
     gh_available: hasGh,
     pr: pr ? { number: pr.number, state: pr.state, headRefName: pr.headRefName, headRefOid: pr.headRefOid, mergeable: pr.mergeable } : null,
-    review: review?.lastReview ? { submittedAt: review.lastReview.submittedAt, commit: review.lastReview.commit?.oid ?? null } : null,
+    review: review?.anchored
+      ? { submittedAt: review.anchored.submittedAt ?? review.anchored.createdAt ?? null, commit: review.anchored.commit?.oid ?? pr?.headRefOid ?? null, anchored_to_head: true, via: review.anchoredVia }
+      : review?.lastReview
+        ? { submittedAt: review.lastReview.submittedAt, commit: review.lastReview.commit?.oid ?? null, anchored_to_head: false, note: "evidence only; does not satisfy the review gate for the current HEAD" }
+        : null,
+    architecture_signal: architectureSignal,
     ci: ci ? { id: ci.databaseId, status: ci.status, conclusion: ci.conclusion, headSha: ci.headSha } : null,
     task_spec: { path: taskSpec, present: taskSpecPresent },
     state_drift: drift,

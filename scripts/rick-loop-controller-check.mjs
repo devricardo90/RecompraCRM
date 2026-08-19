@@ -8,6 +8,9 @@ import {
   classifyDocsOnlyDiff,
   taskFromBranch,
   deriveCanonicalTaskState,
+  selectAnchoredReview,
+  selectAnchoredCleanComment,
+  evaluateArchitectureComplexitySignal,
   detectStateDrift,
   WAIT_BACKOFF_SECONDS,
   backoffSecondsForPollCount,
@@ -47,12 +50,59 @@ try {
 
   const openPr = { number: 14, state: "OPEN", headRefName: "feat/TASK-09-repurchase-forecast", headRefOid: "abc123" };
   const greenCi = { status: "completed", conclusion: "success" };
-  const currentReview = { headRefOid: "abc123", lastReview: { submittedAt: "now" } };
+  const currentReview = { headRefOid: "abc123", lastReview: { submittedAt: "now" }, anchored: { submittedAt: "now" } };
+  // A review that exists but points at an older SHA must NOT satisfy the gate.
+  const staleReview = { headRefOid: "abc123", lastReview: { submittedAt: "then", commit: { oid: "old999" } }, anchored: null };
   assert(deriveCanonicalTaskState({ git: { branch: "main" }, pr: null, review: null, ci: null }) === "READY", "main/no PR should be READY");
   assert(deriveCanonicalTaskState({ git: { branch: "feat/TASK-09-x" }, pr: null, review: null, ci: null }) === "IMPLEMENTING", "task branch/no PR should be IMPLEMENTING");
   assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: null, ci: null }) === "WAIT_CI", "open PR/no CI should WAIT_CI");
   assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: null, ci: greenCi }) === "WAIT_REVIEW", "green CI/no review should WAIT_REVIEW");
   assert(deriveCanonicalTaskState({ git: {}, pr: openPr, review: currentReview, ci: greenCi }) === "REVIEW_LANDED", "current review should land");
+  assert(
+    deriveCanonicalTaskState({ git: {}, pr: openPr, review: staleReview, ci: greenCi }) === "WAIT_REVIEW",
+    "a review anchored to an older SHA must not satisfy the gate for the current HEAD",
+  );
+
+  // Exact-HEAD anchoring: reviews.
+  const reviews = [
+    { commit: { oid: "old999" }, submittedAt: "t1" },
+    { commit: { oid: "abc123" }, submittedAt: "t2" },
+    { commit: { oid: "old999" }, submittedAt: "t3" },
+  ];
+  assert(selectAnchoredReview(reviews, "abc123")?.submittedAt === "t2", "anchored review not selected by exact SHA");
+  assert(selectAnchoredReview(reviews, "nothere") === null, "non-matching SHA must not anchor");
+  assert(selectAnchoredReview(null, "abc123") === null, "missing reviews must not anchor");
+
+  // Exact-HEAD anchoring: the reviewer's clean-comment path, which abbreviates
+  // the SHA and carries no review object at all.
+  const comments = [
+    { body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `old999abcd`", createdAt: "c1" },
+    { body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `abc123def0`", createdAt: "c2" },
+    { body: "unrelated chatter mentioning abc123", createdAt: "c3" },
+  ];
+  assert(selectAnchoredCleanComment(comments, "abc123def0aaaa")?.createdAt === "c2", "clean comment not anchored by abbreviated SHA");
+  assert(selectAnchoredCleanComment(comments, "zzz000") === null, "clean comment must not anchor to a different SHA");
+  assert(selectAnchoredCleanComment([{ body: "Reviewed commit: `abc123def0`" }], "abc123def0") === null, "a comment without a clean verdict must not anchor");
+
+  // Architecture complexity signal: counts review rounds, not comments.
+  const reg = [
+    { task: "TASK-09", review_round: 3, finding: "A" },
+    { task: "TASK-09", review_round: 3, finding: "A" },
+    { task: "TASK-09", review_round: 4, finding: "B" },
+    { task: "TASK-09", review_round: 5, finding: "C" },
+    { task: "TASK-09", review_round: 6, finding: "D" },
+    { task: "TASK-09", review_round: 7, finding: "E", finding_2: "F" },
+    { task: "TASK-08", review_round: 9, finding: "Z" },
+    { task: "TASK-09", status: "COMPLETED_MERGED" },
+  ];
+  const sig = evaluateArchitectureComplexitySignal(reg, "TASK-09");
+  assert(sig.signal === "ARCHITECTURE_COMPLEXITY_SIGNAL", "signal should fire at five distinct rounds");
+  assert(sig.blocking === false, "architecture signal must be non-blocking");
+  assert(sig.rounds === 5, `rounds should count distinct review rounds, got ${sig.rounds}`);
+  assert(sig.defect_classes.length === 6, "defect classes should be collected and de-duplicated");
+  assert(evaluateArchitectureComplexitySignal(reg, "TASK-08").signal === null, "one round must not fire the signal");
+  // A later entry with no finding must not reset or inflate the count.
+  assert(evaluateArchitectureComplexitySignal([...reg, { task: "TASK-09", review_round: 8 }], "TASK-09").rounds === 5, "entries without findings must not change the count");
 
   const staleState = { current_task: "TASK-09", current_task_status: "READY_TO_START", branch: "feat/TASK-07-sales-model", pr_number: 11, next_action: "START_TASK-09" };
   const staleDrift = detectStateDrift({ state: staleState, git: { branch: "main" }, pr: openPr });
