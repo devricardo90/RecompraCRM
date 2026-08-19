@@ -3,12 +3,13 @@
 status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
+loop_version: RICK_LOOP_V1_3
 current_task: TASK-09
 next_eligible_task: TASK-09
 
 ## Política
 
-Uma task por loop. A próxima task só inicia após baseline verde, validação determinística, revisão, handoff, lessons quando aplicável e atualização do state.
+Uma task por loop. A próxima task só inicia após baseline verde, task spec derivada do SDD, validação determinística, revisão, handoff, lessons quando aplicável e atualização do state. A versão v1.3 do loop fica congelada até TASK-17 salvo defeito que bloqueie ou corrompa a execução.
 
 - [x] TASK-01 — Fundação do projeto
   - depends_on: none
@@ -105,9 +106,15 @@ Uma task por loop. A próxima task só inicia após baseline verde, validação 
   - done_when: venda reduz estoque atomicamente e falha sem atualização parcial.
 - [ ] TASK-09 — Previsão de recompra
   - depends_on: TASK-08
-  - status: READY_TO_START
+  - status: RECOVERING
   - baseline: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
-  - done_when: fórmula canônica coberta por testes.
+  - branch: feat/TASK-09-repurchase-forecast
+  - pr: #14 OPEN
+  - reviewed_head: 3344d6a3ff7bd25fbd9eacebc14473a071b31508
+  - validation: Validate #82 / 31587932203 SUCCESS
+  - blocking_review_findings: 2 P1
+  - spec: docs/specs/TASK-09.md
+  - done_when: fórmula canônica coberta por testes, migration segura para legado e revisão sem bloqueios.
 - [ ] TASK-10 — Interface de registro de venda
   - depends_on: TASK-04, TASK-06, TASK-09
   - done_when: fluxo mobile-first validado com Playwright efêmero.

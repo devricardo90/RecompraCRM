@@ -1,215 +1,36 @@
-# Recompra CRM — Handoff do Último Loop
+# Recompra CRM — Current Handoff
 
 ```yaml
-schema_version: "1.0"
-run_id: RCRM-MVP01-RUN-002
-loop_id: RCRM-LOOP-UPGRADE-01B-WAIT-STATE-ENGINE
-status: LOOP_UPGRADE_01B_COMPLETED_MERGED
-task: TASK-09
+schema_version: "1.1"
+run_id: RCRM-MVP01-RUN-003
+loop_id: LOOP-UPGRADE-02-V1.3
+status: UPGRADE_IMPLEMENTED_AWAITING_CI_REVIEW
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_2_WAIT_STATE_ENGINE
-executor_bridge: SCHEDULE_WAKEUP
-previous_agent: ChatGPT
-next_role: Autonomous Agent
-baseline_head: 5ce2365179b0b9519bb7312fed3990543043493c
-branch: feat/TASK-07-sales-model
-atomic_implementation_head: 6f24ffc0b32ec69daa405e6977283cc9a27e7427
-validation_harness_head: ffc2eabe0f2d0ce7c980bb7a94eab7e33e2a4255
-last_green_validated_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-merge_task_03: b3d2f30ed9941c24b973c9addd7578e789d0730b
-merge_pr_7_main: 44ae41746869f5dcf439f8903ff4d6be254aab9a
-plan:
-  - persistir Sale e SaleItem com relações obrigatórias a Customer e Product
-  - exigir quantidade positiva e ao menos um item por venda confirmada no banco
-  - preservar exclusões até TASK-08 definir restauração de estoque
-  - validar a cadeia completa em PostgreSQL vazio e no CI
-  - manter estoque, recompra, API e interface de vendas fora da TASK-07
-changes:
-  - "Migração 20260806204721_enforce_customer_name usa NOT VALID e validação condicional."
-  - "Harness scripts/customer-migration-compat-check.mjs cria bancos isolados e executa migrate deploy real."
-  - "Teste Customer cobre nome omitido, vazio, espaços, tabs e quebras de linha."
-  - "Telefone normal, duplicado e múltiplos NULL continuam cobertos."
-  - "STATE, evidence, HANDOFF, PILOT-AUDIT e LESSONS atualizados."
-  - "Interface Customer implementada com lista, cadastro, edição, busca e empty state."
-  - "API Customer adicionada em GET/POST /api/customers e PUT /api/customers/:id."
-  - "Interface Product implementada com lista, busca, cadastro, edição e alerta de estoque baixo."
-  - "API Product valida payloads e IDs no range PostgreSQL signed 32-bit INTEGER."
-  - "Sale e SaleItem persistidos com FKs restritivas, quantidade positiva e trigger diferido de ao menos um item."
-  - "Harness Sale integrado ao npm test e ao Validate."
-  - "Trigger BEFORE DELETE bloqueia exclusão da Sale mesmo após remoção transacional dos itens."
-  - "Harness Sale aplica migrations em schema único e remove schema/fixtures no finally."
-  - "Trigger BEFORE UPDATE OF id ON Sale rejeita qualquer mudança de chave primária (c4bfbc4)."
-  - "ensure_sale_has_items agora escreve na linha da Sale (UPDATE em vez de SELECT FOR UPDATE) para gerar conflito MVCC real sob REPEATABLE READ (76c637c)."
-  - "Harness cobre remocao concorrente de itens distintos da mesma Sale sob RepeatableRead, exigindo que exatamente uma transacao seja rejeitada."
-validation: TASK_07_TECHNICAL_VERIFIED_GREEN
-playwright_ephemeral: NOT_REQUIRED_NO_UI_CHANGE
-review: CODEX_REVIEW_CLEAN
-technical_review_anchor: 827f2fdc51c6d7a882ab51213c8504dde231667e
-administrative_tail_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
-findings:
-  - "P1 corrigido com NOT VALID e validação condicional, sem alterar dados legados."
-  - "Harness limitado deterministicamente às migrations anteriores à migration alvo."
-  - "Aprovação humana final do piloto concedida."
-  - "PR #7 mergeado em main no commit 44ae41746869f5dcf439f8903ff4d6be254aab9a."
-  - "Validate #26 / CI 31306424995 SUCCESS em main."
-  - "Migrations, database health, migration compatibility, Customer persistence, lint, typecheck e build: PASS."
-  - "TASK-04 technical commit: b3e87a062fb62ce5a97fbde0840db31851e9af28."
-  - "Customer API integration harness: abed0ece0281e2e2182ce7f2fca3eb2d3f4c6132."
-  - "Final reviewed implementation commit: d34591a0fcae06b03fb2ab52a9c8d4acd7202e89."
-  - "P2-1 through P2-5 corrigidos; date display deferred até timezone canônico do negócio."
-  - "PostgreSQL local isolado e CI confirmaram persistência e integração Product."
-  - "P1 de estoque vazio corrigido em 2b9cf167ee92875f5b869d9c1cbc1b70a5de14d8."
-  - "P2 de payload INTEGER corrigido em 428992761162576e656e015840730c478f060f85."
-  - "P2 de Product ID INTEGER corrigido em 7e1c9670535421af7bfce2e040bf306a2e783a08."
-lessons_read:
-  - LESSON-RCRM-0001
-  - LESSON-RCRM-0002
-  - LESSON-RCRM-0003
-  - LESSON-RCRM-0004
-  - LESSON-RCRM-0005
-  - LESSON-RCRM-0006
-  - LESSON-RCRM-0007
-  - LESSON-RCRM-0008
-lessons_created:
-  - LESSON-RCRM-0006
-  - LESSON-RCRM-0007
-  - LESSON-RCRM-0008
-evidence: docs/evidence/TASK-07-validation.md
-pilot_evidence: docs/evidence/PILOT-AUDIT.md
-ci_run: 31408117992
-ci_status: SUCCESS
-last_green_ci_run: 31408117992
-previous_main_ci_run: 31117339641
-previous_main_ci_status: INFRASTRUCTURE_FAILURE
-pr_number: 11
+loop_version: RICK_LOOP_V1_3
 current_task: TASK-09
-next_eligible_task: TASK-09
-technical_commit: 940fce6fad7262aae7579a999c5fedb102a2233b
-validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
-sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-pr_8_status: MERGED
-merge_pr_8_main_head: 19754d8d69c7d8d156ebeff5f42ef64a7c401814
-local_validation_blocker: NONE
-task_05_branch: feat/TASK-05-product-model
-task_05_baseline: 8083428ad45b78eb18129ecd57a2abdc15455c61
-pr_9_status: MERGED
-task_05_implementation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
-task_05_validation_head: 5c23f6dfc69669d9adf8143d5a41672d9da15336
-evidence_task_05: docs/evidence/TASK-05-validation.md
-last_completed_task: TASK-06
-task_05_merge_main_head: 198b2f276389a5fa2f7fca10d4b5923194710fb7
-task_05_main_ci_run: 31319102311
-task_06_branch: feat/TASK-06-product-interface
-task_06_baseline: 163ff93b27edd6d7ab76525318c323b46ebdfb8c
-task_06_implementation_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
-task_06_validation_head: 4382895c8a78062453ebb474f57cab038dcdaf93
-task_06_integer_payload_fix_head: 428992761162576e656e015840730c478f060f85
-task_06_integer_id_fix_head: 7e1c9670535421af7bfce2e040bf306a2e783a08
-evidence_task_06: docs/evidence/TASK-06-validation.md
-task_06_merge_main_head: c9cb0fba8a907ce46d385c2e03fa7411b48c03c8
-task_06_main_ci_run: 31328149760
-pr_10_status: MERGED
-task_07_branch: feat/TASK-07-sales-model
-task_07_baseline: 5ce2365179b0b9519bb7312fed3990543043493c
-task_07_implementation_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_validation_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-task_07_ci_run: 31408117992
-task_07_merge_main_head: e7fbb545d0640219846b55b0c23a9c0add878147
-task_07_main_ci_run: 31418506819
-task_08_branch: feat/TASK-08-sale-stock-transaction
-task_08_baseline: 9d050028cd2dbc95bacfc8dd6b91e32c13d345b9
-task_08_validation_head: 827f2fdc51c6d7a882ab51213c8504dde231667e
-task_08_evidence: docs/evidence/TASK-08-validation.md
-pr_12_status: MERGED
-task_08_merge_main_head: 0b31d5b13aab763b2bd87f0eaf109b8b21c1941f
-task_08_main_ci_run: 31480804711
-pr_13_status: MERGED
-loop_upgrade_01b_branch: infra/rick-loop-wait-state-engine
-loop_upgrade_01b_validation_head: 2de75145894bead1808dda7c0658305ed7643413
-loop_upgrade_01b_merge_main_head: 53c330811747d51fdebc8ff4851ca8d3bba8582e
-loop_upgrade_01b_main_ci_run: 31485257281
-task_07_transactional_delete_fix_head: e1f4899f0425232dbc76c4236e654792f86e5835
-task_07_isolated_harness_fix_head: 940fce6fad7262aae7579a999c5fedb102a2233b
-task_07_sale_id_immutable_fix_head: c4bfbc40b73470ca4e919e3b098bf4a95b78c620
-task_07_sale_item_guard_write_conflict_fix_head: 76c637cc9d31fb53acdc5ff492e1e2951dddeca6
-evidence_task_07: docs/evidence/TASK-07-validation.md
-pr_11_status: MERGED
-next_action: START_TASK_09
-next_action_authorized: true
-restart_command: git switch main && git pull --ff-only && npm install
+current_task_status: RECOVERING
+current_pr: 14
+current_branch: feat/TASK-09-repurchase-forecast
+current_reviewed_head: 3344d6a3ff7bd25fbd9eacebc14473a071b31508
+current_ci_run: 31587932203
+current_ci_status: SUCCESS
+blocking_findings: 2
+blocking_priority: P1
+task_spec: docs/specs/TASK-09.md
+loop_upgrade_branch: infra/LOOP-UPGRADE-02-v1.3
+next_action: VALIDATE_AND_REVIEW_LOOP_UPGRADE_02_THEN_RESUME_TASK_09
+human_intermediate_approval_required: false
 ```
 
-TASK-04 foi mergeada pelo PR #8 em `main` no commit
-`19754d8d69c7d8d156ebeff5f42ef64a7c401814`. O fechamento documental em
-`8083428ad45b78eb18129ecd57a2abdc15455c61` foi validado pelo Validate #36
-(`31317857816`). A branch `feat/TASK-05-product-model` foi criada a partir
-dessa baseline. O Validate #40 (`31319322422`) certificou a baseline usada pela TASK-06.
-A implementação técnica final está no commit
-`7e1c9670535421af7bfce2e040bf306a2e783a08`. O Validate #46
-(`31325836264`) terminou `SUCCESS` com migrations, health, persistência,
-integrações Customer/Product, lint, typecheck e build. Os campos numéricos e o
-ID de Product respeitam o range PostgreSQL `INTEGER`; payloads e IDs oversized
-retornam 400. Playwright efêmero passou em desktop, mobile e short-landscape.
-O Codex revisou o HEAD final `4382895c8a78062453ebb474f57cab038dcdaf93`
-sem major issues. O PR #10 foi mergeado em `main` no commit
-`c9cb0fba8a907ce46d385c2e03fa7411b48c03c8`; o Validate #49
-(`31328149760`) terminou `SUCCESS`. TASK-06 está concluída e TASK-07 é a
-próxima task elegível. A TASK-07 está implementada em
-`693c4504a6799fefdb28e0fff70fe37c1c780495`. O P2 de exclusão transacional foi
-corrigido em `e1f4899f0425232dbc76c4236e654792f86e5835`. O harness foi isolado
-sem fixtures persistentes em `940fce6fad7262aae7579a999c5fedb102a2233b`; o
-Validate #55 (`31390596504`) passou. Sale/SaleItem possuem relações restritivas,
-quantidade positiva, ao menos um item e bloqueio de exclusão da Sale. O Codex
-revisou `940fce6` e apontou um P2 de mutação de `Sale.id` mid-transação,
-corrigido em `c4bfbc40b73470ca4e919e3b098bf4a95b78c620` (trigger
-`BEFORE UPDATE OF "id"`); Validate #58 (`31403871488`) passou. A revisão
-seguinte apontou dois P2 adicionais: um gap de write-skew no gatilho
-`ensure_sale_has_items` sob `REPEATABLE READ` (dois deletes concorrentes de
-itens distintos da mesma Sale podiam ambos commitar) e a defasagem deste
-handoff em relação ao HEAD revisado. O primeiro foi corrigido em
-`76c637cc9d31fb53acdc5ff492e1e2951dddeca6`, trocando o lock somente-leitura por
-um `UPDATE` real que força falha de serialização Postgres na segunda
-transação; harness cobre o cenário concorrente. Validate #59 (`31408117992`)
-passou com o conjunto completo de gates. Cinco rodadas adicionais corrigiram
-defasagens equivalentes em ROADMAP.md, no arquivo de evidência, um erro de
-proveniência e uma violação de append-only no `LOOP-REGISTER.jsonl` (restaurada
-em `be35687244dda781d45a5e9446bf4068dba14acf`, com a correção movida para
-`attempt: 7`) e contadores de tentativa desatualizados
-(`691d89c13bfc770f59af54ec97bd0b90845ed3ab`). Nenhum código de aplicação mudou
-desde `76c637c` em nenhuma dessas rodadas. Como o diff `665ec0a..691d89c`
-continha apenas STATE.md e HANDOFF.md, a política `REVIEW_CARRY_FORWARD` foi
-aplicada e o PR #11 foi mergeado em `main` no commit
-`e7fbb545d0640219846b55b0c23a9c0add878147`; o Validate pós-merge
-(`31418506819`) confirmou `SUCCESS`. TASK-07 está concluída.
+## Resume order
 
-TASK-08 foi implementada em `00c3b0b`: trigger `AFTER INSERT` reduz estoque
-via `UPDATE` real, alimentando um CHECK `Product_currentStock_non_negative`.
-O Codex apontou que o trigger não reconciliava `UPDATE`/`DELETE` de SaleItem
-(já permitidos pela TASK-07); corrigido em `dc03d6e`. Uma segunda rodada
-apontou que `ON UPDATE CASCADE` em `SaleItem_productId_fkey` cobraria estoque
-em dobro ao renomear `Product.id`; corrigido em
-`827f2fdc51c6d7a882ab51213c8504dde231667e` tornando `Product.id` imutável. O
-harness cobre 10 casos. O Codex não apontou mais problemas nesse HEAD. O PR
-#12 foi mergeado em `main` no commit
-`0b31d5b13aab763b2bd87f0eaf109b8b21c1941f`; o Validate pós-merge
-(`31480804711`) confirmou `SUCCESS`. TASK-08 está concluída.
+1. Validate LOOP-UPGRADE-02 and obtain independent review.
+2. Merge it into `main` only if green/clean.
+3. Bring the merged v1.3 controller/spec/state into `feat/TASK-09-repurchase-forecast` without discarding the existing TASK-09 work.
+4. Run the controller. It must recognize PR #14 rather than returning `START_TASK_09`.
+5. Start a pre-write checkpoint for the review recovery.
+6. Fix the two current P1 findings: lock-upgrade deadlock risk and legacy-backfill overflow policy.
+7. Re-run deterministic tests/Validate and request a new independent review on the exact new HEAD.
+8. Do not start TASK-10 before TASK-09 is merged and post-merge validation is green.
 
-LOOP-UPGRADE-01B (motor de wait-state/backoff) foi implementado em
-`586e76b`: backoff limitado (30/30/60/60/120/300/600s) e estado de runtime
-persistido em `.rick/tmp/loop-runtime.json` (gitignored), sobrevivendo a
-reinícios de processo. Antes de construir, foi investigado
-`claude -p --dangerously-skip-permissions` como ponte para um executor
-totalmente autônomo; é tecnicamente real, mas desabilitar toda checagem de
-permissão para um processo headless com acesso de escrita/merge no GitHub em
-uma máquina não isolada é um risco materialmente diferente do já autorizado
-neste projeto, então essa via foi deliberadamente descartada.
-`ScheduleWakeup` permanece como a ponte executora. O Codex apontou que
-`writeFileSync` não é atômico — uma queda de processo durante a escrita (o
-cenário exato que essa persistência existe para sobreviver) poderia deixar
-JSON truncado, e `loadRuntimeState` convertia a falha de parse em `null`
-silenciosamente, perdendo a identidade do wait ativo; corrigido em
-`2de7514` com escrita em arquivo temporário seguida de rename atômico. O
-Codex não apontou mais problemas. O PR #13 foi mergeado em `main` no commit
-`53c330811747d51fdebc8ff4851ca8d3bba8582e`; o Validate pós-merge
-(`31485257281`) confirmou `SUCCESS`. TASK-09 é a próxima task elegível.
+The older task history remains in ROADMAP, evidence and LOOP-REGISTER; HANDOFF now represents only the live continuation point.
