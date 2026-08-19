@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `2d004f41d6768f72b38b86661c25baadf4e331bd` (round-6 P1 cleared, one new P1)
-Current technical HEAD: pending push of the round-7 both-products lock fix
-Validation: Validate `32271278329` SUCCESS on `2d004f4`; round-7 head revalidated below
+Last independently reviewed HEAD: `52653c7ad9a82a4dd6fb84633a0fddfb25629e5c` (round-7 P1 cleared; one new P1, one new P2)
+Current technical HEAD: pending push of the round-8 interval-overflow fix
+Validation: Validate `32272322645` SUCCESS on `52653c7`; round-8 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,33 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-8 review findings
+
+The review of `52653c7` confirmed the round-7 P1 as resolved and reported two
+more.
+
+**P1 - interval overflow during the legacy backfill.** With both `quantity` and
+`consumptionDays` at the INTEGER ceiling - values the existing constraints
+accept - the day count leaves what an `interval` can hold, so the cast raises
+`interval_field_overflow` (22015) before the addition can raise
+`datetime_field_overflow`. The handler caught only the latter, so the backfill
+aborted deployment instead of leaving the historical forecast NULL. The helper
+now catches both conditions. The fix goes into
+`20260811130000_fix_repurchase_forecast_gaps` itself, not a later migration,
+because that migration's own backfill is the caller that fails - the same
+reason recorded there for the earlier overflow correction.
+
+**P2 - per-row versus per-statement lock order.** Accepted as accurate: the
+ordering established in round 7 is per affected row, not per statement or per
+transaction, so a multi-item statement or transaction can still lock a Sale for
+one row and reach a Product for the next. The claim in the round-7 migration is
+corrected to say so. The residual is kept deliberately: statement-wide
+prelocking would need the affected rows before any row is locked, and
+PostgreSQL exposes transition tables only to AFTER triggers; serializing child
+statements reintroduces the global mutex round 3 had to abandon because it
+makes the TASK-07 case impossible by construction. The residual surfaces as a
+retryable `40P01`, and no current path issues multi-item SaleItem writes.
 
 ## Recovery policy for round-7 review finding (old product on reassignment)
 
@@ -137,6 +164,16 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
+## Validation added for round-8 recovery
+
+- persist a second legacy shape whose day count overflows the interval cast
+  (quantity and consumptionDays both at the INTEGER ceiling, with stock sized
+  to satisfy TASK-08's non-negative CHECK);
+- require the full migration chain to deploy with that forecast left NULL;
+- require the strict helper to still reject the same combination, and the
+  legacy wrapper to return NULL for it;
+- confirmed to fail without the fix: the deploy aborts with `22015`.
+
 ## Validation added for round-7 recovery
 
 - advance the harness database to the round-6 head exactly and reproduce the
@@ -205,6 +242,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 - a REPEATABLE READ writer cannot persist a forecast from a superseded soldAt;
 - forecast writes and TASK-08 stock restoration share one lock order;
 - a productId reassignment locks both products before any sale;
+- legacy rows overflowing the interval cast do not abort deployment;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

@@ -23,9 +23,16 @@ BEGIN
   v_total_days := "quantity"::BIGINT * "consumption_days";
 
   BEGIN
+    -- Two different overflows are reachable from values the API already
+    -- accepts: the interval cast itself fails once quantity x
+    -- consumptionDays exceeds what an interval can hold
+    -- (interval_field_overflow, 22015), and the addition fails when the
+    -- result leaves the timestamp range (datetime_field_overflow, 22008).
+    -- Both mean the same thing here - no representable forecast - so both
+    -- become NULL and are reported by the single raise below.
     v_result := "sold_at" + (v_total_days::text || ' days')::interval;
   EXCEPTION
-    WHEN datetime_field_overflow THEN
+    WHEN datetime_field_overflow OR interval_field_overflow THEN
       v_result := NULL;
   END;
 

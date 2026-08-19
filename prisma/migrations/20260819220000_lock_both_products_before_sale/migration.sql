@@ -20,15 +20,40 @@
 -- shared advisory gate admits them together and PostgreSQL aborted one with
 -- 40P01.
 --
--- Locking both products up front, lowest id first, closes it and completes the
--- child direction's global lock order:
+-- Locking both products up front, lowest id first, closes it. The order this
+-- establishes is per affected row:
 --
---   every Product this statement will touch, by ascending id,
---   then every Sale this statement will touch, by ascending id.
+--   every Product *this row* touches, by ascending id,
+--   then every Sale *this row* touches, by ascending id.
 --
 -- Two concurrent reassignments that share a product therefore request it in
 -- the same relative order, and the delete path - which only ever touches one
 -- product and one sale, in that order - is a prefix of it.
+--
+-- Scope, stated precisely: this is a per-row guarantee, not a per-statement or
+-- per-transaction one. A statement that changes several SaleItems, or a
+-- transaction that writes several items in separate statements, fires this
+-- trigger once per row, so it can lock a Sale for one row and only then reach
+-- a Product for the next. A concurrent delete holding that Product and waiting
+-- for that Sale still forms a cycle, and PostgreSQL aborts one side with
+-- 40P01.
+--
+-- That residual is deliberate, because the two ways to remove it are both
+-- worse here:
+--
+--   * statement-wide prelocking would need the set of affected rows before any
+--     row is locked, and PostgreSQL exposes transition tables only to AFTER
+--     triggers - by then the locks are already taken;
+--   * serializing child statements against each other reintroduces the global
+--     mutex that round 3 already tried and had to abandon, because it makes
+--     the TASK-07 case impossible by construction: two transactions must be
+--     able to each remove a different item of the same sale before either
+--     commits.
+--
+-- The residual therefore surfaces as a normal, retryable serialization error
+-- rather than as data corruption, and no current application path issues
+-- multi-item SaleItem writes - the sale registration flow arrives in TASK-10
+-- and should keep one item per statement, or retry on 40P01.
 --
 -- Everything the previous rounds established is preserved: the sale rows are
 -- still locked FOR NO KEY UPDATE, which is what rejects a stale

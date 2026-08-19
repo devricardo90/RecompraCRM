@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 40
+state_version: 41
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -44,7 +44,10 @@ task_09_round5_findings_status: REVIEW_CLOSED_P2_RESOLVED
 task_09_round6_findings: 1 P1 write-vs-delete lock order
 task_09_round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
 task_09_round7_findings: 1 P1 old product locked after sale on reassignment
-task_09_round7_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round7_findings_status: REVIEW_CLOSED_P1_RESOLVED
+task_09_round8_findings: 1 P1 interval overflow in legacy backfill, 1 P2 per-row lock-order scope
+task_09_round8_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round8_p2_disposition: SCOPE_CORRECTED_RESIDUAL_ACCEPTED_RETRYABLE_40P01
 task_09_round7_migration: prisma/migrations/20260819220000_lock_both_products_before_sale
 task_09_round6_migration: prisma/migrations/20260819200000_lock_product_before_sale_for_forecast
 task_09_round5_migration: prisma/migrations/20260819180000_order_sale_locks_for_forecast
@@ -59,9 +62,9 @@ task_spec: docs/specs/TASK-09.md
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND7_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: PUSH_ROUND8_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-19T16:50:00Z"
+updated_at: "2026-08-19T17:25:00Z"
 updated_by: Claude Code
 ```
 
@@ -145,6 +148,24 @@ mutation.
 statement can touch, lowest id first, before any Sale. The child direction now
 has a complete global order - every Product by ascending id, then every Sale by
 ascending id - of which the delete path is a prefix.
+
+Validate `32272322645` was SUCCESS on `52653c7`. The review of that head cleared
+the round-7 P1 and reported two more.
+
+The P1 is a deployment blocker: with quantity and consumptionDays both at the
+INTEGER ceiling the day count overflows the `interval` cast (22015) before the
+addition can overflow the timestamp (22008), and only the latter was caught, so
+the legacy backfill aborted for data that was legal before TASK-09. The helper
+now catches both, fixed inside `20260811130000_fix_repurchase_forecast_gaps`
+because that migration's own backfill is the failing caller.
+
+The P2 is accepted as accurate and its scope corrected rather than removed: the
+round-7 ordering is per affected row, not per statement or transaction. Both
+ways to close it are worse - statement-wide prelocking needs the affected rows
+before any row is locked and PostgreSQL gives transition tables only to AFTER
+triggers, and serializing child statements reintroduces the global mutex round
+3 had to abandon. The residual is a retryable 40P01 on multi-item SaleItem
+writes, which no current path issues.
 
 The harness reproduces each defect at the exact migration depth it lives at and
 requires correct behaviour on the full chain. All local gates are green.

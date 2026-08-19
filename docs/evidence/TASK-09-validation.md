@@ -15,7 +15,8 @@
 - Review round 4 fix (cross-sale share lock P2): `7b78b92`
 - Review round 5 fix (stale REPEATABLE READ snapshot P2): `f89e225`
 - Review round 6 fix (write vs delete lock order P1): `2d004f4`
-- Review round 7 fix (old product on reassignment P1): this head
+- Review round 7 fix (old product on reassignment P1): `52653c7`
+- Review round 8 fix (interval overflow P1 + lock-order scope P2): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -199,6 +200,50 @@ order. All earlier properties are preserved: the sale rows are still locked
 `FOR NO KEY UPDATE`, which rejects a stale `REPEATABLE READ` writer, and a move
 across sales still locks both sale rows lowest id first.
 
+## Review round 8 — interval overflow P1, lock-order scope P2
+
+The review of `52653c7` confirmed the round-7 P1 as resolved and reported two
+more findings.
+
+### P1 — interval overflow aborts the legacy backfill
+
+With both `quantity` and `consumptionDays` at the INTEGER ceiling — a
+combination the existing positive-value and integer constraints accept — the day
+count reaches 4.6e18 and the `interval` cast fails with
+`interval_field_overflow` (`22015`) *before* the addition can raise
+`datetime_field_overflow`. The inner handler caught only the latter and the
+legacy wrapper translated only `22003`, so the backfill in
+`20260811130000_fix_repurchase_forecast_gaps` aborted deployment for data that
+was legal before TASK-09.
+
+The helper now catches both conditions. The fix goes into that migration
+directly rather than a later one, because that migration's own backfill is the
+failing caller — the same reason already recorded there for the earlier overflow
+correction. Confirmed both ways against a real database: reverting the handler
+reproduces `22015` and fails the deploy; restoring it passes.
+
+### P2 — the round-7 ordering is per row, not per statement
+
+Accepted as accurate. The order round 7 establishes holds within one affected
+row; a statement changing several SaleItems, or a transaction writing several
+items in separate statements, fires the trigger once per row and can therefore
+lock a Sale for one row and only then reach a Product for the next. The claim in
+the round-7 migration has been corrected to state the scope precisely.
+
+The residual is kept deliberately, because both ways to remove it are worse:
+
+- statement-wide prelocking needs the set of affected rows *before* any row is
+  locked, and PostgreSQL exposes transition tables only to AFTER triggers — by
+  which point the locks are already held;
+- serializing child statements against each other reintroduces exactly the
+  global mutex round 3 tried and had to abandon, since it makes the TASK-07
+  requirement impossible by construction.
+
+It therefore surfaces as a normal, retryable `40P01` rather than as data
+corruption, and no current application path issues multi-item SaleItem writes.
+The sale registration flow arrives in TASK-10 and should keep one item per
+statement, or retry on `40P01`.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
@@ -247,6 +292,11 @@ Assertions after the fixed runs:
   the restoration and the quantity change;
 - reassignment vs delete: item re-forecast against its new product
   (`soldAt + 9 days`), old product back to `100`, new product `99`.
+
+`scripts/sale-repurchase-recovery-check.mjs` additionally persists a legacy
+row whose day count overflows the interval cast and requires the full chain to
+deploy with that forecast left NULL, the strict helper to still reject the same
+combination, and the legacy wrapper to return NULL for it.
 
 ## Local gate results
 

@@ -24,7 +24,9 @@ round5_findings_status: REVIEW_CLOSED_P2_RESOLVED
 round6_findings: 1 P1 write-vs-delete lock order
 round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
 round7_findings: 1 P1 old product locked after sale on reassignment
-round7_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+round7_findings_status: REVIEW_CLOSED_P1_RESOLVED
+round8_findings: 1 P1 interval overflow in legacy backfill, 1 P2 per-row lock-order scope
+round8_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
 round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
 round3_ci_run: 32263724994
 round3_ci_status: SUCCESS
@@ -32,18 +34,18 @@ evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-09.md
 loop_upgrade_02_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
-next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND7_HEAD
+next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND8_HEAD
 human_intermediate_approval_required: false
 ```
 
 ## Resume order
 
-1. Inspect PR #14 and confirm the current head is the round-7 both-products lock fix.
+1. Inspect PR #14 and confirm the current head is the round-8 interval-overflow fix.
 2. Confirm the Validate run for that exact head is SUCCESS.
 3. Obtain an independent review for that exact head. Do not describe the
-   round-7 P1 as review-closed until that happens. Rounds 3-6 *are*
-   review-closed: the reviews of `e7cfff0`, `7b78b92`, `f89e225` and
-   `2d004f4` no longer report those findings.
+   round-8 findings as review-closed until that happens. Rounds 3-7 *are*
+   review-closed: the reviews of `e7cfff0`, `7b78b92`, `f89e225`,
+   `2d004f4` and `52653c7` no longer report those findings.
 4. If review finds a real defect, stay in RECOVERING, fix only that finding,
    reset stagnation on real progress, validate, and review again.
 5. If review is clean, reconcile evidence/STATE/HANDOFF/ROADMAP, merge PR #14,
@@ -160,6 +162,26 @@ properties are preserved.
 
 The harness now covers six defect classes, each reproduced at its own migration
 depth.
+
+## Round-8 recovery (this loop)
+
+The review of `52653c7` cleared the round-7 P1 and reported two more.
+
+P1, a deployment blocker: with quantity and consumptionDays both at the INTEGER
+ceiling the day count overflows the `interval` cast (22015) before the addition
+can overflow the timestamp (22008); only the latter was caught, so the legacy
+backfill aborted for data legal before TASK-09. The helper now catches both,
+fixed inside `20260811130000_fix_repurchase_forecast_gaps` because that
+migration's own backfill is the failing caller. Proven both ways against a real
+database.
+
+P2, accepted and scoped rather than removed: the round-7 ordering is per
+affected row, not per statement or transaction. Statement-wide prelocking needs
+the affected rows before any row is locked and PostgreSQL gives transition
+tables only to AFTER triggers; serializing child statements reintroduces the
+global mutex round 3 had to abandon. The residual is a retryable 40P01 on
+multi-item SaleItem writes, which no current path issues. TASK-10 should keep
+one item per statement, or retry on 40P01.
 
 The v1.3 controller, task-level SDD, anti-drift reconciliation and recovery
 policy are part of this branch. TASK-09 was resumed, not restarted.

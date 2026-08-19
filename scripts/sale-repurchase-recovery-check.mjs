@@ -106,6 +106,33 @@ try {
   });
   assert(legacySale.items[0].expectedRepurchaseAt === null, "pre-TASK-09 row unexpectedly had a forecast");
   const legacyItemId = legacySale.items[0].id;
+
+  // A second legacy shape that overflows earlier than the one above: with both
+  // quantity and consumptionDays at the INTEGER ceiling, the day count leaves
+  // what an interval can hold, so the cast raises interval_field_overflow
+  // (22015) before the addition can raise datetime_field_overflow. Both were
+  // accepted before TASK-09, so neither may abort the migration. Stock has to
+  // cover the quantity because TASK-08's non-negative CHECK is already active
+  // at this point in the chain.
+  const legacyIntervalProduct = await client.product.create({
+    data: {
+      name: "TASK-09 recovery legacy interval-overflow product",
+      unit: "un",
+      currentStock: 2147483647,
+      minimumStock: 1,
+      consumptionDays: 2147483647,
+    },
+  });
+  const legacyIntervalSale = await client.sale.create({
+    data: {
+      customerId: customer.id,
+      soldAt: legacySoldAt,
+      status: "MODEL_TEST",
+      items: { create: [{ productId: legacyIntervalProduct.id, quantity: 2147483647 }] },
+    },
+    include: { items: true },
+  });
+  const legacyIntervalItemId = legacyIntervalSale.items[0].id;
   await client.$disconnect();
   client = null;
 
@@ -119,10 +146,32 @@ try {
     "unrepresentable legacy row should remain NULL rather than block deployment",
   );
 
+  const legacyIntervalAfter = await client.saleItem.findUniqueOrThrow({ where: { id: legacyIntervalItemId } });
+  assert(
+    legacyIntervalAfter.expectedRepurchaseAt === null,
+    "legacy row whose day count overflows the interval cast should remain NULL rather than block deployment",
+  );
+
   const [legacySafe] = await client.$queryRaw`
     SELECT "compute_legacy_expected_repurchase_at"('2026-01-01'::timestamp(3), 1, 2147483647) AS "value"
   `;
   assert(legacySafe.value === null, "legacy compatibility helper did not return NULL for an unrepresentable forecast");
+
+  const [legacyIntervalSafe] = await client.$queryRaw`
+    SELECT "compute_legacy_expected_repurchase_at"('2026-01-01'::timestamp(3), 2147483647, 2147483647) AS "value"
+  `;
+  assert(
+    legacyIntervalSafe.value === null,
+    "legacy compatibility helper did not return NULL when the day count overflows the interval cast",
+  );
+
+  let strictIntervalError;
+  try {
+    await client.$queryRaw`SELECT "compute_expected_repurchase_at"('2026-01-01'::timestamp(3), 2147483647, 2147483647)`;
+  } catch (caught) {
+    strictIntervalError = caught;
+  }
+  assert(strictIntervalError, "strict runtime helper accepted a forecast whose day count overflows the interval cast");
 
   let strictError;
   try {
