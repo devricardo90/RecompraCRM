@@ -20,6 +20,7 @@ const {
   normalizeSaleItems,
   runSaleRegistration,
 } = await import("../lib/sales/saleTransaction.ts");
+const { parseSaleInput } = await import("../app/api/sales/validation.ts");
 
 /**
  * Proves TASK-10's concurrency contract against real PostgreSQL.
@@ -547,6 +548,53 @@ try {
   const orphans = await client.sale.findMany({ where: { items: { none: {} } } });
   assert(orphans.length === 0, "a failed sale left an itemless Sale behind");
   await exhaustClient.$disconnect();
+
+  // -----------------------------------------------------------------
+  // 7. Request validation: a date that does not exist must be rejected, not
+  //    silently normalized. new Date("2026-02-30") yields March 2, so a
+  //    getTime() check alone would record the sale under a date nobody sent.
+  // -----------------------------------------------------------------
+  const validPayload = (soldAtValue) => ({
+    customerId: customer.id,
+    items: [{ productId: pA.id, quantity: 1 }],
+    ...(soldAtValue === undefined ? {} : { soldAt: soldAtValue }),
+  });
+
+  const accepted = parseSaleInput(validPayload("2026-02-28"));
+  assert(
+    accepted.soldAt.getUTCDate() === 28 && accepted.soldAt.getUTCMonth() === 1,
+    "a real calendar date was not preserved",
+  );
+
+  for (const impossible of ["2026-02-30", "2026-02-31", "2025-02-29", "2026-04-31", "2026-00-10"]) {
+    let rejected;
+    try {
+      parseSaleInput(validPayload(impossible));
+    } catch (error) {
+      rejected = error;
+    }
+    assert(rejected, `impossible date ${impossible} was accepted`);
+    assert(
+      rejected.name === "SaleInputError",
+      `expected SaleInputError for ${impossible}, got ${rejected.name}`,
+    );
+  }
+
+  // A leap day that does exist must still be accepted.
+  const leap = parseSaleInput(validPayload("2028-02-29"));
+  assert(leap.soldAt.getUTCDate() === 29, "a valid leap day was rejected");
+
+  // The derived forecast field is refused outright rather than ignored.
+  let derivedRejected;
+  try {
+    parseSaleInput({
+      customerId: customer.id,
+      items: [{ productId: pA.id, quantity: 1, expectedRepurchaseAt: "2030-01-01" }],
+    });
+  } catch (error) {
+    derivedRejected = error;
+  }
+  assert(derivedRejected, "a caller-supplied expectedRepurchaseAt was accepted");
 
   // -----------------------------------------------------------------
   // 6. Stock never negative anywhere in this run.

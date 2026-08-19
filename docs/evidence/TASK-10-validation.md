@@ -93,6 +93,20 @@ deterministic consequence of the submitted values, not contention, so it now
 classifies as a domain invariant with a readable message telling the user to
 reduce the quantity or the product's consumption duration.
 
+## Review round 3 — one finding, confirmed and fixed
+
+**P2 — impossible dates were silently normalized.** JavaScript turns
+`new Date("2026-02-30")` into March 2, so a `getTime()` check alone accepted it
+and the sale — plus every forecast derived from it — would have been recorded
+under a date the caller never sent. `parseSoldAt` now validates the ISO format
+and round-trips the calendar components, rejecting `2026-02-30`, `2026-02-31`,
+`2025-02-29`, `2026-04-31` and `2026-00-10` while still accepting the real leap
+day `2028-02-29`. `SaleInputError` also gained a proper `name`, so logs and tests
+no longer see a bare `Error`.
+
+Proven both ways: reverting to the naive check fails the harness with
+*"impossible date 2026-02-30 was accepted"*.
+
 ## Concurrency harness
 
 `scripts/sale-registration-concurrency-check.mjs`
@@ -113,6 +127,8 @@ isolated PostgreSQL schema per run, real database throughout.
 | 4 | unrepresentable forecast (`22003`) | `SaleInvariantError` with a readable message, not a 503 |
 | 5 | every attempt raises `40P01` | `SaleConcurrencyError` after exactly 3 attempts, SQLSTATE preserved, no itemless `Sale` |
 | 6 | whole run | no product ended with negative stock |
+| 7 | impossible calendar dates | `2026-02-30`, `2026-02-31`, `2025-02-29`, `2026-04-31`, `2026-00-10` rejected; `2028-02-29` accepted |
+| 7 | caller-supplied `expectedRepurchaseAt` | rejected outright, not ignored |
 
 Cases 0 and 1 are what prevent a silent regression, and they run against the
 production module rather than a copy of it.

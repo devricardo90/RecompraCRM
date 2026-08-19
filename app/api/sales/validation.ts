@@ -1,6 +1,13 @@
 export const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
-export class SaleInputError extends Error {}
+export class SaleInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    // Named like the other sale errors so logs and tests can tell them apart
+    // instead of seeing a bare "Error".
+    this.name = "SaleInputError";
+  }
+}
 
 export async function parseSaleRequest(request: Request) {
   try {
@@ -42,6 +49,47 @@ function quantity(value: unknown) {
   return value;
 }
 
+/**
+ * JavaScript silently normalizes an impossible-but-parseable date: `2026-02-30`
+ * becomes March 2. Checking only `getTime()` would therefore accept it and
+ * record the sale -- and every forecast derived from it -- under a date the
+ * caller never sent. So the calendar components are validated explicitly.
+ */
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+
+function parseSoldAt(value: unknown) {
+  if (typeof value !== "string") {
+    throw new SaleInputError("Informe uma data de venda válida.");
+  }
+
+  const match = ISO_DATE.exec(value.trim());
+  if (!match) {
+    throw new SaleInputError("Informe uma data de venda válida no formato AAAA-MM-DD.");
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  // Round-trip the calendar date: if the components survive unchanged, the day
+  // actually exists in that month.
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== month - 1 ||
+    probe.getUTCDate() !== day
+  ) {
+    throw new SaleInputError("Informe uma data de venda que exista no calendário.");
+  }
+
+  const parsed = new Date(value.trim());
+  if (Number.isNaN(parsed.getTime())) {
+    throw new SaleInputError("Informe uma data de venda válida.");
+  }
+
+  return parsed;
+}
+
 export function parseSaleInput(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new SaleInputError("Informe os dados da venda.");
@@ -79,16 +127,7 @@ export function parseSaleInput(payload: unknown) {
 
   let soldAt = new Date();
   if (input.soldAt !== undefined) {
-    if (typeof input.soldAt !== "string") {
-      throw new SaleInputError("Informe uma data de venda válida.");
-    }
-
-    const parsed = new Date(input.soldAt);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new SaleInputError("Informe uma data de venda válida.");
-    }
-
-    soldAt = parsed;
+    soldAt = parseSoldAt(input.soldAt);
   }
 
   let notes: string | null = null;
