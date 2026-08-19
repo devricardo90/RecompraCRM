@@ -2,41 +2,32 @@
 
 ```yaml
 schema_version: "1.1"
-run_id: RCRM-MVP01-RUN-003
-loop_id: RCRM-TASK09-V1.3-CLOSURE
-status: TASK_09_COMPLETED_READY_FOR_TASK_10
+run_id: RCRM-MVP01-RUN-004
+loop_id: RCRM-TASK10-CLOSURE
+status: TASK_10_COMPLETED_READY_FOR_TASK_11
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3
-current_task: TASK-10
+loop_version: RICK_LOOP_V1_3_1
+current_task: TASK-11
 current_task_status: NOT_STARTED
-next_eligible_task: TASK-10
+next_eligible_task: TASK-11
 current_branch: main
 current_pr: none
 external_gate: none
-task_09_status: COMPLETED
-task_09_technical_head: 82c68a7e6c73a0f141a2c8b30ae7d7632b750dee
-task_09_branch_ci: 32274791956
-task_09_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
-task_09_review_rounds: 9
-task_09_pr: 14 MERGED_SQUASH
-task_09_merge_main_head: e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d
-task_09_main_ci_run: 32282972720
-task_09_main_ci_status: SUCCESS
-task_09_spec: docs/specs/TASK-09.md
-task_09_evidence: docs/evidence/TASK-09-validation.md
-task_09_accepted_residual: RETRYABLE_40P01_ON_MULTI_ITEM_SALEITEM_STATEMENTS
-task_09_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL
-task_09_architecture_item: ARCH-01
-task_10_spec: docs/specs/TASK-10.md
-lessons_created:
-  - LESSON-RCRM-0010
-  - LESSON-RCRM-0011
-  - LESSON-RCRM-0012
-  - LESSON-RCRM-0013
-  - LESSON-RCRM-0014
-  - LESSON-RCRM-0015
-  - LESSON-RCRM-0016
-next_action: START_TASK_10
+task_10_status: COMPLETED
+task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
+task_10_branch_ci: 32291165510
+task_10_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_10_review_rounds: 5
+task_10_findings_fixed: 10
+task_10_pr: 16 MERGED_SQUASH
+task_10_merge_main_head: f69f4e13666b0740f0952fcf17148da4d6cda2cd
+task_10_main_ci_run: 32291852224
+task_10_main_ci_status: SUCCESS
+task_10_playwright: PASS_11_EPHEMERAL_RETRIES_0
+task_10_architecture_signal: NOT_EMITTED_4_OF_5_ROUNDS
+task_10_evidence: docs/evidence/TASK-10-validation.md
+open_architecture_item: ARCH-01 (decide before TASK-12)
+next_action: START_TASK_11
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -44,35 +35,33 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` is at `e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d` and the Validate run `32282972720` is SUCCESS.
-2. Read `docs/specs/TASK-10.md`, especially the binding concurrency contract —
-   the strategy must be chosen and written into the spec before implementing,
-   and proven with a concurrency test.
-3. Create `feat/TASK-10-sale-registration-ui` from `main`, validate the
-   baseline is green, take a pre-write checkpoint, then implement.
-4. TASK-10 changes UI, so the ephemeral Playwright run is required this time —
-   it was not applicable to TASK-09.
-5. Do not reopen TASK-09 findings. They are fixed and recorded in
-   `docs/operations/LESSONS.md` (LESSON-RCRM-0009..0016).
+1. Confirm `main` is at `f69f4e13666b0740f0952fcf17148da4d6cda2cd` and Validate `32291852224` is SUCCESS.
+2. Derive `docs/specs/TASK-11.md` from the SDD and the roadmap before writing
+   code.
+3. Create `feat/TASK-11-customer-history` from `main`, verify a green baseline,
+   take a pre-write checkpoint, then implement.
+4. TASK-11 changes UI, so the ephemeral Playwright run is required.
 
-## TASK-09 closure
+## Contracts TASK-11 inherits
 
-TASK-09 persists a per-SaleItem repurchase forecast using the canonical
-formula, computed and maintained entirely in the persistence layer. Nine
-independent review rounds hardened its concurrency behaviour against TASK-07's
-item guard and TASK-08's stock reconciliation; eleven findings were confirmed
-and fixed, and the final review of the exact head `82c68a7e6c73a0f141a2c8b30ae7d7632b750dee` reported no major
-issues. PR #14 was squash-merged at `e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d` and the post-merge Validate run
-`32282972720` is SUCCESS.
+- **Any write to `Sale`/`SaleItem` must go through
+  `lib/sales/saleTransaction.ts`.** It owns the deterministic write shape and
+  the bounded retry policy. Reimplementing either reopens TASK-09's residual,
+  and the concurrency harness asserts the emitted statement shape, so a
+  divergent writer will not go unnoticed.
+- `expectedRepurchaseAt` is database-derived. Never send it, never compute it.
+- Domain invariants are reported, not reimplemented: `23514`, `23503`, `P2003`
+  and `22003` map to readable 4xx; only `40P01`, `40001` and `P2034` are
+  retryable.
+- Node `>=24.0.0` is required — the concurrency harness imports the production
+  TypeScript module directly and relies on native type stripping.
 
-Carried forward deliberately, not hidden:
+## Open, non-blocking
 
-- **Accepted residual.** The lock ordering is a per-row guarantee, so a
-  multi-item SaleItem statement or transaction can still produce a retryable
-  `40P01`. No current application path issues one. TASK-10's spec carries a
-  binding contract to settle this before implementation.
-- **Architecture signal.** Nine review rounds with distinct confirmed defects
-  emitted `ARCHITECTURE_COMPLEXITY_SIGNAL`, recorded as the non-blocking
-  roadmap item `ARCH-01`: whether `expectedRepurchaseAt` should remain a
-  synchronously persisted derived field. It must be decided before TASK-12
-  couples a dashboard to the current design. It does not reopen TASK-09.
+`ARCH-01` — whether `expectedRepurchaseAt` should remain a synchronously
+persisted derived field maintained by triggers. TASK-09 emitted
+`ARCHITECTURE_COMPLEXITY_SIGNAL` (7 rounds). TASK-10 came within one round of
+the threshold (4 of 5), with most findings clustered around the error
+classification and write shape that the persisted forecast demands. Decide
+before TASK-12 couples a dashboard to the current design. It does not reopen
+TASK-09 or TASK-10.

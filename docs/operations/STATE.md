@@ -2,12 +2,12 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 43
+state_version: 44
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3
+loop_version: RICK_LOOP_V1_3_1
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
@@ -25,10 +25,11 @@ completed_tasks:
   - TASK-07
   - TASK-08
   - TASK-09
-last_completed_task: TASK-09
-current_task: TASK-10
+  - TASK-10
+last_completed_task: TASK-10
+current_task: TASK-11
 current_task_status: NOT_STARTED
-next_eligible_task: TASK-10
+next_eligible_task: TASK-11
 branch: main
 pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -62,7 +63,21 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-10.md
+task_spec: docs/specs/TASK-11.md
+task_10_status: COMPLETED
+task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
+task_10_branch_ci: 32291165510
+task_10_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_10_review_rounds: 5
+task_10_findings_fixed: 10
+task_10_pr: 16 MERGED_SQUASH
+task_10_merge_main_head: f69f4e13666b0740f0952fcf17148da4d6cda2cd
+task_10_main_ci_run: 32291852224
+task_10_main_ci_status: SUCCESS
+task_10_playwright: PASS_11_EPHEMERAL_RETRIES_0
+task_10_concurrency_contract: STRATEGY_A_AND_B_IMPLEMENTED_AND_PROVEN
+task_10_architecture_signal: NOT_EMITTED_4_OF_5_ROUNDS
+task_10_evidence: docs/evidence/TASK-10-validation.md
 task_09_status: COMPLETED
 task_09_technical_head: 82c68a7e6c73a0f141a2c8b30ae7d7632b750dee
 task_09_branch_ci: 32274791956
@@ -79,43 +94,44 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: START_TASK_10
+next_action: START_TASK_11
 next_action_authorized: true
-updated_at: "2026-08-19T17:45:00Z"
+updated_at: "2026-08-19T19:35:00Z"
 updated_by: Claude Code
 ```
 
-TASK-01 through TASK-09 are completed and integrated into `main`. Rick Loop
-v1.3 is merged and frozen through TASK-17.
+TASK-01 through TASK-10 are completed and integrated into `main`. Rick Loop
+v1.3.1 adds the architecture-complexity signal, the exact-HEAD review invariant,
+the reviewer-suggestions-are-hypotheses rule, pre/post-fix evidence, external
+gate continuation, failed-attempt learning, and the rule that executable loop
+changes go through a PR.
 
-TASK-09 (previsão de recompra) persists a per-SaleItem forecast using the
-canonical formula, computed and maintained entirely in the persistence layer:
-computed on insert, recomputed when quantity/productId/saleId change,
-propagated when `Sale.soldAt` or `Product.consumptionDays` change, and
-recomputed rather than stored when a caller writes the column directly.
-Representable historical rows are backfilled; unrepresentable legacy rows stay
-NULL instead of blocking deployment, while new unrepresentable writes are
-rejected.
+TASK-10 (interface de registro de venda) closes the residual TASK-09 left
+behind. The concurrency contract was decided and committed before any product
+code existed, and both strategies shipped: a deterministic mutation shape (one
+transaction, items sorted by ascending `productId`, one `SaleItem` per
+statement, duplicates summed) and bounded retry (three attempts, only `40P01`,
+`40001` and Prisma's normalized `P2034`, whole transaction redone from scratch).
+Domain invariants — `23514`, `23503`, `P2003` and TASK-09's deliberate `22003`
+forecast-range failure — are never retried and reach the user as readable 4xx.
 
-Nine independent review rounds hardened the concurrency behaviour of that
-trigger web against TASK-07's item guard and TASK-08's stock reconciliation.
-Eleven findings were confirmed and fixed; the final review of the exact head
-`82c68a7e6c73a0f141a2c8b30ae7d7632b750dee` reported no major issues. PR #14 was squash-merged into `main` at
-`e4de101bcbd9d632a72c6a81efb3cf02a7cf0c8d`, and the post-merge Validate run `32282972720` is SUCCESS.
+`lib/sales/saleTransaction.ts` owns that policy and is the only authorized
+writer of `Sale`/`SaleItem`. Any future task that persists a sale must go
+through it rather than reimplementing the shape or the retry.
 
-One residual is accepted and recorded rather than hidden: the lock ordering is
-a per-row guarantee, so a multi-item SaleItem statement or transaction can
-still produce a retryable `40P01`. No current application path issues one, and
-TASK-10's spec now carries a binding concurrency contract that must be settled
-before its implementation.
+Five review rounds produced ten confirmed findings, including two P1s: retry was
+silently disabled for typed writes because Prisma collapses `40P01`/`40001` into
+`P2034`, and the concurrency harness originally exercised a private copy of the
+policy rather than production — which is precisely why the first P1 survived.
+The harness now drives the production module and asserts the emitted write shape
+and order from Prisma query events, so replacing the loop with `createMany`
+fails it.
 
-The nine rounds also produced an `ARCHITECTURE_COMPLEXITY_SIGNAL`, recorded as
-the non-blocking `ARCH-01` roadmap item: whether `expectedRepurchaseAt` should
-remain a synchronously persisted derived field. It must be decided before
-TASK-12 couples a dashboard to the current persistence design. It does not
-reopen TASK-09.
+The architecture-complexity signal did **not** fire for TASK-10: four review
+rounds carried confirmed findings against a threshold of five, computed from
+`LOOP-REGISTER.jsonl` rather than estimated. `ARCH-01` remains open and
+non-blocking, and must still be decided before TASK-12.
 
-TASK-10 (interface de registro de venda) is the next eligible task: its
-dependencies TASK-04, TASK-06 and TASK-09 are all satisfied, and it is the
-lowest-numbered pending task with dependencies met. TASK-13 is also unblocked
-but comes later in roadmap order.
+TASK-11 (histórico do cliente) is the next eligible task: its dependency
+TASK-10 is satisfied and it is the lowest-numbered pending task with
+dependencies met. TASK-13 is also unblocked but comes later in roadmap order.

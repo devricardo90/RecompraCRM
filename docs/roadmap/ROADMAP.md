@@ -4,8 +4,8 @@ status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
-current_task: TASK-10
-next_eligible_task: TASK-10
+current_task: TASK-11
+next_eligible_task: TASK-11
 
 ## Política
 
@@ -120,13 +120,24 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - accepted_residual: per-row lock ordering leaves a retryable 40P01 for multi-item SaleItem statements; contracted away in TASK-10
   - architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL (9 review rounds) -> ARCH-01
   - done_when: fórmula canônica coberta por testes, migration segura para legado e revisão sem bloqueios.
-- [ ] TASK-10 — Interface de registro de venda
+- [x] TASK-10 — Interface de registro de venda
   - depends_on: TASK-04, TASK-06, TASK-09
+  - status: COMPLETED
   - spec: docs/specs/TASK-10.md
-  - concurrency_contract: obrigatório — ver TASK-09 accepted_residual e a seção "Contrato de concorrência" do spec
+  - concurrency_contract: RESOLVIDO — estratégias A (forma determinística) e B (retry limitado) implementadas e provadas
+  - technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
+  - branch_ci: Validate 32291165510 SUCCESS
+  - review: CODEX_REVIEW_CLEAN on 7d0026f0d1b449d5108ba6c546e4bc83ddc43186 (5 rounds; 10 findings fixed)
+  - pr: #16 MERGED (squash)
+  - merge_main: f69f4e13666b0740f0952fcf17148da4d6cda2cd
+  - main_ci: Validate 32291852224 SUCCESS
+  - playwright: 11 cenários efêmeros PASS (mobile + desktop), retries 0
+  - evidence: docs/evidence/TASK-10-validation.md
+  - architecture_signal: NOT_EMITTED — 4 rodadas com findings confirmados (limite: 5); contagem calculada pelo controller a partir do LOOP-REGISTER, não estimada
   - done_when: fluxo mobile-first validado com Playwright efêmero.
 - [ ] TASK-11 — Histórico do cliente
   - depends_on: TASK-10
+  - inherited_contract: usar lib/sales/saleTransaction.ts para qualquer escrita de Sale/SaleItem; não reimplementar a forma nem o retry
   - done_when: histórico correto, ordenado e com previsões.
 - [ ] TASK-12 — Dashboard de recompra
   - depends_on: TASK-09, TASK-11
@@ -165,4 +176,5 @@ autorizam refatoração imediata.
       - C. projeção assíncrona/materializada, se justificável
   - criteria: complexidade de concorrência; superfície de deadlock; amplificação de escrita; desempenho de leitura/consulta; requisitos de histórico e dashboard; consistência dos dados; complexidade de migração; observabilidade; manutenibilidade
   - evidence: docs/evidence/TASK-09-validation.md; LESSON-RCRM-0009..0014
+  - related_evidence: TASK-10 ficou a uma rodada do limite (4 findings rounds), a maioria em torno da classificação de erros e da forma de escrita exigidas pela previsão persistida
   - non_goal: não refatorar a TASK-09 agora
