@@ -1,15 +1,21 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { spawnSync } from "node:child_process";
+
+import {
+  MAX_SALE_ATTEMPTS,
+  classifySaleError,
+  normalizeSaleItems,
+  runSaleRegistration,
+} from "../lib/sales/saleTransaction.ts";
 
 /**
  * Proves TASK-10's concurrency contract against real PostgreSQL.
  *
- * Strategy A: one transaction, items sorted by ascending productId, one
- * SaleItem per statement. Asserted on the *emitted shape*, not just the result,
- * by reading Prisma's query events -- swapping the loop for createMany collapses
- * the inserts into one statement and fails the test.
- *
- * Strategy B: the whole transaction retried at most 3 times, only for 40P01 and
- * 40001, never continuing from partial state.
+ * Every case drives the *production* implementation
+ * (`lib/sales/saleTransaction.ts`) with an isolated client. An earlier version
+ * of this harness reimplemented the policy locally, which meant changing the
+ * production loop to createMany, dropping normalization, or breaking the retry
+ * classification would have left it green.
  */
 
 const baseUrl = process.env.DATABASE_URL;
@@ -50,95 +56,7 @@ function clientFor(url, withQueryLog = false) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// The production policy under test, mirrored here so the harness exercises the
-// same shape and the same retry rules the route uses.
-// ---------------------------------------------------------------------------
-const RETRYABLE = new Set(["40P01", "40001"]);
-const MAX_ATTEMPTS = 3;
-const RETRY_DELAY_MS = [20, 40];
-
-function sqlStateOf(error) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    const code = error.meta?.code;
-    if (typeof code === "string") return code;
-  }
-  const message = error instanceof Error ? error.message : "";
-  const named = message.match(/\b(?:code|SQLSTATE)[^0-9A-Za-z]{0,3}([0-9A-Z]{5})\b/);
-  return named ? named[1] : null;
-}
-
-function normalizeSaleItems(items) {
-  const merged = new Map();
-  for (const item of items) {
-    merged.set(item.productId, (merged.get(item.productId) ?? 0) + item.quantity);
-  }
-  return [...merged.entries()]
-    .map(([productId, quantity]) => ({ productId, quantity }))
-    .sort((a, b) => a.productId - b.productId);
-}
-
-/**
- * @param hooks.beforeItems runs inside the transaction, after the Sale exists
- *        and before the items are written -- the window a concurrent operation
- *        needs to close a cycle.
- */
-async function registerSale(client, input, hooks = {}) {
-  const items = normalizeSaleItems(input.items);
-  let attempts = 0;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    attempts = attempt;
-    try {
-      const sale = await client.$transaction(
-        async (tx) => {
-          const created = await tx.sale.create({
-            data: {
-              customerId: input.customerId,
-              soldAt: input.soldAt,
-              status: "CONFIRMED",
-              notes: null,
-            },
-          });
-
-          if (hooks.beforeItems) await hooks.beforeItems(attempt, created.id, tx);
-
-          for (const item of items) {
-            await tx.saleItem.create({
-              data: { saleId: created.id, productId: item.productId, quantity: item.quantity },
-            });
-          }
-
-          return tx.sale.findUniqueOrThrow({
-            where: { id: created.id },
-            include: { items: { orderBy: { productId: "asc" } } },
-          });
-        },
-        { timeout: 60000, maxWait: 60000 },
-      );
-      return { sale, attempts };
-    } catch (error) {
-      const state = sqlStateOf(error);
-      if (state && RETRYABLE.has(state)) {
-        if (attempt < MAX_ATTEMPTS) {
-          await sleep(RETRY_DELAY_MS[attempt - 1] ?? 0);
-          continue;
-        }
-        const exhausted = new Error(`sale concurrency exhausted after ${MAX_ATTEMPTS} attempts (${state})`);
-        exhausted.name = "SaleConcurrencyError";
-        exhausted.sqlState = state;
-        exhausted.attempts = MAX_ATTEMPTS;
-        throw exhausted;
-      }
-      error.attempts = attempt;
-      throw error;
-    }
-  }
-
-  throw new Error("unreachable");
-}
-
-async function waitUntilAnyLockWait(monitor, timeoutMs = 30000) {
+async function waitUntilAnyLockWait(monitor, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const rows = await monitor.$queryRawUnsafe(
@@ -152,24 +70,6 @@ async function waitUntilAnyLockWait(monitor, timeoutMs = 30000) {
     await sleep(40);
   }
   return false;
-}
-
-async function waitUntilBlocked(monitor, marker, timeoutMs = 30000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const rows = await monitor.$queryRawUnsafe(
-      `SELECT count(*)::int AS blocked
-         FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND pid <> pg_backend_pid()
-          AND wait_event_type = 'Lock'
-          AND query LIKE $1`,
-      `%${marker}%`,
-    );
-    if (Number(rows[0].blocked) > 0) return;
-    await sleep(40);
-  }
-  throw new Error(`timed out waiting for ${marker} to block on a lock`);
 }
 
 if (!baseUrl) {
@@ -186,7 +86,6 @@ let logged;
 
 try {
   await admin.$executeRawUnsafe(`CREATE SCHEMA ${quoteSchemaName(schemaName)}`);
-  const { spawnSync } = await import("node:child_process");
   const migrate = spawnSync(
     process.execPath,
     ["node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "prisma/schema.prisma"],
@@ -210,60 +109,136 @@ try {
     });
 
   // -----------------------------------------------------------------
-  // 1. Multi-item sale is atomic, ordered, and one statement per item.
+  // 0. Error classification. This is what makes the retry policy real:
+  //    Prisma collapses a genuine 40P01/40001 raised by a typed write into
+  //    P2034 and drops the SQLSTATE, so classifying on SQLSTATE alone would
+  //    silently disable retry for exactly the writes it protects.
   // -----------------------------------------------------------------
-  const pA = await makeProduct("shape-a", 50, 4);
-  const pB = await makeProduct("shape-b", 50, 6);
-  const pC = await makeProduct("shape-c", 50, 8);
+  const knownRequestError = (code, metaCode) => {
+    const error = new Error(`simulated ${code}`);
+    error.name = "PrismaClientKnownRequestError";
+    error.code = code;
+    if (metaCode) error.meta = { code: metaCode };
+    return error;
+  };
+
+  assert(
+    classifySaleError(knownRequestError("P2034")) === "retryable",
+    "Prisma's normalized write-conflict code P2034 must be retryable",
+  );
+  assert(
+    classifySaleError(knownRequestError("P2003")) === "invariant",
+    "Prisma's foreign-key code P2003 must be a domain invariant, not a generic failure",
+  );
+  assert(
+    classifySaleError(new Error("Database error code: `40P01`")) === "retryable",
+    "a raw 40P01 must be retryable",
+  );
+  assert(
+    classifySaleError(new Error("Database error code: `40001`")) === "retryable",
+    "a raw 40001 must be retryable",
+  );
+  assert(
+    classifySaleError(new Error("Database error code: `23514`")) === "invariant",
+    "a CHECK violation must be a domain invariant",
+  );
+  assert(
+    classifySaleError(new Error("something else entirely")) === "fatal",
+    "an unrecognized error must be fatal, never retried",
+  );
+
+  // Aggregate overflow: each line is individually legal, the sum is not.
+  let overflowError;
+  try {
+    normalizeSaleItems([
+      { productId: 1, quantity: 2_000_000_000 },
+      { productId: 1, quantity: 2_000_000_000 },
+    ]);
+  } catch (error) {
+    overflowError = error;
+  }
+  assert(overflowError, "a duplicate total above the INTEGER range was accepted");
+  assert(
+    overflowError.name === "SaleValidationError",
+    `expected SaleValidationError, got ${overflowError.name}`,
+  );
+
+  // -----------------------------------------------------------------
+  // 1. Multi-item sale: atomic, normalized, and one statement per item in
+  //    ascending productId order -- asserted on the emitted writes.
+  // -----------------------------------------------------------------
+  const pA = await makeProduct("shape-a", 5000, 4);
+  const pB = await makeProduct("shape-b", 5000, 6);
+  const pC = await makeProduct("shape-c", 5000, 8);
 
   logged = clientFor(isolatedUrl, true);
   const itemInserts = [];
   logged.$on("query", (event) => {
-    if (/insert\s+into\s+"[^"]*"\."?SaleItem"?/i.test(event.query)) itemInserts.push(event.query);
+    if (/insert\s+into\s+"[^"]*"\."?SaleItem"?/i.test(event.query)) {
+      itemInserts.push(event.params ?? "");
+    }
   });
 
-  // Deliberately unsorted on input, and with a duplicate, to prove the
-  // normalization rather than assume the caller behaves.
-  const shape = await registerSale(logged, {
+  // Quantities are far from any autoincrement id, so matching a productId in
+  // the statement parameters is unambiguous.
+  const quantityFor = new Map([
+    [pA.id, 101],
+    [pB.id, 202],
+    [pC.id, 303],
+  ]);
+
+  // Deliberately unsorted, with a duplicate, to prove the normalization rather
+  // than assume the caller behaves.
+  const shape = await runSaleRegistration(logged, {
     customerId: customer.id,
     soldAt,
+    status: "CONFIRMED",
     items: [
-      { productId: pC.id, quantity: 2 },
+      { productId: pC.id, quantity: 303 },
+      { productId: pA.id, quantity: 100 },
+      { productId: pB.id, quantity: 202 },
       { productId: pA.id, quantity: 1 },
-      { productId: pB.id, quantity: 3 },
-      { productId: pA.id, quantity: 2 },
     ],
   });
 
-  assert(shape.sale.items.length === 3, `duplicate product not merged: got ${shape.sale.items.length} items`);
-  const persistedOrder = shape.sale.items.map((item) => item.productId);
-  const ascending = [...persistedOrder].sort((a, b) => a - b);
-  assert(
-    JSON.stringify(persistedOrder) === JSON.stringify(ascending),
-    "persisted items are not in ascending productId order",
-  );
-  const mergedA = shape.sale.items.find((item) => item.productId === pA.id);
-  assert(mergedA.quantity === 3, `duplicate quantities not summed: got ${mergedA.quantity}`);
+  assert(shape.items.length === 3, `duplicate product not merged: got ${shape.items.length} items`);
+  const mergedA = shape.items.find((item) => item.productId === pA.id);
+  assert(mergedA.quantity === 101, `duplicate quantities not summed: got ${mergedA.quantity}`);
   assert(
     itemInserts.length === 3,
-    `expected one INSERT statement per item, observed ${itemInserts.length} (a multi-row insert would collapse this)`,
+    `expected one INSERT statement per item, observed ${itemInserts.length} (a multi-row insert collapses this)`,
+  );
+
+  // The order actually written, not a sorted read-back: a read-back ordered by
+  // productId would look ascending even if the writes were not.
+  const observedOrder = itemInserts.map((params) => {
+    const numbers = new Set((String(params).match(/\d+/g) ?? []).map(Number));
+    const match = [...quantityFor.entries()].find(
+      ([productId, quantity]) => numbers.has(productId) && numbers.has(quantity),
+    );
+    assert(match, `could not identify the product written by statement params ${params}`);
+    return match[0];
+  });
+  const expectedOrder = [...quantityFor.keys()].sort((a, b) => a - b);
+  assert(
+    JSON.stringify(observedOrder) === JSON.stringify(expectedOrder),
+    `items were written in order ${observedOrder} rather than ascending productId ${expectedOrder}`,
   );
 
   const stockA = await client.product.findUniqueOrThrow({ where: { id: pA.id } });
-  assert(stockA.currentStock === 47, `stock after merge is ${stockA.currentStock}; expected 47`);
+  assert(stockA.currentStock === 5000 - 101, `stock after merge is ${stockA.currentStock}`);
 
-  // Forecast stays database-derived and is never sent by the caller.
-  const forecastA = shape.sale.items.find((item) => item.productId === pA.id).expectedRepurchaseAt;
+  const forecastA = shape.items.find((item) => item.productId === pA.id).expectedRepurchaseAt;
   assert(
-    forecastA?.getTime() === soldAt.getTime() + 3 * 4 * DAY_MS,
-    `forecast is ${forecastA?.toISOString()}; expected soldAt + 12 days`,
+    forecastA?.getTime() === soldAt.getTime() + 101 * 4 * DAY_MS,
+    `forecast is ${forecastA?.toISOString()}; expected soldAt + ${101 * 4} days`,
   );
 
   await logged.$disconnect();
   logged = null;
 
   // -----------------------------------------------------------------
-  // 2. Concurrent supported sales of the same products both commit.
+  // 2. Concurrent supported sales sharing products both commit.
   // -----------------------------------------------------------------
   const shared1 = await makeProduct("shared-1", 20, 5);
   const shared2 = await makeProduct("shared-2", 20, 5);
@@ -271,17 +246,19 @@ try {
   const clientY = clientFor(urlForSchema(schemaName, true));
 
   const [saleX, saleY] = await Promise.all([
-    registerSale(clientX, {
+    runSaleRegistration(clientX, {
       customerId: customer.id,
       soldAt,
+      status: "CONFIRMED",
       items: [
         { productId: shared1.id, quantity: 2 },
         { productId: shared2.id, quantity: 1 },
       ],
     }),
-    registerSale(clientY, {
+    runSaleRegistration(clientY, {
       customerId: customer.id,
       soldAt,
+      status: "CONFIRMED",
       items: [
         { productId: shared2.id, quantity: 3 },
         { productId: shared1.id, quantity: 1 },
@@ -289,7 +266,7 @@ try {
     }),
   ]);
 
-  assert(saleX.sale.id !== saleY.sale.id, "concurrent sales did not both commit");
+  assert(saleX.id !== saleY.id, "concurrent sales did not both commit");
   const shared1After = await client.product.findUniqueOrThrow({ where: { id: shared1.id } });
   const shared2After = await client.product.findUniqueOrThrow({ where: { id: shared2.id } });
   assert(shared1After.currentStock === 17, `shared1 stock ${shared1After.currentStock}; expected 17`);
@@ -298,9 +275,8 @@ try {
   await clientY.$disconnect();
 
   // -----------------------------------------------------------------
-  // 3. A retryable 40P01 retries the WHOLE transaction and yields exactly
-  //    one sale. The first attempt is forced into a real deadlock against a
-  //    concurrent item deletion, which is the residual TASK-09 documented.
+  // 3. A real deadlock against a concurrent item deletion -- the residual
+  //    TASK-09 documented -- is survived rather than surfaced.
   // -----------------------------------------------------------------
   const victimProduct = await makeProduct("retry", 100, 5);
   const victimSale = await client.sale.create({
@@ -323,54 +299,49 @@ try {
   const monitor = clientFor(urlForSchema(schemaName, true));
   const deleterHolding = deferred();
   const writerParked = deferred();
-  const marker = "task10_retry_probe";
-  let observedAttempts = 0;
 
   const deleterRun = deleter.$transaction(
     async (tx) => {
       // Holds the Product row through TASK-08's stock restoration; its deferred
       // guard reaches for the Sale row only at COMMIT.
-      await tx.$executeRawUnsafe(
-        `DELETE FROM "SaleItem" WHERE "id" = ${victimSale.items[1].id}`,
-      );
+      await tx.$executeRawUnsafe(`DELETE FROM "SaleItem" WHERE "id" = ${victimSale.items[1].id}`);
       deleterHolding.resolve();
       await writerParked.promise;
     },
-    { timeout: 30000, maxWait: 30000 },
+    { timeout: 60000, maxWait: 60000 },
   );
 
   await deleterHolding.promise;
 
-  const writerRun = registerSale(
+  const writerRun = runSaleRegistration(
     writer,
-    { customerId: customer.id, soldAt, items: [{ productId: victimProduct.id, quantity: 1 }] },
     {
-      beforeItems: async (attempt, saleId, tx) => {
-        observedAttempts = attempt;
-        void saleId;
-        if (attempt > 1) return;
-        // Attempt 1 only. Take the victim Sale row inside this transaction, then
-        // release the deleter so it reaches COMMIT: its deferred guard needs
-        // that Sale row while this transaction still needs its Product, which
-        // is the cycle. Wait until the deleter is genuinely parked on the lock
-        // before continuing, so the deadlock is forced rather than raced.
-        await tx.$executeRawUnsafe(
-          `/* ${marker} */ UPDATE "Sale" SET "status" = 'CONFIRMED' WHERE "id" = ${victimSale.id}`,
-        );
-        writerParked.resolve();
-        await waitUntilAnyLockWait(monitor, 15000);
+      customerId: customer.id,
+      soldAt,
+      status: "CONFIRMED",
+      items: [{ productId: victimProduct.id, quantity: 1 }],
+    },
+    {
+      transactionTimeoutMs: 60000,
+      hooks: {
+        beforeItems: async (attempt, _saleId, tx) => {
+          if (attempt > 1) return;
+          // Attempt 1 only: take the victim Sale row, then release the deleter
+          // so its deferred guard reaches for that same row while this
+          // transaction still needs its Product. Wait until it is genuinely
+          // parked so the deadlock is forced rather than raced.
+          await tx.$executeRawUnsafe(
+            `UPDATE "Sale" SET "status" = 'CONFIRMED' WHERE "id" = ${victimSale.id}`,
+          );
+          writerParked.resolve();
+          await waitUntilAnyLockWait(monitor);
+        },
       },
     },
   ).catch((error) => ({ error }));
 
-  // No stray release here: only the hook may free the deleter, and only after
-  // it has actually taken the Sale row. Releasing early lets the deleter commit
-  // before the cycle exists, and nothing deadlocks.
   const [, writerResult] = await Promise.all([deleterRun.catch(() => null), writerRun]);
-
-  if (writerResult.error) {
-    // If the writer was the aborted side and retries were exhausted the
-    // contract still holds, but with only one forced deadlock it must recover.
+  if (writerResult?.error) {
     assert(
       writerResult.error.name !== "SaleConcurrencyError",
       `writer exhausted retries on a single forced deadlock: ${writerResult.error.message}`,
@@ -383,39 +354,42 @@ try {
   });
   assert(
     salesForProduct.length === 1,
-    `retry produced ${salesForProduct.length} sales; a retried transaction must yield exactly one`,
+    `forced deadlock produced ${salesForProduct.length} sales; expected exactly one`,
   );
-  assert(observedAttempts >= 1, "retry instrumentation did not observe any attempt");
 
   await deleter.$disconnect();
   await writer.$disconnect();
   await monitor.$disconnect();
 
   // -----------------------------------------------------------------
-  // 3b. A retry that succeeds must leave exactly one sale. Deterministic:
-  //     attempt 1 always fails with a real 40P01, attempt 2 always succeeds,
-  //     so this does not depend on which side PostgreSQL picks as victim.
+  // 3b. A retry that succeeds leaves exactly one sale. Deterministic:
+  //     attempt 1 always fails with a real 40P01, attempt 2 succeeds.
   // -----------------------------------------------------------------
   const retryProduct = await makeProduct("retry-once", 30, 5);
   const retryClient = clientFor(urlForSchema(schemaName, true));
   let retryAttempts = 0;
-  const retried = await registerSale(
+  await runSaleRegistration(
     retryClient,
-    { customerId: customer.id, soldAt, items: [{ productId: retryProduct.id, quantity: 4 }] },
     {
-      beforeItems: async (attempt, _saleId, tx) => {
-        retryAttempts = attempt;
-        void _saleId;
-        if (attempt > 1) return;
-        await tx.$executeRawUnsafe(
-          `DO $$ BEGIN RAISE EXCEPTION 'forced deadlock' USING ERRCODE = '40P01'; END $$;`,
-        );
+      customerId: customer.id,
+      soldAt,
+      status: "CONFIRMED",
+      items: [{ productId: retryProduct.id, quantity: 4 }],
+    },
+    {
+      hooks: {
+        beforeItems: async (attempt, _saleId, tx) => {
+          retryAttempts = attempt;
+          if (attempt > 1) return;
+          await tx.$executeRawUnsafe(
+            `DO $$ BEGIN RAISE EXCEPTION 'forced deadlock' USING ERRCODE = '40P01'; END $$;`,
+          );
+        },
       },
     },
   );
 
-  assert(retryAttempts === 2, `expected the sale to succeed on attempt 2, observed ${retryAttempts}`);
-  assert(retried.attempts === 2, `registerSale reported ${retried.attempts} attempts; expected 2`);
+  assert(retryAttempts === 2, `expected success on attempt 2, observed ${retryAttempts}`);
   const retrySales = await client.sale.findMany({
     where: { items: { some: { productId: retryProduct.id } } },
   });
@@ -424,10 +398,7 @@ try {
     `a successful retry produced ${retrySales.length} sales; it must produce exactly one`,
   );
   const retryStock = await client.product.findUniqueOrThrow({ where: { id: retryProduct.id } });
-  assert(
-    retryStock.currentStock === 26,
-    `retry charged stock ${30 - retryStock.currentStock} times; expected a single charge of 4`,
-  );
+  assert(retryStock.currentStock === 26, `retry charged stock more than once: ${retryStock.currentStock}`);
   await retryClient.$disconnect();
 
   // -----------------------------------------------------------------
@@ -435,32 +406,58 @@ try {
   // -----------------------------------------------------------------
   const scarce = await makeProduct("scarce", 1, 5);
   const scarceClient = clientFor(urlForSchema(schemaName, true));
+  let attemptsSeen = 0;
   let domainError;
   try {
-    await registerSale(scarceClient, {
-      customerId: customer.id,
-      soldAt,
-      items: [{ productId: scarce.id, quantity: 5 }],
-    });
+    await runSaleRegistration(
+      scarceClient,
+      {
+        customerId: customer.id,
+        soldAt,
+        status: "CONFIRMED",
+        items: [{ productId: scarce.id, quantity: 5 }],
+      },
+      {
+        hooks: {
+          beforeItems: async (attempt) => {
+            attemptsSeen = attempt;
+          },
+        },
+      },
+    );
   } catch (error) {
     domainError = error;
   }
   assert(domainError, "insufficient stock was accepted");
   assert(
-    domainError.name !== "SaleConcurrencyError",
-    "a domain invariant was treated as a retryable concurrency failure",
+    domainError.name === "SaleInvariantError",
+    `expected SaleInvariantError, got ${domainError.name}: ${domainError.message}`,
   );
-  assert(
-    domainError.attempts === 1,
-    `domain error was retried ${domainError.attempts} times; it must fail on the first attempt`,
-  );
+  assert(/Estoque insuficiente/.test(domainError.message), `unhelpful message: ${domainError.message}`);
+  assert(attemptsSeen === 1, `domain error was retried: transaction body ran ${attemptsSeen} times`);
   const scarceAfter = await client.product.findUniqueOrThrow({ where: { id: scarce.id } });
   assert(scarceAfter.currentStock === 1, "rejected sale changed stock");
-  assert(scarceAfter.currentStock >= 0, "stock became negative");
-
-  const orphan = await client.sale.findMany({ where: { items: { none: {} } } });
-  assert(orphan.length === 0, "a rejected sale left an itemless Sale behind");
   await scarceClient.$disconnect();
+
+  // A missing product is a domain conflict too, not a generic failure.
+  const fkClient = clientFor(urlForSchema(schemaName, true));
+  let fkError;
+  try {
+    await runSaleRegistration(fkClient, {
+      customerId: customer.id,
+      soldAt,
+      status: "CONFIRMED",
+      items: [{ productId: 2_147_000_000, quantity: 1 }],
+    });
+  } catch (error) {
+    fkError = error;
+  }
+  assert(fkError, "a sale referencing a missing product was accepted");
+  assert(
+    fkError.name === "SaleInvariantError",
+    `missing product should be a domain invariant, got ${fkError.name}: ${fkError.message}`,
+  );
+  await fkClient.$disconnect();
 
   // -----------------------------------------------------------------
   // 5. Exhausted retries surface an error rather than being swallowed.
@@ -470,18 +467,22 @@ try {
   let exhausted;
   let exhaustAttempts = 0;
   try {
-    await registerSale(
+    await runSaleRegistration(
       exhaustClient,
-      { customerId: customer.id, soldAt, items: [{ productId: alwaysProduct.id, quantity: 1 }] },
       {
-        beforeItems: async (attempt, _saleId, tx) => {
-          exhaustAttempts = attempt;
-          void _saleId;
-          // A genuine PostgreSQL deadlock error, raised with the real SQLSTATE,
-          // on every attempt.
-          await tx.$executeRawUnsafe(
-            `DO $$ BEGIN RAISE EXCEPTION 'forced deadlock' USING ERRCODE = '40P01'; END $$;`,
-          );
+        customerId: customer.id,
+        soldAt,
+        status: "CONFIRMED",
+        items: [{ productId: alwaysProduct.id, quantity: 1 }],
+      },
+      {
+        hooks: {
+          beforeItems: async (attempt, _saleId, tx) => {
+            exhaustAttempts = attempt;
+            await tx.$executeRawUnsafe(
+              `DO $$ BEGIN RAISE EXCEPTION 'forced deadlock' USING ERRCODE = '40P01'; END $$;`,
+            );
+          },
         },
       },
     );
@@ -493,12 +494,15 @@ try {
     exhausted.name === "SaleConcurrencyError",
     `expected SaleConcurrencyError, got ${exhausted.name}: ${exhausted.message}`,
   );
-  assert(exhausted.attempts === MAX_ATTEMPTS, `expected ${MAX_ATTEMPTS} attempts, got ${exhausted.attempts}`);
-  assert(exhaustAttempts === MAX_ATTEMPTS, `transaction body ran ${exhaustAttempts} times; expected ${MAX_ATTEMPTS}`);
+  assert(exhausted.attempts === MAX_SALE_ATTEMPTS, `expected ${MAX_SALE_ATTEMPTS} attempts`);
+  assert(
+    exhaustAttempts === MAX_SALE_ATTEMPTS,
+    `transaction body ran ${exhaustAttempts} times; expected ${MAX_SALE_ATTEMPTS}`,
+  );
   assert(exhausted.sqlState === "40P01", `lost the original SQLSTATE: ${exhausted.sqlState}`);
 
-  const exhaustOrphans = await client.sale.findMany({ where: { items: { none: {} } } });
-  assert(exhaustOrphans.length === 0, "exhausted retries left an itemless Sale behind");
+  const orphans = await client.sale.findMany({ where: { items: { none: {} } } });
+  assert(orphans.length === 0, "a failed sale left an itemless Sale behind");
   await exhaustClient.$disconnect();
 
   // -----------------------------------------------------------------

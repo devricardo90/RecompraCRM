@@ -94,6 +94,11 @@ seleções repetidas do mesmo `productId` são somadas em um único item, o que
 mantém um item por produto, preserva a quantidade total pretendida e evita duas
 linhas concorrendo pelo mesmo `Product` dentro da mesma transação.
 
+A soma é validada no mesmo passo: duas linhas podem ser individualmente válidas
+e mesmo assim somar acima do range `INTEGER`, então o total é verificado com
+`Number.isSafeInteger` e contra `2147483647` antes de abrir a transação, virando
+**400** em vez de um erro genérico de banco.
+
 ### Estratégia B — retry limitado (ADOTADA)
 
 Política exata:
@@ -101,6 +106,10 @@ Política exata:
 - **máximo de 3 tentativas no total** (a primeira mais 2 repetições);
 - retenta **apenas** `40P01` (deadlock detectado) e `40001` (falha de
   serialização); qualquer outro erro falha imediatamente;
+- retenta também o código normalizado do Prisma **`P2034`**: uma escrita tipada
+  que sofre um `40P01`/`40001` real chega com esse código e **sem** o SQLSTATE,
+  então classificar só por SQLSTATE desativaria silenciosamente o retry
+  justamente no caminho que ele existe para proteger;
 - a transação **inteira** é refeita do zero a cada tentativa, incluindo a criação
   da `Sale`. Nada é continuado a partir de estado parcial, e uma tentativa
   abortada não deixa `Sale` órfã porque o rollback do PostgreSQL desfaz tudo;
@@ -115,7 +124,8 @@ Política exata:
 **Distinção entre concorrência e invariante de domínio.** As invariantes das
 TASK-07/08/09 chegam como erros do PostgreSQL com SQLSTATE próprio — `23514`
 para `CHECK` (estoque negativo, quantidade não positiva, venda sem itens) e
-`23503` para chave estrangeira. Esses **não** são retentáveis: são resposta
+`23503` para chave estrangeira — ou, pela escrita tipada, como o código
+`P2003` do Prisma, que também é tratado como invariante. Esses **não** são retentáveis: são resposta
 determinística do domínio e viram **HTTP 409** com mensagem específica. Retentar
 um deles apenas repetiria a mesma falha três vezes e mascararia a causa.
 
@@ -123,10 +133,10 @@ um deles apenas repetiria a mesma falha três vezes e mascararia a causa.
 
 | Origem | SQLSTATE | HTTP | Comportamento |
 | --- | --- | --- | --- |
-| entrada inválida | — | 400 | falha imediata, mensagem de validação |
-| cliente ou produto inexistente | `23503` | 409 | falha imediata |
+| entrada inválida, inclusive total duplicado fora do range | — | 400 | falha imediata, mensagem de validação |
+| cliente ou produto inexistente | `23503` / `P2003` | 409 | falha imediata |
 | invariante de domínio (estoque negativo, quantidade, venda sem itens) | `23514` | 409 | falha imediata, mensagem específica |
-| deadlock | `40P01` | 503 após 3 tentativas | retenta a transação inteira |
+| deadlock | `40P01` / `P2034` | 503 após 3 tentativas | retenta a transação inteira |
 | falha de serialização | `40001` | 503 após 3 tentativas | retenta a transação inteira |
 | indisponibilidade/erro inesperado | outros | 503 | falha imediata |
 

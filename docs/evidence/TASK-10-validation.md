@@ -14,8 +14,10 @@
 The spec was amended and committed **before** any product code existed, as its
 own contract required. Both strategies were adopted.
 
-**A — deterministic mutation shape.** `lib/sales/registerSale.ts` is the only
-authorized writer of `Sale`/`SaleItem`. It opens one interactive transaction,
+**A — deterministic mutation shape.** `lib/sales/saleTransaction.ts` holds the
+whole policy and `lib/sales/registerSale.ts` binds the application's Prisma
+client to it; together they are the only authorized writer of `Sale`/`SaleItem`.
+It opens one interactive transaction,
 creates the `Sale` without nested items, sorts items by ascending `productId`,
 and inserts **one `SaleItem` per statement** in a loop — never `createMany` or a
 nested `create`, both of which emit the multi-row statement TASK-09's residual is
@@ -24,14 +26,55 @@ rows in. Duplicate product selections are summed into a single item before
 persistence, so one transaction never holds two items contending for the same
 `Product`. The API route validates and delegates; it never assembles a write.
 
-**B — bounded retry.** Three attempts total, retrying only `40P01` and `40001`,
-redoing the whole transaction from scratch each time, with a bounded jitter-free
-20 ms / 40 ms backoff. Exhaustion raises `SaleConcurrencyError` → HTTP 503 with a
-readable message; the original SQLSTATE is preserved.
+**B — bounded retry.** Three attempts total, retrying `40P01`, `40001` and
+Prisma's normalized `P2034`, redoing the whole transaction from scratch each
+time, with a bounded jitter-free 20 ms / 40 ms backoff. Exhaustion raises
+`SaleConcurrencyError` → HTTP 503 with a readable message; the original state is
+preserved.
 
-Domain invariants (`23514` CHECK, `23503` FK) are deliberately **not** retried —
-they are deterministic answers, map to HTTP 409, and retrying would repeat the
-same failure three times and hide the cause.
+Domain invariants (`23514` CHECK, `23503` FK, and Prisma's `P2003`) are
+deliberately **not** retried — they are deterministic answers, map to HTTP 409,
+and retrying would repeat the same failure three times and hide the cause.
+
+## Review round 1 — five findings, all confirmed and fixed
+
+The review of `792a0ea` reported two P1s and three P2s. All were real.
+
+**P1 — retry was silently disabled for typed writes.** Prisma collapses a real
+`40P01`/`40001` raised by `tx.saleItem.create` into `P2034` and drops the
+SQLSTATE, so `sqlStateOf` returned `null` and the transaction was rethrown after
+attempt 1 instead of following the three-attempt policy. Galling because the
+TASK-09 harness already documents that collapse — I wrote the note and then did
+not apply it. `classifySaleError` now treats `P2034` as retryable.
+
+**P1 — the harness tested a copy, not production.** Every case called a private
+reimplementation of the registrar, so switching production to `createMany`,
+dropping normalization, or breaking retry classification would have left it
+green, which is exactly why the `P2034` gap survived. Policy moved to
+`lib/sales/saleTransaction.ts`, which imports no Prisma singleton and no path
+alias so the harness can import and drive it directly under Node's native type
+stripping. `lib/sales/registerSale.ts` is now a thin wrapper binding the app
+client.
+
+Verified the guard actually bites: temporarily replacing the loop with
+`createMany` fails the harness with *"expected one INSERT statement per item,
+observed 1"*, and restoring it passes.
+
+**P2 — sorted read-back proved nothing.** `persistedOrder` was read with
+`orderBy: { productId: "asc" }`, so it looked ascending regardless of write
+order. The harness now reconstructs the **actual** write sequence from the
+statement parameters of each `INSERT`, matching each statement to its product by
+a (productId, quantity) pair chosen so the values cannot collide with
+autoincrement ids.
+
+**P2 — `P2003` was not mapped.** A product deleted after the catalog loaded
+produced a generic 503 instead of the contracted 409. Now classified as a domain
+invariant.
+
+**P2 — duplicate totals could overflow.** Two lines can each pass the per-line
+`2147483647` limit while their sum does not. `normalizeSaleItems` now validates
+each aggregate with `Number.isSafeInteger` and the PostgreSQL maximum before the
+transaction opens, returning 400.
 
 ## Concurrency harness
 
@@ -41,17 +84,20 @@ isolated PostgreSQL schema per run, real database throughout.
 
 | # | Case | Assertion |
 | --- | --- | --- |
-| 1 | multi-item sale, unsorted input with a duplicate | 3 items persisted in ascending `productId`, duplicate quantities summed, stock `47`, forecast = `soldAt + 12 days` |
-| 1 | emitted shape | exactly **one** `INSERT INTO "SaleItem"` statement per item, read from Prisma's `query` events |
+| 0 | error classification | `P2034` and raw `40P01`/`40001` ⇒ retryable; `P2003` and `23514` ⇒ invariant; anything else ⇒ fatal |
+| 0 | aggregate overflow | duplicate total above the INTEGER range raises `SaleValidationError` before any transaction |
+| 1 | multi-item sale, unsorted input with a duplicate | 3 items, duplicate quantities summed, stock and forecast from the canonical formula |
+| 1 | emitted shape | exactly **one** `INSERT INTO "SaleItem"` per item, and the **actual write order** reconstructed from statement parameters is ascending `productId` |
 | 2 | two concurrent sales sharing both products, opposite input order | both commit; stock `17` and `16` |
 | 3 | real forced deadlock against a concurrent item deletion | recovers; exactly one sale for that product |
 | 3b | attempt 1 always `40P01`, attempt 2 succeeds | succeeds on attempt 2, **exactly one** sale, stock charged once |
-| 4 | insufficient stock | fails on attempt 1 (not retried), stock unchanged, no itemless `Sale` |
+| 4 | insufficient stock | `SaleInvariantError` on attempt 1 (not retried), stock unchanged |
+| 4 | missing product | `SaleInvariantError`, not a generic failure |
 | 5 | every attempt raises `40P01` | `SaleConcurrencyError` after exactly 3 attempts, SQLSTATE preserved, no itemless `Sale` |
 | 6 | whole run | no product ended with negative stock |
 
-Case 1 is what prevents a silent regression: replacing the loop with
-`createMany` collapses the insert count to one and fails the test.
+Cases 0 and 1 are what prevent a silent regression, and they run against the
+production module rather than a copy of it.
 
 Synchronization uses `pg_stat_activity` lock-wait polling, not `sleep`. Three
 consecutive local runs passed.
@@ -64,7 +110,7 @@ had taken its lock, so no cycle could form.
 ## Playwright — ephemeral
 
 Scenario built in `.rick/tmp/playwright/task10/`, `retries: 0` so nothing flaky
-is masked. **11 passed in 31.6 s**, then test, config, traces, screenshots and
+is masked. **11 passed**, re-run after the round-1 refactor (13.1 s), then test, config, traces, screenshots and
 report were removed per `docs/operations/PLAYWRIGHT-EPHEMERAL.md`.
 `@playwright/test` was installed with `--no-save`, so the dependency surface is
 unchanged.

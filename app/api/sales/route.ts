@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   SaleConcurrencyError,
   SaleInvariantError,
+  SaleValidationError,
   registerSale,
 } from "@/lib/sales/registerSale";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ sale }, { status: 201 });
   } catch (error) {
-    if (error instanceof SaleInputError) {
+    if (error instanceof SaleInputError || error instanceof SaleValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
