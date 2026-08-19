@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 // deadlock cycles; the full chain must make the very same interleavings
 // commit cleanly.
 const LOCK_ORDER_MIGRATION = "20260819140000_serialize_forecast_lock_order";
+const SHARE_LOCK_MIGRATION = "20260819160000_drop_redundant_sale_share_lock";
 
 const repoRoot = process.cwd();
 const migrationsRoot = resolve(repoRoot, "prisma", "migrations");
@@ -63,9 +64,9 @@ function runMigrations(targetUrl, targetSchemaPath) {
   assert(result.status === 0, `Migration deploy failed with exit code ${result.status}`);
 }
 
-// A migration project holding every migration that precedes the fix, so the
-// defect can be observed on a real database instead of argued about.
-function createPreLockOrderMigrationProject() {
+// A migration project holding every migration that precedes a given fix, so
+// each defect can be observed on a real database instead of argued about.
+function createMigrationProjectBefore(boundaryMigration) {
   const tempRoot = mkdtempSync(join(repoRoot, ".tmp-task09-lockorder-"));
   const tempMigrations = join(tempRoot, "migrations");
   mkdirSync(tempMigrations, { recursive: true });
@@ -76,8 +77,8 @@ function createPreLockOrderMigrationProject() {
     .filter((entry) => entry.isDirectory() && /^\d+_.+$/.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-  const targetIndex = migrationDirectories.indexOf(LOCK_ORDER_MIGRATION);
-  assert(targetIndex >= 0, `Target migration ${LOCK_ORDER_MIGRATION} was not found`);
+  const targetIndex = migrationDirectories.indexOf(boundaryMigration);
+  assert(targetIndex >= 0, `Target migration ${boundaryMigration} was not found`);
 
   for (const migrationName of migrationDirectories.slice(0, targetIndex)) {
     cpSync(join(migrationsRoot, migrationName), join(tempMigrations, migrationName), { recursive: true });
@@ -285,6 +286,104 @@ async function seedSaleCase(client, label, soldAt, consumptionDays) {
   };
 }
 
+/**
+ * Reproduces the reported cross-sale P2: two transactions moving an item in
+ * opposite directions between two multi-item sales (A -> B and B -> A).
+ *
+ * Both are the *child* direction, so the shared advisory gate admits both by
+ * design. Each one's forecast trigger used to take FOR SHARE on its
+ * destination Sale, while the deferred TASK-07 guard updates its source Sale
+ * at COMMIT - so each held a share lock blocking the other's update.
+ *
+ * Both statements must therefore complete before either commits, which is
+ * what the barrier below enforces.
+ */
+async function runCrossSaleMove({ schemaName, moveForward, moveBackward, expectDeadlock }) {
+  const forwardClient = clientFor(urlForSchema(schemaName, true));
+  const backwardClient = clientFor(urlForSchema(schemaName, true));
+
+  const forwardMoved = deferred();
+  const backwardMoved = deferred();
+
+  try {
+    const forwardRun = forwardClient.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(moveForward);
+      forwardMoved.resolve();
+      await backwardMoved.promise;
+    }, TX_OPTIONS);
+
+    const backwardRun = backwardClient.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(moveBackward);
+      backwardMoved.resolve();
+      await forwardMoved.promise;
+    }, TX_OPTIONS);
+
+    const [forwardResult, backwardResult] = await Promise.allSettled([forwardRun, backwardRun]);
+
+    if (expectDeadlock) {
+      const failures = [forwardResult, backwardResult].filter((entry) => entry.status === "rejected");
+      assert(
+        failures.some((entry) => isDeadlock(entry.reason)),
+        "expected a deadlock from opposite-direction cross-sale moves before the share-lock fix",
+      );
+      return;
+    }
+
+    for (const [name, entry] of [["forward", forwardResult], ["backward", backwardResult]]) {
+      assert(
+        entry.status === "fulfilled",
+        `${name} cross-sale move failed after the fix: ${entry.reason?.message ?? entry.reason}`,
+      );
+    }
+  } finally {
+    forwardMoved.resolve();
+    backwardMoved.resolve();
+    await backwardClient.$disconnect();
+    await forwardClient.$disconnect();
+  }
+}
+
+// Two sales of two items each, so moving one item out is legal - TASK-07 only
+// blocks removing the last item of a sale.
+async function seedCrossSaleCase(client, label, soldAtA, soldAtB, consumptionDays) {
+  const customer = await client.customer.create({ data: { name: `TASK-09 cross-sale ${label} customer` } });
+  const products = [];
+  for (const suffix of ["a1", "a2", "b1", "b2"]) {
+    products.push(
+      await client.product.create({
+        data: {
+          name: `TASK-09 cross-sale ${label} ${suffix} product`,
+          unit: "un",
+          currentStock: 100,
+          minimumStock: 1,
+          consumptionDays,
+        },
+      }),
+    );
+  }
+  const makeSale = async (soldAt, first, second) => {
+    const sale = await client.sale.create({
+      data: {
+        customerId: customer.id,
+        soldAt,
+        status: "MODEL_TEST",
+        items: {
+          create: [
+            { productId: first.id, quantity: 1 },
+            { productId: second.id, quantity: 1 },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    return { id: sale.id, movedItemId: sale.items.find((item) => item.productId === first.id).id };
+  };
+  const saleA = await makeSale(soldAtA, products[0], products[1]);
+  const saleB = await makeSale(soldAtB, products[2], products[3]);
+  return { saleA, saleB };
+}
+
+
 if (!baseUrl) {
   console.error("Sale forecast lock-order tests: FAIL");
   console.error("DATABASE_URL is not set.");
@@ -294,7 +393,8 @@ if (!baseUrl) {
 const schemaName = `task09_lockorder_${Date.now()}_${process.pid}`;
 const isolatedUrl = urlForSchema(schemaName);
 const admin = new PrismaClient();
-const preFixProject = createPreLockOrderMigrationProject();
+const preLockOrderProject = createMigrationProjectBefore(LOCK_ORDER_MIGRATION);
+const preShareLockProject = createMigrationProjectBefore(SHARE_LOCK_MIGRATION);
 let client;
 
 try {
@@ -303,7 +403,7 @@ try {
   // ---------------------------------------------------------------
   // 1. Reproduce both reported P1 deadlocks on the chain without the fix.
   // ---------------------------------------------------------------
-  runMigrations(isolatedUrl, preFixProject.schema);
+  runMigrations(isolatedUrl, preLockOrderProject.schema);
   client = clientFor(isolatedUrl);
 
   const soldAt = new Date("2026-08-19T00:00:00.000Z");
@@ -332,8 +432,27 @@ try {
   client = null;
 
   // ---------------------------------------------------------------
-  // 2. Deploy the fix over that same populated database and require the
-  //    identical interleavings to commit with correct data.
+  // 2. Advance to the reviewed head (lock-order fix present, share-lock fix
+  //    absent) and reproduce the cross-sale P2 that survived that gate.
+  // ---------------------------------------------------------------
+  runMigrations(isolatedUrl, preShareLockProject.schema);
+  client = clientFor(isolatedUrl);
+
+  const soldAtB = new Date("2026-09-01T00:00:00.000Z");
+  const brokenCrossSale = await seedCrossSaleCase(client, "broken", soldAt, soldAtB, 5);
+  await runCrossSaleMove({
+    schemaName,
+    moveForward: `UPDATE "SaleItem" SET "saleId" = ${integerLiteral(brokenCrossSale.saleB.id, "saleBId")} WHERE "id" = ${integerLiteral(brokenCrossSale.saleA.movedItemId, "saleAItemId")}`,
+    moveBackward: `UPDATE "SaleItem" SET "saleId" = ${integerLiteral(brokenCrossSale.saleA.id, "saleAId")} WHERE "id" = ${integerLiteral(brokenCrossSale.saleB.movedItemId, "saleBItemId")}`,
+    expectDeadlock: true,
+  });
+
+  await client.$disconnect();
+  client = null;
+
+  // ---------------------------------------------------------------
+  // 3. Deploy the full chain over that same populated database and require
+  //    every one of those interleavings to commit with correct data.
   // ---------------------------------------------------------------
   runMigrations(isolatedUrl, schemaPath);
   client = clientFor(isolatedUrl);
@@ -385,6 +504,34 @@ try {
   const saleProductAfter = await client.product.findUniqueOrThrow({ where: { id: fixedSale.childProductId } });
   assert(saleProductAfter.currentStock === 97, `sale-cycle stock is ${saleProductAfter.currentStock}; expected 97`);
 
+  const fixedCrossSale = await seedCrossSaleCase(client, "fixed", soldAt, soldAtB, 5);
+  await runCrossSaleMove({
+    schemaName,
+    moveForward: `UPDATE "SaleItem" SET "saleId" = ${integerLiteral(fixedCrossSale.saleB.id, "saleBId")} WHERE "id" = ${integerLiteral(fixedCrossSale.saleA.movedItemId, "saleAItemId")}`,
+    moveBackward: `UPDATE "SaleItem" SET "saleId" = ${integerLiteral(fixedCrossSale.saleA.id, "saleAId")} WHERE "id" = ${integerLiteral(fixedCrossSale.saleB.movedItemId, "saleBItemId")}`,
+    expectDeadlock: false,
+  });
+
+  // Each moved item must now be re-forecast against its destination sale.
+  const movedForward = await client.saleItem.findUniqueOrThrow({ where: { id: fixedCrossSale.saleA.movedItemId } });
+  assert(
+    movedForward.saleId === fixedCrossSale.saleB.id,
+    "forward cross-sale move did not land on the destination sale",
+  );
+  assert(
+    movedForward.expectedRepurchaseAt?.getTime() === soldAtB.getTime() + 5 * DAY_MS,
+    `forward moved forecast is ${movedForward.expectedRepurchaseAt?.toISOString()}; expected sale B soldAt + 5 days`,
+  );
+  const movedBackward = await client.saleItem.findUniqueOrThrow({ where: { id: fixedCrossSale.saleB.movedItemId } });
+  assert(
+    movedBackward.saleId === fixedCrossSale.saleA.id,
+    "backward cross-sale move did not land on the destination sale",
+  );
+  assert(
+    movedBackward.expectedRepurchaseAt?.getTime() === soldAt.getTime() + 5 * DAY_MS,
+    `backward moved forecast is ${movedBackward.expectedRepurchaseAt?.toISOString()}; expected sale A soldAt + 5 days`,
+  );
+
   console.log("Sale forecast lock-order tests: PASS");
 } catch (error) {
   console.error("Sale forecast lock-order tests: FAIL");
@@ -392,7 +539,8 @@ try {
   process.exitCode = 1;
 } finally {
   if (client) await client.$disconnect();
-  rmSync(preFixProject.root, { recursive: true, force: true });
+  rmSync(preLockOrderProject.root, { recursive: true, force: true });
+  rmSync(preShareLockProject.root, { recursive: true, force: true });
   try {
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
   } catch (error) {

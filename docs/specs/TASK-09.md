@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `e3be67a1d1cff634798ddaa59de6be16038be23d`
-Current technical HEAD: pending push of the round-3 lock-order fix
-Validation: Validate #88 / `32258132550` SUCCESS on `e3be67a`; round-3 head revalidated below
+Last independently reviewed HEAD: `e7cfff0980954bab06db5da5ebe98e0050083904` (round-3 P1s cleared, one new P2)
+Current technical HEAD: pending push of the round-4 share-lock fix
+Validation: Validate `32263724994` SUCCESS on `e7cfff0`; round-4 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,26 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-4 review finding (cross-sale moves)
+
+The review of `e7cfff0` confirmed both round-3 P1s as resolved and reported one
+P2: two transactions moving items in opposite directions between two
+multi-item sales (A -> B and B -> A) still deadlocked. Both are the child
+direction, so the shared gate admits both by design; each then took `FOR SHARE`
+on its *destination* Sale while the deferred TASK-07 guard updates its *source*
+Sale at COMMIT, so each share lock blocked the other's update.
+
+1. The Sale `FOR SHARE` is dropped. It existed so a forecast read would
+   conflict with a concurrent `soldAt` correction, and since the round-3
+   migration such a correction takes the cluster lock in EXCLUSIVE mode while
+   every SaleItem write holds it SHARED - the two can no longer overlap at
+   all, so the row-level share lock only contributed the edge above.
+2. `Product` stays on `FOR NO KEY UPDATE`. That lock is not about concurrent
+   `consumptionDays` changes; it is what stops two SaleItem writes for the same
+   product from deadlocking while upgrading to TASK-08's stock `UPDATE`. Both
+   are the child direction and run concurrently by design, so it is still
+   required.
 
 ## Recovery policy for round-3 review findings (lock order)
 
@@ -58,6 +78,15 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 1. Concurrent SaleItem writes and Product updates must serialize without shared-lock upgrade deadlocks. Product forecast reads acquire `FOR NO KEY UPDATE` because the same SaleItem write later updates Product stock; Sale.soldAt reads remain `FOR SHARE`.
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
+
+## Validation added for round-4 recovery
+
+- advance the harness database to the reviewed head exactly (round-3 fix
+  present, round-4 fix absent) and reproduce the opposite-direction cross-sale
+  move, requiring PostgreSQL to abort one side;
+- deploy the full chain and require both moves to commit, each moved item
+  landing on its destination sale with a forecast recomputed against that
+  sale's `soldAt`.
 
 ## Validation added for round-3 recovery
 
@@ -89,6 +118,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 - concurrent sales do not deadlock because of forecast lock upgrades;
 - forecast propagation and SaleItem writes cannot deadlock on reversed lock
   order, while SaleItem writes stay concurrent with each other;
+- legal cross-sale item moves in opposite directions do not deadlock;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

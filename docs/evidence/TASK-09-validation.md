@@ -11,7 +11,8 @@
 - Initial implementation head: `626953c` (compute forecast per SaleItem)
 - Review round 1 fixes: `87904a3`, `e497162`, `3344d6a`
 - Review round 2 fixes (legacy backfill + lock upgrade P1s): `a352de7`
-- Review round 3 fix (lock-order P1s): this head
+- Review round 3 fix (lock-order P1s): `e7cfff0`
+- Review round 4 fix (cross-sale share lock P2): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -75,17 +76,45 @@ PostgreSQL as a normal, retryable deadlock rather than corrupting anything. No
 application path performs that combination — the product and sale routes are
 separate transactions.
 
+## Review round 4 — cross-sale move P2
+
+The review of `e7cfff0` confirmed both round-3 P1s as resolved and reported one
+new P2. `SaleItem.saleId` is mutable and moving an item between sales is legal
+whenever the source keeps another item, so two transactions can move items in
+opposite directions between two multi-item sales. Both are the child direction,
+so the shared gate admits both — correctly. But each one's forecast trigger took
+`FOR SHARE` on its *destination* Sale, while the deferred
+`SaleItem_preserves_sale_items` guard updates its *source* Sale at COMMIT. The
+A→B transaction therefore held a share lock on B and needed to update A, and the
+B→A transaction the mirror image; each share lock blocked the other's update.
+
+The fix drops that share lock
+(`prisma/migrations/20260819160000_drop_redundant_sale_share_lock`). It was
+added so a forecast read would conflict with a concurrent `soldAt` correction,
+and since the round-3 migration such a correction takes the cluster lock
+exclusively while every SaleItem write holds it shared — the two can no longer
+overlap at all. Removing it deletes the cycle without weakening the guarantee
+that motivated it.
+
+`Product` deliberately stays on `FOR NO KEY UPDATE`: that lock is not about
+concurrent `consumptionDays` changes but about stopping two SaleItem writes for
+the same product from deadlocking while upgrading to TASK-08's stock `UPDATE`.
+Both are the child direction and run concurrently by design.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
 `npm run test:repurchase-forecast` and therefore into Validate, proves the
 defect and the fix on a real database rather than arguing about them:
 
-1. builds a database from every migration *preceding* the fix;
-2. reproduces both reported cycles and requires PostgreSQL to abort one side;
+1. builds a database from every migration *preceding* the round-3 fix and
+   reproduces both P1 cycles, requiring PostgreSQL to abort one side;
+2. advances that same database to the reviewed head exactly — round-3 fix
+   present, round-4 fix absent — and reproduces the cross-sale P2 the shared
+   gate correctly let through;
 3. deploys the full chain over that same populated database;
-4. requires the identical interleavings to commit, with the forecasts and stock
-   the canonical formula demands.
+4. requires all three interleavings to commit, with the forecasts and stock the
+   canonical formula demands.
 
 The parent operations are single statements — the shapes the review actually
 described (a product `PUT` changing `consumptionDays`, a correction of
@@ -101,7 +130,9 @@ Assertions after the fixed runs:
 - product cycle: propagated item = `soldAt + 7 days`, updated item =
   `soldAt + 14 days`, stock `97`;
 - sale cycle: propagated item = corrected `soldAt + 5 days`, updated item =
-  corrected `soldAt + 15 days`, stock `97`.
+  corrected `soldAt + 15 days`, stock `97`;
+- cross-sale moves: each moved item lands on its destination sale with a
+  forecast recomputed against that sale's `soldAt`.
 
 ## Local gate results
 
@@ -109,7 +140,7 @@ Local PostgreSQL (docker compose, isolated schema per harness):
 
 | Gate | Result |
 | --- | --- |
-| `db:migrate` (16 migrations) | PASS |
+| `db:migrate` (17 migrations) | PASS |
 | `db:health` | PASS |
 | `test:migration-compat` (clean + legacy) | PASS |
 | `test:customer` | PASS |
