@@ -14,7 +14,8 @@
 - Review round 3 fix (lock-order P1s): `e7cfff0`
 - Review round 4 fix (cross-sale share lock P2): `7b78b92`
 - Review round 5 fix (stale REPEATABLE READ snapshot P2): `f89e225`
-- Review round 6 fix (write vs delete lock order P1): this head
+- Review round 6 fix (write vs delete lock order P1): `2d004f4`
+- Review round 7 fix (old product on reassignment P1): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -167,6 +168,37 @@ The parent direction still locks in the opposite order in places, but it holds
 the cluster's advisory lock exclusively, so no child path can be inside at the
 same time and no cycle with it can form.
 
+## Review round 7 — old product on reassignment P1
+
+The review of `2d004f4` confirmed the round-6 P1 as resolved and reported that
+one supported mutation still reversed the order. Round 6 locked only
+`NEW."productId"`, but TASK-08's `reconcile_product_stock_on_sale_item_update`
+updates *both* products on a `productId` change — restoring stock to the old one
+and charging the new one — so a reassignment reached the old product only after
+the Sale:
+
+| Path | Order |
+| --- | --- |
+| reassignment | locks new `Product`, then `Sale`, then waits for the old `Product` in the AFTER stock trigger |
+| item delete | holds the old `Product` from the restore trigger, then waits for `Sale` in the deferred guard at COMMIT |
+
+Deleting another item of the same sale and old product is legal whenever the
+sale retains an item, and both are the child direction, so the shared gate
+admits them together and one was aborted with `40P01`.
+
+`prisma/migrations/20260819220000_lock_both_products_before_sale` locks every
+Product the statement can touch, lowest id first, before any Sale. That
+completes the child direction's global lock order:
+
+> every `Product` this statement will touch, by ascending id, then every `Sale`
+> it will touch, by ascending id.
+
+Two concurrent reassignments sharing a product request it in the same relative
+order, and the delete path — one product, then one sale — is a prefix of that
+order. All earlier properties are preserved: the sale rows are still locked
+`FOR NO KEY UPDATE`, which rejects a stale `REPEATABLE READ` writer, and a move
+across sales still locks both sale rows lowest id first.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
@@ -181,8 +213,10 @@ defect and the fix on a real database rather than arguing about them:
    `REPEATABLE READ` writer commits a forecast against the superseded `soldAt`;
 4. advances it to the round-5 head exactly and reproduces the write-vs-delete
    cycle that round-5's ordering created;
-5. deploys the full chain over that same populated database;
-6. requires every one of those interleavings to behave correctly — the moves
+5. advances it to the round-6 head exactly and reproduces the
+   reassignment-vs-delete cycle through the old product;
+6. deploys the full chain over that same populated database;
+7. requires every one of those interleavings to behave correctly — the moves
    and updates committing with the forecasts and stock the canonical formula
    demands, and the stale writer rejected with a serialization failure that
    leaves no row behind.
@@ -210,7 +244,9 @@ Assertions after the fixed runs:
   forecast recomputed against that sale's `soldAt`;
 - stale writer: rejected with `40001`, no SaleItem persisted;
 - write vs delete: written item = `soldAt + 10 days`, stock `98` after both
-  the restoration and the quantity change.
+  the restoration and the quantity change;
+- reassignment vs delete: item re-forecast against its new product
+  (`soldAt + 9 days`), old product back to `100`, new product `99`.
 
 ## Local gate results
 
@@ -218,7 +254,7 @@ Local PostgreSQL (docker compose, isolated schema per harness):
 
 | Gate | Result |
 | --- | --- |
-| `db:migrate` (19 migrations) | PASS |
+| `db:migrate` (20 migrations) | PASS |
 | `db:health` | PASS |
 | `test:migration-compat` (clean + legacy) | PASS |
 | `test:customer` | PASS |

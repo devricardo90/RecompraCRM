@@ -22,7 +22,9 @@ round4_findings_status: REVIEW_CLOSED_P2_RESOLVED
 round5_findings: 1 P2 stale REPEATABLE READ soldAt snapshot
 round5_findings_status: REVIEW_CLOSED_P2_RESOLVED
 round6_findings: 1 P1 write-vs-delete lock order
-round6_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
+round7_findings: 1 P1 old product locked after sale on reassignment
+round7_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
 round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
 round3_ci_run: 32263724994
 round3_ci_status: SUCCESS
@@ -30,18 +32,18 @@ evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-09.md
 loop_upgrade_02_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
-next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND6_HEAD
+next_action: WAIT_CI_AND_INDEPENDENT_REVIEW_OF_ROUND7_HEAD
 human_intermediate_approval_required: false
 ```
 
 ## Resume order
 
-1. Inspect PR #14 and confirm the current head is the round-6 product-first lock fix.
+1. Inspect PR #14 and confirm the current head is the round-7 both-products lock fix.
 2. Confirm the Validate run for that exact head is SUCCESS.
 3. Obtain an independent review for that exact head. Do not describe the
-   round-6 P1 as review-closed until that happens. The round-3 P1s and the
-   round-4 and round-5 P2s *are* review-closed: the reviews of `e7cfff0`,
-   `7b78b92` and `f89e225` no longer report them.
+   round-7 P1 as review-closed until that happens. Rounds 3-6 *are*
+   review-closed: the reviews of `e7cfff0`, `7b78b92`, `f89e225` and
+   `2d004f4` no longer report those findings.
 4. If review finds a real defect, stay in RECOVERING, fix only that finding,
    reset stagnation on real progress, validate, and review again.
 5. If review is clean, reconcile evidence/STATE/HANDOFF/ROADMAP, merge PR #14,
@@ -142,6 +144,22 @@ destination lowest id first.
 
 The harness now covers five defect classes, each reproduced at its own
 migration depth.
+
+## Round-7 recovery (this loop)
+
+The review of `2d004f4` cleared the round-6 P1 and reported one more: round 6
+locked only `NEW."productId"`, but TASK-08's reconciliation updates both
+products on a reassignment, so the old product was reached only after the Sale
+and the `Sale -> Product` cycle returned for that mutation.
+
+`prisma/migrations/20260819220000_lock_both_products_before_sale` locks every
+Product the statement can touch, lowest id first, before any Sale. The child
+direction now has a complete global order - every Product by ascending id, then
+every Sale by ascending id - of which the delete path is a prefix. All earlier
+properties are preserved.
+
+The harness now covers six defect classes, each reproduced at its own migration
+depth.
 
 The v1.3 controller, task-level SDD, anti-drift reconciliation and recovery
 policy are part of this branch. TASK-09 was resumed, not restarted.

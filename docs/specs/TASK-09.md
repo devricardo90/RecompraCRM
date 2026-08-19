@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `f89e22521958ae8b1598db1ec31ae1bcef393b0c` (round-5 P2 cleared, one new P1)
-Current technical HEAD: pending push of the round-6 product-first lock fix
-Validation: Validate `32268303782` SUCCESS on `f89e225`; round-6 head revalidated below
+Last independently reviewed HEAD: `2d004f41d6768f72b38b86661c25baadf4e331bd` (round-6 P1 cleared, one new P1)
+Current technical HEAD: pending push of the round-7 both-products lock fix
+Validation: Validate `32271278329` SUCCESS on `2d004f4`; round-7 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,23 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-7 review finding (old product on reassignment)
+
+The review of `2d004f4` reported that a `productId` reassignment still put
+`Sale -> Product` back into the write path. Round 6 locked only
+`NEW."productId"`, but TASK-08's stock reconciliation afterwards updates both
+products - restoring to the old one and charging the new one - so the old
+product was reached only after the Sale.
+
+1. The trigger now locks every Product the statement can touch, lowest id
+   first, before any Sale.
+2. This completes the child direction's global order: every Product by
+   ascending id, then every Sale by ascending id. The delete path, which
+   touches one product then one sale, is a prefix of it.
+3. All earlier properties are preserved: sales are still locked
+   `FOR NO KEY UPDATE` (rejecting stale `REPEATABLE READ` writers) and a move
+   still locks both sale rows lowest id first.
 
 ## Recovery policy for round-6 review finding (write vs delete lock order)
 
@@ -120,6 +137,13 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
+## Validation added for round-7 recovery
+
+- advance the harness database to the round-6 head exactly and reproduce the
+  reassignment-vs-delete cycle through the old product;
+- deploy the full chain and require both to complete, with the item re-forecast
+  against its new product and stock reconciled on both products.
+
 ## Validation added for round-6 recovery
 
 - advance the harness database to the round-5 head exactly and reproduce the
@@ -180,6 +204,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 - legal cross-sale item moves in opposite directions do not deadlock;
 - a REPEATABLE READ writer cannot persist a forecast from a superseded soldAt;
 - forecast writes and TASK-08 stock restoration share one lock order;
+- a productId reassignment locks both products before any sale;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

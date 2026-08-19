@@ -10,6 +10,7 @@ const LOCK_ORDER_MIGRATION = "20260819140000_serialize_forecast_lock_order";
 const SHARE_LOCK_MIGRATION = "20260819160000_drop_redundant_sale_share_lock";
 const SALE_LOCK_ORDER_MIGRATION = "20260819180000_order_sale_locks_for_forecast";
 const PRODUCT_FIRST_MIGRATION = "20260819200000_lock_product_before_sale_for_forecast";
+const BOTH_PRODUCTS_MIGRATION = "20260819220000_lock_both_products_before_sale";
 
 const repoRoot = process.cwd();
 const migrationsRoot = resolve(repoRoot, "prisma", "migrations");
@@ -624,6 +625,52 @@ async function seedWriteVsDeleteCase(client, label, soldAt, consumptionDays) {
 }
 
 
+// One sale holding two items of the same product, plus a second product to
+// reassign one of them to. Deleting the other item is legal and its stock
+// restoration touches the product the reassignment must also charge back.
+async function seedReassignVsDeleteCase(client, label, soldAt, oldConsumptionDays, newConsumptionDays) {
+  const customer = await client.customer.create({ data: { name: `TASK-09 reassign ${label} customer` } });
+  const oldProduct = await client.product.create({
+    data: {
+      name: `TASK-09 reassign ${label} old product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays: oldConsumptionDays,
+    },
+  });
+  const newProduct = await client.product.create({
+    data: {
+      name: `TASK-09 reassign ${label} new product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays: newConsumptionDays,
+    },
+  });
+  const sale = await client.sale.create({
+    data: {
+      customerId: customer.id,
+      soldAt,
+      status: "MODEL_TEST",
+      items: {
+        create: [
+          { productId: oldProduct.id, quantity: 1 },
+          { productId: oldProduct.id, quantity: 1 },
+        ],
+      },
+    },
+    include: { items: { orderBy: { id: "asc" } } },
+  });
+  return {
+    oldProductId: oldProduct.id,
+    newProductId: newProduct.id,
+    reassignedItemId: sale.items[0].id,
+    deletedItemId: sale.items[1].id,
+  };
+}
+
+
 if (!baseUrl) {
   console.error("Sale forecast lock-order tests: FAIL");
   console.error("DATABASE_URL is not set.");
@@ -637,6 +684,7 @@ const preLockOrderProject = createMigrationProjectBefore(LOCK_ORDER_MIGRATION);
 const preShareLockProject = createMigrationProjectBefore(SHARE_LOCK_MIGRATION);
 const preSaleLockOrderProject = createMigrationProjectBefore(SALE_LOCK_ORDER_MIGRATION);
 const preProductFirstProject = createMigrationProjectBefore(PRODUCT_FIRST_MIGRATION);
+const preBothProductsProject = createMigrationProjectBefore(BOTH_PRODUCTS_MIGRATION);
 let client;
 
 try {
@@ -733,7 +781,26 @@ try {
   client = null;
 
   // ---------------------------------------------------------------
-  // 5. Deploy the full chain over that same populated database and require
+  // 5. Advance to the round-6 head (only the new Product locked) and
+  //    reproduce the reassignment-vs-delete cycle through the old Product.
+  // ---------------------------------------------------------------
+  runMigrations(isolatedUrl, preBothProductsProject.schema);
+  client = clientFor(isolatedUrl);
+
+  const brokenReassign = await seedReassignVsDeleteCase(client, "broken", soldAt, 5, 9);
+  await runWriteVsDelete({
+    schemaName,
+    label: "broken_reassign",
+    deleteSql: `DELETE FROM "SaleItem" WHERE "id" = ${integerLiteral(brokenReassign.deletedItemId, "deletedItemId")}`,
+    writeSql: `UPDATE "SaleItem" SET "productId" = ${integerLiteral(brokenReassign.newProductId, "newProductId")} WHERE "id" = ${integerLiteral(brokenReassign.reassignedItemId, "reassignedItemId")}`,
+    expectDeadlock: true,
+  });
+
+  await client.$disconnect();
+  client = null;
+
+  // ---------------------------------------------------------------
+  // 6. Deploy the full chain over that same populated database and require
   //    every one of those interleavings to behave correctly.
   // ---------------------------------------------------------------
   runMigrations(isolatedUrl, schemaPath);
@@ -845,6 +912,30 @@ try {
     `write-vs-delete stock is ${writeDeleteProduct.currentStock}; expected 98`,
   );
 
+  const fixedReassign = await seedReassignVsDeleteCase(client, "fixed", soldAt, 5, 9);
+  await runWriteVsDelete({
+    schemaName,
+    label: "fixed_reassign",
+    deleteSql: `DELETE FROM "SaleItem" WHERE "id" = ${integerLiteral(fixedReassign.deletedItemId, "deletedItemId")}`,
+    writeSql: `UPDATE "SaleItem" SET "productId" = ${integerLiteral(fixedReassign.newProductId, "newProductId")} WHERE "id" = ${integerLiteral(fixedReassign.reassignedItemId, "reassignedItemId")}`,
+    expectDeadlock: false,
+  });
+
+  const reassignedAfter = await client.saleItem.findUniqueOrThrow({ where: { id: fixedReassign.reassignedItemId } });
+  assert(
+    reassignedAfter.productId === fixedReassign.newProductId,
+    "reassignment did not land on the new product",
+  );
+  assert(
+    reassignedAfter.expectedRepurchaseAt?.getTime() === soldAt.getTime() + 9 * DAY_MS,
+    `reassigned forecast is ${reassignedAfter.expectedRepurchaseAt?.toISOString()}; expected soldAt + 9 days`,
+  );
+  // Old product: 100 - 2 items, +1 from the delete, +1 from the reassignment.
+  const oldProductAfter = await client.product.findUniqueOrThrow({ where: { id: fixedReassign.oldProductId } });
+  assert(oldProductAfter.currentStock === 100, `old product stock is ${oldProductAfter.currentStock}; expected 100`);
+  const newProductAfter = await client.product.findUniqueOrThrow({ where: { id: fixedReassign.newProductId } });
+  assert(newProductAfter.currentStock === 99, `new product stock is ${newProductAfter.currentStock}; expected 99`);
+
   console.log("Sale forecast lock-order tests: PASS");
 } catch (error) {
   console.error("Sale forecast lock-order tests: FAIL");
@@ -856,6 +947,7 @@ try {
   rmSync(preShareLockProject.root, { recursive: true, force: true });
   rmSync(preSaleLockOrderProject.root, { recursive: true, force: true });
   rmSync(preProductFirstProject.root, { recursive: true, force: true });
+  rmSync(preBothProductsProject.root, { recursive: true, force: true });
   try {
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
   } catch (error) {

@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 39
+state_version: 40
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -42,7 +42,10 @@ task_09_round4_findings_status: REVIEW_CLOSED_P2_RESOLVED
 task_09_round5_findings: 1 P2 stale REPEATABLE READ soldAt snapshot
 task_09_round5_findings_status: REVIEW_CLOSED_P2_RESOLVED
 task_09_round6_findings: 1 P1 write-vs-delete lock order
-task_09_round6_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round6_findings_status: REVIEW_CLOSED_P1_RESOLVED
+task_09_round7_findings: 1 P1 old product locked after sale on reassignment
+task_09_round7_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round7_migration: prisma/migrations/20260819220000_lock_both_products_before_sale
 task_09_round6_migration: prisma/migrations/20260819200000_lock_product_before_sale_for_forecast
 task_09_round5_migration: prisma/migrations/20260819180000_order_sale_locks_for_forecast
 task_09_round4_migration: prisma/migrations/20260819160000_drop_redundant_sale_share_lock
@@ -56,9 +59,9 @@ task_spec: docs/specs/TASK-09.md
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND6_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: PUSH_ROUND7_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-19T16:20:00Z"
+updated_at: "2026-08-19T16:50:00Z"
 updated_by: Claude Code
 ```
 
@@ -131,6 +134,17 @@ properties are untouched: the sales are still locked `FOR NO KEY UPDATE`, which
 is what rejects a stale `REPEATABLE READ` writer, and a move still locks source
 and destination lowest id first. The child direction now has one global order -
 Product, then Sale by ascending id.
+
+Validate `32271278329` was SUCCESS on `2d004f4`. The review of that head cleared
+the round-6 P1 and reported one more: round 6 locked only `NEW."productId"`,
+while TASK-08's reconciliation updates both products on a reassignment, so the
+old product was reached only after the Sale and the cycle returned for that
+mutation.
+
+`20260819220000_lock_both_products_before_sale` locks every Product the
+statement can touch, lowest id first, before any Sale. The child direction now
+has a complete global order - every Product by ascending id, then every Sale by
+ascending id - of which the delete path is a prefix.
 
 The harness reproduces each defect at the exact migration depth it lives at and
 requires correct behaviour on the full chain. All local gates are green.
