@@ -4,9 +4,9 @@ Status: IMPLEMENTED_VALIDATED_WAITING_REVIEW
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-08
 PR: #14
-Last independently reviewed HEAD: `7b78b92ede4c3520016b1b4a14a719dda533650d` (round-4 P2 cleared, one new P2)
-Current technical HEAD: pending push of the round-5 sale-lock-order fix
-Validation: Validate `32265214581` SUCCESS on `7b78b92`; round-5 head revalidated below
+Last independently reviewed HEAD: `f89e22521958ae8b1598db1ec31ae1bcef393b0c` (round-5 P2 cleared, one new P1)
+Current technical HEAD: pending push of the round-6 product-first lock fix
+Validation: Validate `32268303782` SUCCESS on `f89e225`; round-6 head revalidated below
 
 ## Outcome
 
@@ -30,6 +30,24 @@ A multi-product sale has an independent forecast for each item.
 - customer history UI (TASK-11);
 - repurchase dashboard (TASK-12);
 - predictive AI or messaging.
+
+## Recovery policy for round-6 review finding (write vs delete lock order)
+
+The review of `f89e225` reported that round-5's Sale-before-Product order
+deadlocks against the delete path. Both operations are legal and both are the
+child direction, so the shared gate admits them together.
+
+1. The delete path reaches `Product` first (TASK-08 restores stock in an
+   `AFTER DELETE` trigger) and `Sale` last (TASK-07's guard runs at COMMIT).
+   Neither half can be reordered, so `Product` before `Sale` is the only order
+   both paths can share and the forecast trigger adopts it.
+2. Everything round 5 established stays: the sales are still locked
+   `FOR NO KEY UPDATE` (which is what rejects a stale `REPEATABLE READ`
+   writer), and a move still locks source and destination lowest id first.
+3. The cluster now has one global child-direction order: `Product`, then
+   `Sale` by ascending id.
+4. The parent direction locks in the opposite order in places, but it holds
+   the cluster lock exclusively, so no child can be inside at the same time.
 
 ## Recovery policy for round-5 review finding (stale REPEATABLE READ snapshot)
 
@@ -102,6 +120,14 @@ against the forecast read plus the TASK-07 "at least one item" guard).
 2. A historical row accepted before TASK-09 must not make the migration undeployable only because its computed forecast is outside the JavaScript/Prisma DateTime range. Legacy backfill uses a compatibility-only wrapper that returns NULL only for the strict helper's domain-overflow error. New or subsequently modified writes continue to use the strict helper and are rejected when unrepresentable.
 3. Representable legacy rows are still backfilled with the canonical formula; the compatibility policy does not weaken normal runtime correctness.
 
+## Validation added for round-6 recovery
+
+- advance the harness database to the round-5 head exactly and reproduce the
+  write-vs-delete cycle, requiring PostgreSQL to abort one side;
+- deploy the full chain and require both to complete, with the written item
+  re-forecast and the product stock reconciled by both the delete and the
+  quantity change.
+
 ## Validation added for round-5 recovery
 
 - advance the harness database to the round-4 head exactly and prove the stale
@@ -153,6 +179,7 @@ against the forecast read plus the TASK-07 "at least one item" guard).
   order, while SaleItem writes stay concurrent with each other;
 - legal cross-sale item moves in opposite directions do not deadlock;
 - a REPEATABLE READ writer cannot persist a forecast from a superseded soldAt;
+- forecast writes and TASK-08 stock restoration share one lock order;
 - full Validate is green;
 - independent review has no blocking findings;
 - STATE/HANDOFF/evidence are reconciled before merge.

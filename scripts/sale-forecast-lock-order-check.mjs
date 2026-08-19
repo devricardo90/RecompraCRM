@@ -9,6 +9,7 @@ import { PrismaClient } from "@prisma/client";
 const LOCK_ORDER_MIGRATION = "20260819140000_serialize_forecast_lock_order";
 const SHARE_LOCK_MIGRATION = "20260819160000_drop_redundant_sale_share_lock";
 const SALE_LOCK_ORDER_MIGRATION = "20260819180000_order_sale_locks_for_forecast";
+const PRODUCT_FIRST_MIGRATION = "20260819200000_lock_product_before_sale_for_forecast";
 
 const repoRoot = process.cwd();
 const migrationsRoot = resolve(repoRoot, "prisma", "migrations");
@@ -523,6 +524,106 @@ async function seedStaleSnapshotCase(client, label, soldAt, consumptionDays) {
 }
 
 
+/**
+ * Reproduces the reported write-vs-delete cycle. An insert or quantity update
+ * and the deletion of another item of the same sale and product are both legal
+ * and both the child direction, so the shared advisory gate admits them
+ * together.
+ *
+ * The delete path reaches Product first (TASK-08 restores stock in an AFTER
+ * DELETE trigger) and Sale last (TASK-07's guard runs at COMMIT), and neither
+ * can be reordered. So if the forecast trigger locks Sale before Product, the
+ * writer holds the Sale row and waits for the Product row while the delete
+ * holds Product and waits, at commit, for that Sale.
+ */
+async function runWriteVsDelete({ schemaName, label, deleteSql, writeSql, expectDeadlock }) {
+  const deleteClient = clientFor(urlForSchema(schemaName, true));
+  const writeClient = clientFor(urlForSchema(schemaName, true));
+  const monitor = clientFor(urlForSchema(schemaName, true));
+
+  const writeMarker = `task09_write_vs_delete_${label}`;
+  const deleted = deferred();
+  const writerParked = deferred();
+
+  try {
+    const deleteRun = deleteClient.$transaction(async (tx) => {
+      // Holds the Product row through TASK-08's stock restoration; the Sale
+      // row is only touched by the deferred guard at COMMIT.
+      await tx.$executeRawUnsafe(deleteSql);
+      deleted.resolve();
+      await writerParked.promise;
+    }, TX_OPTIONS);
+
+    await deleted.promise;
+
+    const writeRun = writeClient.$transaction(
+      async (tx) => tx.$executeRawUnsafe(`/* ${writeMarker} */ ${writeSql}`),
+      TX_OPTIONS,
+    );
+    await waitUntilBlocked(monitor, writeMarker);
+
+    // Letting the delete commit is what makes its deferred guard reach for the
+    // Sale row - the moment the cycle closes, if there is one.
+    writerParked.resolve();
+
+    if (expectDeadlock) {
+      const [deleteResult, writeResult] = await Promise.allSettled([deleteRun, writeRun]);
+      const failures = [deleteResult, writeResult].filter((entry) => entry.status === "rejected");
+      assert(
+        failures.some((entry) => isDeadlock(entry.reason)),
+        `${label}: expected a deadlock between the write and delete paths before the fix`,
+      );
+      return;
+    }
+
+    // With Product locked first the writer never holds the Sale row while
+    // waiting, so the delete commits and releases it.
+    await deleteRun;
+    await writeRun;
+  } finally {
+    writerParked.resolve();
+    deleted.resolve();
+    await monitor.$disconnect();
+    await writeClient.$disconnect();
+    await deleteClient.$disconnect();
+  }
+}
+
+// One sale holding two items of the same product, so deleting one is legal and
+// its stock restoration touches the product the other item is writing.
+async function seedWriteVsDeleteCase(client, label, soldAt, consumptionDays) {
+  const customer = await client.customer.create({ data: { name: `TASK-09 write-vs-delete ${label} customer` } });
+  const product = await client.product.create({
+    data: {
+      name: `TASK-09 write-vs-delete ${label} product`,
+      unit: "un",
+      currentStock: 100,
+      minimumStock: 1,
+      consumptionDays,
+    },
+  });
+  const sale = await client.sale.create({
+    data: {
+      customerId: customer.id,
+      soldAt,
+      status: "MODEL_TEST",
+      items: {
+        create: [
+          { productId: product.id, quantity: 1 },
+          { productId: product.id, quantity: 1 },
+        ],
+      },
+    },
+    include: { items: { orderBy: { id: "asc" } } },
+  });
+  return {
+    productId: product.id,
+    writtenItemId: sale.items[0].id,
+    deletedItemId: sale.items[1].id,
+  };
+}
+
+
 if (!baseUrl) {
   console.error("Sale forecast lock-order tests: FAIL");
   console.error("DATABASE_URL is not set.");
@@ -535,6 +636,7 @@ const admin = new PrismaClient();
 const preLockOrderProject = createMigrationProjectBefore(LOCK_ORDER_MIGRATION);
 const preShareLockProject = createMigrationProjectBefore(SHARE_LOCK_MIGRATION);
 const preSaleLockOrderProject = createMigrationProjectBefore(SALE_LOCK_ORDER_MIGRATION);
+const preProductFirstProject = createMigrationProjectBefore(PRODUCT_FIRST_MIGRATION);
 let client;
 
 try {
@@ -612,7 +714,26 @@ try {
   client = null;
 
   // ---------------------------------------------------------------
-  // 4. Deploy the full chain over that same populated database and require
+  // 4. Advance to the round-5 head (Sale locked before Product) and
+  //    reproduce the write-vs-delete cycle that ordering created.
+  // ---------------------------------------------------------------
+  runMigrations(isolatedUrl, preProductFirstProject.schema);
+  client = clientFor(isolatedUrl);
+
+  const brokenWriteDelete = await seedWriteVsDeleteCase(client, "broken", soldAt, 5);
+  await runWriteVsDelete({
+    schemaName,
+    label: "broken",
+    deleteSql: `DELETE FROM "SaleItem" WHERE "id" = ${integerLiteral(brokenWriteDelete.deletedItemId, "deletedItemId")}`,
+    writeSql: `UPDATE "SaleItem" SET "quantity" = 2 WHERE "id" = ${integerLiteral(brokenWriteDelete.writtenItemId, "writtenItemId")}`,
+    expectDeadlock: true,
+  });
+
+  await client.$disconnect();
+  client = null;
+
+  // ---------------------------------------------------------------
+  // 5. Deploy the full chain over that same populated database and require
   //    every one of those interleavings to behave correctly.
   // ---------------------------------------------------------------
   runMigrations(isolatedUrl, schemaPath);
@@ -704,6 +825,26 @@ try {
     expectStale: false,
   });
 
+  const fixedWriteDelete = await seedWriteVsDeleteCase(client, "fixed", soldAt, 5);
+  await runWriteVsDelete({
+    schemaName,
+    label: "fixed",
+    deleteSql: `DELETE FROM "SaleItem" WHERE "id" = ${integerLiteral(fixedWriteDelete.deletedItemId, "deletedItemId")}`,
+    writeSql: `UPDATE "SaleItem" SET "quantity" = 2 WHERE "id" = ${integerLiteral(fixedWriteDelete.writtenItemId, "writtenItemId")}`,
+    expectDeadlock: false,
+  });
+
+  const writtenAfter = await client.saleItem.findUniqueOrThrow({ where: { id: fixedWriteDelete.writtenItemId } });
+  assert(
+    writtenAfter.expectedRepurchaseAt?.getTime() === soldAt.getTime() + 2 * 5 * DAY_MS,
+    `write-vs-delete forecast is ${writtenAfter.expectedRepurchaseAt?.toISOString()}; expected soldAt + 10 days`,
+  );
+  const writeDeleteProduct = await client.product.findUniqueOrThrow({ where: { id: fixedWriteDelete.productId } });
+  assert(
+    writeDeleteProduct.currentStock === 98,
+    `write-vs-delete stock is ${writeDeleteProduct.currentStock}; expected 98`,
+  );
+
   console.log("Sale forecast lock-order tests: PASS");
 } catch (error) {
   console.error("Sale forecast lock-order tests: FAIL");
@@ -714,6 +855,7 @@ try {
   rmSync(preLockOrderProject.root, { recursive: true, force: true });
   rmSync(preShareLockProject.root, { recursive: true, force: true });
   rmSync(preSaleLockOrderProject.root, { recursive: true, force: true });
+  rmSync(preProductFirstProject.root, { recursive: true, force: true });
   try {
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS ${quoteSchemaName(schemaName)} CASCADE`);
   } catch (error) {

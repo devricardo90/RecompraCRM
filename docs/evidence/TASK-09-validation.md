@@ -13,7 +13,8 @@
 - Review round 2 fixes (legacy backfill + lock upgrade P1s): `a352de7`
 - Review round 3 fix (lock-order P1s): `e7cfff0`
 - Review round 4 fix (cross-sale share lock P2): `7b78b92`
-- Review round 5 fix (stale REPEATABLE READ snapshot P2): this head
+- Review round 5 fix (stale REPEATABLE READ snapshot P2): `f89e225`
+- Review round 6 fix (write vs delete lock order P1): this head
 
 Canonical rule covered:
 `expectedRepurchaseAt = Sale.soldAt + SaleItem.quantity × Product.consumptionDays days`,
@@ -135,6 +136,37 @@ The trigger fires only on INSERT and on `UPDATE OF quantity/productId/saleId`,
 never on DELETE, so TASK-07's concurrent removal of two items of one sale keeps
 arbitrating through that guard's own update rather than through this lock.
 
+## Review round 6 — write vs delete lock order P1
+
+The review of `f89e225` confirmed the round-5 P2 as resolved and reported that
+round-5's own ordering created a new cycle. Locking Sale before reading Product
+put `Sale → Product` in the write path, while the delete path already ran
+`Product → Sale`:
+
+| Path | Order |
+| --- | --- |
+| forecast write (insert / quantity update) | locks `Sale`, then reads `Product` `FOR NO KEY UPDATE` |
+| item delete | `SaleItem_restores_product_stock_on_delete` updates `Product` at once; `SaleItem_preserves_sale_items` updates `Sale` at COMMIT |
+
+So an insert or quantity update racing the deletion of another item of the same
+sale and product deadlocked. Both are legal whenever the sale retains an item,
+and both are the child direction, so the shared gate admits them together by
+design.
+
+The delete path cannot be reordered — its Product update is an `AFTER DELETE`
+trigger and its Sale update is a deferred constraint trigger, both fixed by
+construction. `Product` before `Sale` is therefore the only order the two paths
+can share, and
+`prisma/migrations/20260819200000_lock_product_before_sale_for_forecast` adopts
+it. Round 5's other two properties are untouched: the sales are still locked
+`FOR NO KEY UPDATE`, which is what rejects a stale `REPEATABLE READ` writer, and
+a move still locks source and destination lowest id first. The child direction
+now has one global order — `Product`, then `Sale` by ascending id.
+
+The parent direction still locks in the opposite order in places, but it holds
+the cluster's advisory lock exclusively, so no child path can be inside at the
+same time and no cycle with it can form.
+
 ## Deterministic validation
 
 `scripts/sale-forecast-lock-order-check.mjs`, wired into
@@ -147,8 +179,10 @@ defect and the fix on a real database rather than arguing about them:
    cross-sale P2 the shared gate correctly let through;
 3. advances it to the round-4 head exactly and proves the stale
    `REPEATABLE READ` writer commits a forecast against the superseded `soldAt`;
-4. deploys the full chain over that same populated database;
-5. requires every one of those interleavings to behave correctly — the moves
+4. advances it to the round-5 head exactly and reproduces the write-vs-delete
+   cycle that round-5's ordering created;
+5. deploys the full chain over that same populated database;
+6. requires every one of those interleavings to behave correctly — the moves
    and updates committing with the forecasts and stock the canonical formula
    demands, and the stale writer rejected with a serialization failure that
    leaves no row behind.
@@ -174,7 +208,9 @@ Assertions after the fixed runs:
   corrected `soldAt + 15 days`, stock `97`;
 - cross-sale moves: each moved item lands on its destination sale with a
   forecast recomputed against that sale's `soldAt`;
-- stale writer: rejected with `40001`, no SaleItem persisted.
+- stale writer: rejected with `40001`, no SaleItem persisted;
+- write vs delete: written item = `soldAt + 10 days`, stock `98` after both
+  the restoration and the quantity change.
 
 ## Local gate results
 
@@ -182,7 +218,7 @@ Local PostgreSQL (docker compose, isolated schema per harness):
 
 | Gate | Result |
 | --- | --- |
-| `db:migrate` (18 migrations) | PASS |
+| `db:migrate` (19 migrations) | PASS |
 | `db:health` | PASS |
 | `test:migration-compat` (clean + legacy) | PASS |
 | `test:customer` | PASS |

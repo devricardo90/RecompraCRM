@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 38
+state_version: 39
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -40,7 +40,10 @@ task_09_round3_findings_status: REVIEW_CLOSED_BOTH_P1_RESOLVED
 task_09_round4_findings: 1 P2 cross-sale item move deadlock
 task_09_round4_findings_status: REVIEW_CLOSED_P2_RESOLVED
 task_09_round5_findings: 1 P2 stale REPEATABLE READ soldAt snapshot
-task_09_round5_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round5_findings_status: REVIEW_CLOSED_P2_RESOLVED
+task_09_round6_findings: 1 P1 write-vs-delete lock order
+task_09_round6_findings_status: FIXED_LOCALLY_AWAITING_CI_AND_REVIEW
+task_09_round6_migration: prisma/migrations/20260819200000_lock_product_before_sale_for_forecast
 task_09_round5_migration: prisma/migrations/20260819180000_order_sale_locks_for_forecast
 task_09_round4_migration: prisma/migrations/20260819160000_drop_redundant_sale_share_lock
 task_09_round3_head: e7cfff0980954bab06db5da5ebe98e0050083904
@@ -53,9 +56,9 @@ task_spec: docs/specs/TASK-09.md
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: PUSH_ROUND5_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
+next_action: PUSH_ROUND6_FIX_THEN_WAIT_CI_AND_INDEPENDENT_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-19T15:50:00Z"
+updated_at: "2026-08-19T16:20:00Z"
 updated_by: Claude Code
 ```
 
@@ -115,6 +118,19 @@ and the stale snapshot is still served. What reconciles both rounds is a fixed
 lock order - a move touches two sale rows, so the trigger locks both with
 `FOR NO KEY UPDATE`, lowest id first, and opposite-direction moves then wait
 instead of deadlocking.
+
+Validate `32268303782` was SUCCESS on `f89e225`. The review of that head then
+cleared the round-5 P2 and reported one P1: round-5's own Sale-before-Product
+order deadlocks against the delete path, which reaches Product first (TASK-08
+stock restoration, AFTER DELETE) and Sale last (TASK-07 guard, at COMMIT) and
+cannot be reordered.
+
+`20260819200000_lock_product_before_sale_for_forecast` therefore locks Product
+before Sale, the only order both child paths can share. Round-5's other
+properties are untouched: the sales are still locked `FOR NO KEY UPDATE`, which
+is what rejects a stale `REPEATABLE READ` writer, and a move still locks source
+and destination lowest id first. The child direction now has one global order -
+Product, then Sale by ascending id.
 
 The harness reproduces each defect at the exact migration depth it lives at and
 requires correct behaviour on the full chain. All local gates are green.
