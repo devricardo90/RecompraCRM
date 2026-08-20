@@ -175,6 +175,14 @@ AC9.1. A extração não altera o comportamento visível de `/products`: o selo
 ponto de igualdade `currentStock == minimumStock`, e isso é provado por cenário
 Playwright próprio — os harnesses existentes não renderizam essa tela.
 
+AC9.2. O compartilhamento é provado **estruturalmente**, não por comportamento.
+Igualdade visível não distingue "as duas telas usam a mesma função" de
+"`ProductWorkspace` manteve o seu `isLowStock` local e `/inventory` escreveu uma
+comparação idêntica" — o segundo caso passa em todos os cenários e viola a AC9,
+mantendo exatamente o risco R1 de regra duplicada. O gate é um teste de fonte:
+ambos os consumidores importam o helper canônico, e nenhuma comparação
+`currentStock <= minimumStock` sobrevive fora dele.
+
 AC10. Mobile `390x844`, landscape `844x390` e desktop `1440x900` não apresentam overflow horizontal nem ação principal inacessível.
 
 AC13. `/inventory` é alcançável pela navegação visível de `/`, `/products` e
@@ -197,7 +205,10 @@ Antes de abrir a implementação para merge:
 - `npm run db:validate`;
 - migrations existentes aplicadas em PostgreSQL descartável;
 - harness de Product e Sale/Stock continua verde;
-- teste direcionado da projeção de alertas cobre AC1–AC6 e ordenação;
+- teste direcionado da projeção de alertas cobre AC1–AC6 e ordenação, incluindo
+  desempate por `id` entre déficits iguais;
+- teste de fonte da AC9.2: `/products` e `/inventory` importam o mesmo helper e
+  não existe comparação `currentStock <= minimumStock` duplicada fora dele;
 - Product API integration continua verde;
 - `npm run test:loop-controller`;
 - lint;
@@ -211,15 +222,25 @@ Antes de abrir a implementação para merge:
 
 Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
 
-1. **desktop `1440x900`** — lista com produto abaixo, igual e acima do mínimo;
-   apenas os dois primeiros aparecem; contagem correta; **e a ordem renderizada é
-   asserida**, não só a pertinência. As fixtures são construídas para que a ordem
-   de `GET /api/products` (`updatedAt DESC, name ASC`) **conflite** com a ordem por
-   urgência: sem isso, uma implementação que renderize o array da API na ordem em
-   que ele chega passaria com a AC5 quebrada. A asserção é sobre a sequência
-   visível, por déficit crescente e depois `id`;
+1. **desktop `1440x900`** — fixtures com produto abaixo, **dois com déficit
+   igual entre si**, um exatamente igual ao mínimo e um acima. Apenas os de
+   alerta aparecem, com contagem correta, **e a sequência visível é asserida**:
+
+   - a ordem de `GET /api/products` (`updatedAt DESC, name ASC`) é construída para
+     **conflitar** com a ordem por urgência, senão renderizar o array na ordem em
+     que chega passaria com a AC5 quebrada;
+   - os dois de déficit igual entram com ordem de API **oposta** aos seus `id`,
+     porque é a única forma de exercitar a segunda metade da AC5: com déficits
+     todos distintos, o desempate por `id` nunca é consultado e uma implementação
+     que ordene só por déficit passa;
+
+   e o conteúdo de pelo menos um alerta é asserido — nome, **unidade**, **estoque
+   mínimo** e a indicação textual de estoque baixo — porque uma tela que
+   mostrasse só nomes e o total satisfaria pertinência, contagem e ordem sem
+   entregar o conteúdo exigido;
 2. **mobile `390x844`** — lista de alertas legível, navegação acessível e sem overflow horizontal;
-3. **landscape `844x390`** — resumo e primeiro alerta acessíveis sem corte de ação essencial;
+3. **landscape `844x390`** — resumo e primeiro alerta acessíveis sem corte de ação essencial, **e a mesma medição de overflow**;
+3.1. **desktop `1440x900`** — a medição de overflow também é feita aqui. A AC10 cobre os três viewports, mas só o mobile media: landscape e desktop podiam ficar com `scrollWidth > clientWidth` com todos os gates verdes;
 4. **empty state** — nenhum produto em alerta;
 5. **error/retry** — falha controlada de leitura mostra erro, retry recupera;
 6. **venda → alerta** — produto começa acima do mínimo, venda é registrada pelo fluxo canônico, dashboard é aberto/recarregado e passa a mostrar o produto com o estoque reduzido;
@@ -241,7 +262,13 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
    os gates verdes. O cenário abre `/products` com produtos abaixo, **igual** e
    acima do mínimo e exige selo exatamente nos dois primeiros e contador igual a
    `2`, provando o mesmo predicado compartilhado no ponto de igualdade;
-10. console sem erro crítico.
+10. **acessibilidade observável** — travessia por teclado alcança os controles
+    principais com foco **visível** (indicador de foco presente, não removido por
+    CSS), e a página expõe os landmarks e títulos que a seção de acessibilidade
+    exige: um `main`, uma `nav` e hierarquia de títulos utilizável. Sem este
+    cenário, uma página construída com contêineres genéricos e `outline: none`
+    passaria em todos os checks funcionais, de viewport e de console;
+11. console sem erro crítico.
 
 Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
 
