@@ -128,7 +128,8 @@ Um erro de rede/banco nunca pode ser apresentado como lista vazia.
 - foco visível em links/botões;
 - status não pode depender apenas de cor;
 - títulos e landmarks devem permitir navegação por leitor de tela;
-- touch targets relevantes com dimensão coerente com as telas já entregues.
+- touch targets relevantes com no mínimo `44px` de altura renderizada, o mesmo
+  `min-h-11` já usado nas telas entregues, e medidos por Playwright em `390x844`.
 
 ## Fronteiras de domínio
 
@@ -237,7 +238,12 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
    e o conteúdo de pelo menos um alerta é asserido — nome, **unidade**, **estoque
    mínimo** e a indicação textual de estoque baixo — porque uma tela que
    mostrasse só nomes e o total satisfaria pertinência, contagem e ordem sem
-   entregar o conteúdo exigido;
+   entregar o conteúdo exigido.
+
+   O resumo também é asserido: além do número, precisa do **texto que explica o
+   critério** `estoque atual <= estoque mínimo`, exigido no conteúdo do
+   dashboard. Sem essa asserção, um resumo puramente numérico passaria em todos
+   os gates enquanto o usuário fica sem saber por que aqueles produtos estão ali;
 2. **mobile `390x844`** — lista de alertas legível, navegação acessível e sem overflow horizontal;
 3. **landscape `844x390`** — resumo e primeiro alerta acessíveis sem corte de ação essencial, **e a mesma medição de overflow**;
 3.1. **desktop `1440x900`** — a medição de overflow também é feita aqui. A AC10 cobre os três viewports, mas só o mobile media: landscape e desktop podiam ficar com `scrollWidth > clientWidth` com todos os gates verdes;
@@ -250,11 +256,12 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
    lista aparece. Sem este cenário, uma implementação que mostrasse falso "zero
    alertas" durante todo carregamento passaria em todos os outros, porque todos
    esperam a resposta final;
-8. **entrada pela navegação** — o cenário chega a `/inventory` clicando no link
-   **Estoque** a partir de `/products`, e confirma que `/`, `/products` e `/sales`
-   continuam expondo os destinos que já tinham. Abrir `/inventory` por URL direta
-   não prova a AC13: a rota poderia estar inacessível pela interface com todos os
-   gates verdes;
+8. **entrada pela navegação, das três telas** — o cenário chega a `/inventory`
+   clicando no link **Estoque** a partir de `/`, de `/products` e de `/sales`,
+   uma de cada vez, e confirma que cada uma continua expondo os destinos que já
+   tinha. Clicar só de `/products` não prova a AC13: uma implementação que
+   adicionasse o link apenas ali passaria, e as outras duas telas ficariam sem
+   acesso ao dashboard. Abrir `/inventory` por URL direta não prova nada disso;
 9. **`/products` não regride** — a AC9 obriga extrair `isLowStock` de
    `ProductWorkspace`, então `/products` muda por construção. Nenhum outro
    cenário abre essa tela, e os harnesses de Product e Sale/Stock não renderizam
@@ -267,7 +274,14 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
     CSS), e a página expõe os landmarks e títulos que a seção de acessibilidade
     exige: um `main`, uma `nav` e hierarquia de títulos utilizável. Sem este
     cenário, uma página construída com contêineres genéricos e `outline: none`
-    passaria em todos os checks funcionais, de viewport e de console;
+    passaria em todos os checks funcionais, de viewport e de console.
+
+    O mesmo cenário mede os **touch targets** em `390x844`: os controles
+    principais da página — link de navegação e ação `Tentar novamente` — precisam
+    de altura renderizada de no mínimo **44 px**. O número não é arbitrário: é o
+    `min-h-11` que as telas já entregues usam como alvo padrão. Sem medir, um
+    controle de poucos pixels continuaria focável por teclado, legível e sem
+    overflow, passando em tudo que já está listado;
 11. console sem erro crítico.
 
 Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
