@@ -231,8 +231,10 @@ verificável:
   **não existiu** naquele dia — verificado: `2018-11-04T03:00:00Z` é renderizado
   como `01:00` local. Isso atinge inclusive entrada **só-data**, não apenas
   data-hora sem offset.
-- **2019-02-17**: o relógio voltou, então horários locais da sobreposição
-  ocorreram **duas vezes**.
+- **2019-02-16**: o relógio voltou no fim daquele dia local, então a hora de
+  parede `23:00`–`23:59` de **16/02** ocorreu **duas vezes** — verificado:
+  `2019-02-17T01:30Z` e `2019-02-17T02:30Z` renderizam ambos como
+  `16/02/2019 23:30`. Os horários locais de **17/02** não são ambíguos.
 
 Deixar isso indefinido faria o instante armazenado depender da implementação da
 conversão, e o instante afeta ordenação e previsão. Regra explícita, determinística
@@ -241,7 +243,7 @@ nos dois casos:
 | Caso | Regra |
 | --- | --- |
 | lacuna (horário local inexistente) | usar o **primeiro instante válido após a lacuna** |
-| sobreposição (horário local ambíguo) | usar a **primeira ocorrência**, isto é, o offset ainda vigente antes da virada |
+| sobreposição (horário local ambíguo) | usar a **primeira ocorrência**, isto é, o offset ainda vigente antes da virada — local `2019-02-16T23:30` ⇒ `2019-02-17T01:30Z`, não `02:30Z` |
 | entrada com offset explícito | não se aplica — o instante já está determinado |
 
 Assim `soldAt: "2018-11-04"` é armazenado como `2018-11-04T03:00:00Z`, que é
@@ -260,16 +262,36 @@ mandou só a data" e "o chamador mandou esse instante exato". Reescrever essas
 linhas chutando intenção seria pior do que exibi-las pelo instante que de fato
 guardam.
 
-Isso é seguro hoje por um fato verificável, não por otimismo: **não existe
-ambiente durável** — a TASK-16 (deploy de homologação) ainda está pendente no
-roadmap, e os bancos de desenvolvimento e de CI são recriados a cada execução.
-Não há, portanto, linha pré-mudança persistente para corromper.
+Uma versão anterior deste spec afirmava que nenhuma linha pré-mudança poderia
+persistir, porque a TASK-16 (deploy de homologação) ainda está pendente. **Essa
+afirmação estava errada** e o repositório a contradiz:
 
-A evidência mesmo assim precisa cobrir uma linha gravada à meia-noite UTC,
-exigindo que ela seja exibida pelo dia de calendário do **instante armazenado**.
-O objetivo é que esse comportamento seja consciente e verificado, não descoberto
-depois. Se um ambiente durável passar a existir antes desta task, esta seção
-precisa ser revisitada.
+- `docker-compose.yml` monta o volume nomeado `postgres_data`;
+- `npm run db:down` executa apenas `docker compose down`, que preserva o volume;
+- o `README.md` diz isso explicitamente e indica `docker compose down -v` como o
+  comando separado que de fato apaga.
+
+Ou seja, o banco **de desenvolvimento persiste** entre execuções. Quem registrou
+vendas só-data antes desta mudança mantém linhas à meia-noite UTC e verá a data
+exibida deslocar quando o formatador compartilhado entrar. O ambiente durável que
+importa aqui não é o de produção — é o local.
+
+Decisão revista, sem migração automática e sem a premissa falsa:
+
+1. **não há migração corretiva automática**, porque a intenção continua
+   irrecuperável — um `T00:00:00Z` gravado não distingue "o chamador mandou só a
+   data" de "o chamador mandou esse instante";
+2. **exige-se reset explícito** do banco local para quem tiver vendas
+   pré-mudança: `docker compose down -v` seguido de `npm run db:setup`. Isso vai
+   documentado na evidência da task e no README, como passo consciente e não como
+   efeito colateral;
+3. a evidência cobre uma linha gravada à meia-noite UTC, exigindo que ela seja
+   exibida pelo dia de calendário do **instante armazenado** — comportamento
+   declarado, verificado, e não descoberto depois.
+
+Se e quando existir ambiente compartilhado ou de produção com dados reais, um
+reset deixa de ser aceitável e esta seção precisa de uma estratégia de migração
+antes de qualquer mudança de fuso.
 
 ## Assumptions
 
@@ -286,7 +308,7 @@ precisa ser revisitada.
 | --- | --- |
 | L1 | Renomear um produto altera o nome exibido em vendas passadas; não há snapshot histórico de nome. Fora do escopo por tocar `SaleItem`, centro da malha de triggers TASK-07/08/09. |
 | L2 | Sem preço no histórico enquanto o registro de venda não capturar preço. |
-| L3 | Vendas gravadas antes da regra de fuso permanecem no instante original e podem exibir o dia anterior. Sem migração porque a intenção é irrecuperável; seguro hoje porque não existe ambiente durável (TASK-16 pendente). |
+| L3 | Vendas gravadas antes da regra de fuso permanecem no instante original e podem exibir o dia anterior. Sem migração automática porque a intenção é irrecuperável; o banco local **persiste** (volume nomeado `postgres_data`), então exige-se reset explícito documentado. |
 
 ## Fora do escopo
 
@@ -341,9 +363,10 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
     negócio e armazenado como `17:30Z`, não como `14:30Z` — sem este caso uma
     implementação passaria mantendo o comportamento atual;
 14. `soldAt` com offset explícito é respeitado como instante exato;
-15. horário de verão: `2018-11-04` (lacuna, meia-noite inexistente) resolve para o
-    primeiro instante válido e exibe `04/11/2018`; um horário da sobreposição de
-    `2019-02-17` resolve para a primeira ocorrência;
+15. horário de verão, com instantes concretos: `2018-11-04` só-data (lacuna,
+    meia-noite inexistente) resolve para `2018-11-04T03:00:00Z` e exibe
+    `04/11/2018`; local `2019-02-16T23:30` (sobreposição) resolve para a primeira
+    ocorrência `2019-02-17T01:30:00Z`, **não** `2019-02-17T02:30:00Z`;
 16. uma linha gravada à meia-noite UTC **antes** desta regra é exibida pelo dia de
     calendário do instante armazenado, comportamento declarado e não acidental;
 17. renomear um produto reflete no histórico — comportamento declarado em L1,
