@@ -140,6 +140,13 @@ O contrato é:
    cursor.id`;
 4. `cursor` inexistente ⇒ `400`.
 
+**Índice exigido.** O seek lexicográfico precisa de índice na mesma ordem, senão
+`limit` limita o tamanho da resposta mas não o trabalho repetido: hoje `Sale` tem
+apenas `@@index([customerId])`, então cada página faria varredura e ordenação das
+vendas do cliente. Esta task adiciona `@@index([customerId, soldAt, id])` por
+migration. É índice aditivo — não toca dados nem a malha de triggers das
+TASK-07/08/09.
+
 **Invariante sob escrita concorrente**, enunciada de forma não contraditória: uma
 travessia cobre **exatamente uma vez cada venda do conjunto existente quando a
 travessia começou**. Uma venda registrada no meio da navegação, com `soldAt` mais
@@ -277,10 +284,16 @@ suposta, por três razões concretas:
    estabilizar;
 2. mudar a fórmula **reescreveria silenciosamente toda previsão já gravada**,
    inclusive as que a TASK-09 validou;
-3. o Brasil aboliu o horário de verão em 2019, então para qualquer venda de 2019
-   em diante o offset é constante `−03` e duração fixa **coincide** com dia de
-   calendário. A divergência atinge apenas venda retroagida cruzando transição
-   anterior a 2019, que não é o caso de uso de um CRM registrando vendas atuais.
+3. o Brasil aboliu o horário de verão depois da última virada, em
+   **2019-02-17**; a partir dessa data o offset é constante `−03` e duração fixa
+   **coincide** com dia de calendário.
+
+O corte é `2019-02-17`, **não** "2019 em diante": janeiro e a primeira metade de
+fevereiro de 2019 ainda estavam em horário de verão — verificado, offset `−02`
+em `2019-01-15` e `−03` só a partir de `2019-02-17`. O próprio exemplo acima, uma
+venda em `2019-02-16`, cai dentro de 2019 e mesmo assim atravessa a virada.
+Descrever a divergência como restrita a "antes de 2019" subestimaria os dados
+atingidos e levaria trabalho futuro a aplicar o corte errado.
 
 Fica como limitação **L4**, com caso de evidência fixando o comportamento, para
 que seja consciente e não descoberto depois. Migrar para aritmética de calendário
@@ -345,7 +358,7 @@ antes de qualquer mudança de fuso.
 | --- | --- |
 | L1 | Renomear um produto altera o nome exibido em vendas passadas; não há snapshot histórico de nome. Fora do escopo por tocar `SaleItem`, centro da malha de triggers TASK-07/08/09. |
 | L2 | Sem preço no histórico enquanto o registro de venda não capturar preço. |
-| L4 | A previsão usa duração fixa (múltiplos de 24 h), não dia de calendário. Para venda retroagida cruzando transição de horário de verão anterior a 2019, a previsão pode exibir o dia da própria venda — verificado com `2019-02-16` e previsão de 1 dia. Coincide com dia de calendário para toda venda de 2019 em diante. |
+| L4 | A previsão usa duração fixa (múltiplos de 24 h), não dia de calendário. Para venda retroagida cruzando uma virada de horário de verão, a previsão pode exibir o dia da própria venda — verificado com `2019-02-16` e previsão de 1 dia. Coincide com dia de calendário a partir de `2019-02-17`, quando o offset passou a ser constante `−03`. |
 | L3 | Vendas gravadas antes da regra de fuso permanecem no instante original e podem exibir o dia anterior. Sem migração automática porque a intenção é irrecuperável; o banco local **persiste** (volume nomeado `postgres_data`), então exige-se reset explícito documentado. |
 
 ## Fora do escopo
@@ -427,6 +440,8 @@ Playwright efêmero obrigatório (há interface), mobile e desktop, conforme
 - estados de carregando, vazio, erro e cliente inexistente implementados;
 - fuso unificado em um único módulo, aplicado tanto à exibição quanto à
   interpretação de `soldAt` só-data no registro de venda;
+- índice `(customerId, soldAt, id)` criado por migration, acompanhando a ordem do
+  cursor;
 - harness determinístico e Playwright efêmero verdes;
 - lint, typecheck, build e suíte de regressão verdes;
 - revisão independente sem findings bloqueantes no HEAD exato;
