@@ -93,18 +93,22 @@ correct; the test was not.
 
 ## Implementation review round 1 — three findings, all confirmed
 
-- **Milliseconds were silently moved.**  compared a
+- **Milliseconds were silently moved.** `zoneOffsetMinutes` compared a
   millisecond-bearing instant against Intl's second-precision reading, so the
-  fractional error was added back into every candidate:  became ,
-   became . The offset is now computed on a whole-second instant.
+  fractional-minute error was added back into every candidate: `.123` became
+  `.369`, and even `.001` became `.003`. The caller's instant, changed under
+  them. The offset is now computed on a whole-second instant, since zone offsets
+  never change mid-second.
 - **The explicit-offset path skipped calendar validation.** Delegating straight
-  to Thu, Aug 20, 2026  2:27:57 PM accepted  and normalised it to March 2 — a
-  regression against what the API rejected before this module existed. The
-  grammar and calendar are now checked on that path too.
-- **A pagination failure wiped the loaded history.** The outer  branch
-  took precedence over the list, so a failed "carregar mais" replaced the whole
-  screen with the first-page error panel and the inline message was unreachable.
-  Pagination failures now use their own state and leave the loaded rows visible.
+  to `Date` accepted `2026-02-30T00:00Z` and normalised it to March 2 — a
+  regression against what the API rejected before this module existed. Grammar
+  and calendar components are now checked on that path too.
+- **A pagination failure wiped the loaded history.** The outer `error` branch
+  takes precedence over the list branch, so a failed "carregar mais" replaced
+  the whole screen with the first-page error panel; the inline message was
+  unreachable and the retry reloaded page one rather than the failed page.
+  Pagination failures now carry their own state and leave the loaded rows
+  visible.
 
 Each is pinned by a regression case in the harness.
 
