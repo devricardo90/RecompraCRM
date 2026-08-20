@@ -13,9 +13,19 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LOCAL_DATE_TIME =
   /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 const HAS_EXPLICIT_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
+const OFFSET_DATE_TIME =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
-/** Minutes to add to a UTC instant to get the wall clock in the zone. */
-function zoneOffsetMinutes(instantMs: number): number {
+/**
+ * Minutes to add to a UTC instant to get the wall clock in the zone.
+ *
+ * Computed on a whole-second instant: Intl reports no milliseconds, so
+ * comparing a millisecond-bearing instant against a second-precision reading
+ * yields a fractional-minute offset that then gets added back into every
+ * candidate. That turned .123 into .369 -- the caller's instant, silently moved.
+ */
+function zoneOffsetMinutes(instantMsWithMillis: number): number {
+  const instantMs = Math.floor(instantMsWithMillis / 1000) * 1000;
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: BUSINESS_TIME_ZONE,
     hour12: false,
@@ -112,6 +122,21 @@ export function parseBusinessDateInput(value: string): Date {
   // Explicit offset: the caller already pinned the instant. Every form the
   // existing parser accepts counts -- Z, +HH:MM, -HH:MM and the compact
   // +HHMM/-HHMM -- and none may be reinterpreted as business-local time.
+  //
+  // The grammar and the calendar are still checked here. Handing the string
+  // straight to Date would accept 2026-02-30T00:00Z and silently normalise it
+  // to March 2, which the API rejected before this module existed.
+  const offsetForm = OFFSET_DATE_TIME.exec(trimmed);
+  if (!offsetForm) {
+    throw new BusinessDateError("Informe uma data de venda válida no formato AAAA-MM-DD.");
+  }
+  const [, year, month, day, hour, minute] = offsetForm.map(Number);
+  const second = Number(offsetForm[6] ?? 0);
+  assertRealCalendarDate(year, month, day);
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new BusinessDateError("Informe uma hora de venda válida.");
+  }
+
   const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) {
     throw new BusinessDateError("Informe uma data de venda válida.");

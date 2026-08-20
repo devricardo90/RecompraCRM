@@ -94,7 +94,38 @@ try {
     );
   }
 
-  // Impossible calendar dates stay rejected.
+  // Milliseconds survive the zone conversion. Computing the offset against a
+  // second-precision reading used to add a fractional-minute error back into
+  // every candidate, turning .123 into .369.
+  for (const [input, expectedIso] of [
+    ["2026-08-20T14:30:00.123", "2026-08-20T17:30:00.123Z"],
+    ["2026-08-20T14:30:00.001", "2026-08-20T17:30:00.001Z"],
+  ]) {
+    const parsed = parseBusinessDateInput(input);
+    assert(
+      parsed.toISOString() === expectedIso,
+      `"${input}" stored ${parsed.toISOString()}; expected ${expectedIso} (millisecond drift)`,
+    );
+  }
+
+  // Impossible calendar dates stay rejected -- including on the explicit-offset
+  // path, which must not hand the string straight to Date and let it normalise
+  // 2026-02-30 into March 2.
+  for (const impossible of [
+    "2026-02-30T00:00Z",
+    "2026-02-30T00:00:00-03:00",
+    "2025-02-29T10:00Z",
+    "not-a-date-Z",
+  ]) {
+    let rejected;
+    try {
+      parseBusinessDateInput(impossible);
+    } catch (error) {
+      rejected = error;
+    }
+    assert(rejected, `impossible offset-bearing value ${impossible} was accepted`);
+  }
+
   for (const impossible of ["2026-02-30", "2025-02-29", "2026-13-01"]) {
     let rejected;
     try {

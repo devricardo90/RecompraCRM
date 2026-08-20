@@ -35,11 +35,15 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Kept apart from `error`: a failed "carregar mais" must not replace the
+  // history already on screen with the first-page error panel.
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   const loadFirstPage = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setLoadMoreError(null);
     setNotFound(false);
 
     try {
@@ -77,7 +81,7 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
   const loadMore = async () => {
     if (nextCursor === null || isLoadingMore) return;
     setIsLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
 
     try {
       const response = await fetch(
@@ -95,7 +99,7 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
       setSales((current) => [...current, ...payload.sales]);
       setNextCursor(payload.nextCursor);
     } catch (loadError) {
-      setError(
+      setLoadMoreError(
         loadError instanceof Error ? loadError.message : "Não foi possível carregar mais vendas.",
       );
     } finally {
@@ -255,12 +259,13 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
                 ))}
               </ol>
 
-              {error && (
+              {loadMoreError && (
                 <p
                   className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800"
                   role="alert"
+                  data-testid="history-load-more-error"
                 >
-                  {error}
+                  {loadMoreError}
                 </p>
               )}
 
