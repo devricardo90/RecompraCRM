@@ -2,17 +2,23 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 45
+state_version: 46
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_1
+loop_version: RICK_LOOP_V1_3_2
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
 loop_upgrade_02_validation: Validate #84 / 32257064941 SUCCESS
 loop_upgrade_02_review_exception: CODEX_REQUESTED_3X_NO_PUBLISHED_REVIEW
+loop_upgrade_03_status: MERGED_V1_3_2
+loop_upgrade_03_pr: 18 MERGED_SQUASH
+loop_upgrade_03_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
+loop_upgrade_03_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+loop_upgrade_03_merge_main_head: ad2f7487f4fecc404fe310dacbeec018f4fe8d9a
+loop_upgrade_03_validation: Validate #125 SUCCESS
 loop_freeze_until: TASK-17
 executor_bridge: SCHEDULE_WAKEUP
 completed_tasks:
@@ -28,9 +34,9 @@ completed_tasks:
   - TASK-10
   - TASK-11
 last_completed_task: TASK-11
-current_task: TASK-12
-current_task_status: NOT_STARTED
-next_eligible_task: TASK-12
+current_task: TASK-13
+current_task_status: SPEC_REQUIRED
+next_eligible_task: TASK-13
 branch: main
 pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -64,7 +70,7 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-12.md
+task_spec: docs/specs/TASK-13.md
 task_11_status: COMPLETED
 task_11_technical_head: 955baeb6cbc3cbc89f43e6f948392c291cfbea77
 task_11_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -81,7 +87,11 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
+task_12_status: BLOCKED_BY_ARCH_01
 task_12_blocked_by: ARCH-01
+task_13_status: SPEC_REQUIRED
+task_13_dependencies: TASK-06, TASK-08
+task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
 open_architecture_items: ARCH-01, ARCH-02
 task_10_status: COMPLETED
 task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
@@ -113,10 +123,10 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: RESOLVE_ARCH_01_THEN_START_TASK_12
+next_action: CREATE_TASK_13_SPEC
 next_action_authorized: true
-updated_at: "2026-08-20T12:55:00Z"
-updated_by: Claude Code
+updated_at: "2026-08-20T14:53:00Z"
+updated_by: ChatGPT Control Plane
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
@@ -156,9 +166,9 @@ domain's date and time contract — because the overwhelming majority of the
 twenty corrections landed there rather than in the history feature itself. It is
 non-blocking and does not reopen TASK-11.
 
-**TASK-12 is not yet executable.** Its dependencies TASK-09 and TASK-11 are
-satisfied, but `ARCH-01` — whether `expectedRepurchaseAt` should remain a
-synchronously persisted derived field — must be resolved first, because a
-repurchase dashboard is precisely the consumer that would couple to the current
-persistence design. TASK-13 (dashboard de estoque) has its dependencies met and
-carries no such block.
+Rick Loop v1.3.2 is merged in `main` at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a`
+and passed post-merge Validate #125. Its deterministic resolver evaluates the
+pending roadmap entries rather than trusting the persisted task pointer.
+TASK-12 remains task-scoped blocked by open ARCH-01. TASK-13 depends only on
+completed TASK-06 and TASK-08, so it is now the first eligible task and is in
+`SPEC_REQUIRED`; no owner approval is required to create its SDD-derived spec.
