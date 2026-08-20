@@ -14,6 +14,7 @@ import {
   detectStateDrift,
   parseRoadmapPlan,
   resolveNextEligibleTask,
+  resolveEffectiveTask,
   classifyLoopDecision,
   WAIT_BACKOFF_SECONDS,
   backoffSecondsForPollCount,
@@ -167,6 +168,22 @@ try {
   const alignedHandoff = { current_task: "TASK-12", current_task_status: "NOT_STARTED", next_eligible_task: "TASK-12", mode: "CONTROLLED_AUTONOMOUS", current_branch: "main", current_pr: "none" };
   assert(detectStateDrift({ state: task12State, handoff: alignedHandoff, git: { branch: "main" }, pr: null }).length === 0, "aligned STATE/HANDOFF must not drift");
 
+  const populatedVsNone = detectStateDrift({
+    state: { ...task12State, pr_number: 17 },
+    handoff: { ...alignedHandoff, current_pr: "none" },
+    git: { branch: "main" },
+    pr: null,
+  });
+  assert(populatedVsNone.some((d) => d.code === "HANDOFF_PR_STALE"), "STATE populated PR vs HANDOFF none must drift");
+
+  const noneVsPopulated = detectStateDrift({
+    state: { ...task12State, pr_number: "none" },
+    handoff: { ...alignedHandoff, current_pr: 17 },
+    git: { branch: "main" },
+    pr: null,
+  });
+  assert(noneVsPopulated.some((d) => d.code === "HANDOFF_PR_STALE"), "STATE none vs HANDOFF populated PR must drift");
+
   const advanceDecision = classifyLoopDecision(
     task12State,
     { pending: 6, done: 11, total: 17 },
@@ -190,6 +207,24 @@ try {
   );
   assert(specDecision.transition === "SPEC_REQUIRED" && specDecision.task === "TASK-13", "TASK-13 should require its spec after deterministic selection");
 
+  const preservedNoEligible = resolveEffectiveTask({
+    pr: null,
+    gitBranch: "main",
+    taskSelection: noEligible,
+    state: task12State,
+    roadmapAvailable: true,
+  });
+  assert(preservedNoEligible === null, "explicit NO_ELIGIBLE_TASK must not fall back to persisted current_task");
+
+  const fallbackWithoutRoadmap = resolveEffectiveTask({
+    pr: null,
+    gitBranch: "main",
+    taskSelection: { task: "TASK-12", reason: "STATE_FALLBACK", skipped: [] },
+    state: task12State,
+    roadmapAvailable: false,
+  });
+  assert(fallbackWithoutRoadmap === "TASK-12", "STATE fallback is allowed only when roadmap resolution is unavailable");
+
   const blockedDecision = classifyLoopDecision(
     task12State,
     { pending: 2, done: 11, total: 13 },
@@ -197,9 +232,9 @@ try {
     null,
     null,
     null,
-    { drift: [], taskSpecPresent: false, effectiveTask: null, taskSelection: noEligible },
+    { drift: [], taskSpecPresent: true, effectiveTask: preservedNoEligible, taskSelection: noEligible },
   );
-  assert(blockedDecision.transition === "NO_ELIGIBLE_TASK", "all-blocked roadmap must expose no eligible work rather than invent owner approval");
+  assert(blockedDecision.transition === "NO_ELIGIBLE_TASK", "all-blocked roadmap must expose no eligible work even when persisted task spec exists");
 
   assert(backoffSecondsForPollCount(0) === 30, "first backoff wrong");
   assert(backoffSecondsForPollCount(2) === 60, "third backoff wrong");
