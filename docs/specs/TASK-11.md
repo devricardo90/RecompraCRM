@@ -218,8 +218,8 @@ Então a regra é de **interpretação e armazenamento**, não só de exibição
 | Entrada | Interpretação |
 | --- | --- |
 | só data, `YYYY-MM-DD` | meia-noite **no fuso do negócio**, armazenada como o instante UTC correspondente |
-| data e hora com offset explícito (`Z`, `+HH:MM`) | instante exato informado, respeitado como veio |
-| data e hora sem offset (`2026-08-20T14:30`) | hora local **no fuso do negócio**, não UTC — em host UTC o parser atual guardaria `14:30Z`, e a regra exige `17:30Z` |
+| data e hora com offset explícito | instante exato informado, respeitado como veio. **Todas** as formas que o parser atual já aceita contam: `Z`, `+HH:MM`, `-HH:MM` e a forma compacta `+HHMM`/`-HHMM` |
+| data e hora sem offset (`2026-08-20T14:30`) | hora local **no fuso do negócio**. Hoje o parser usa a hora local **do host**, então o instante gravado varia com a máquina — verificado. A regra exige `17:30Z` independentemente do host |
 | ausente | instante atual |
 
 Com isso, `soldAt: "2026-08-20"` é armazenado como `2026-08-20T03:00:00Z` e
@@ -413,7 +413,11 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
 13. `soldAt` **sem offset** (`2026-08-20T14:30`) é interpretado como hora local do
     negócio e armazenado como `17:30Z`, não como `14:30Z` — sem este caso uma
     implementação passaria mantendo o comportamento atual;
-14. `soldAt` com offset explícito é respeitado como instante exato;
+14. `soldAt` com offset explícito é respeitado como instante exato em **todas** as
+    formas hoje aceitas — `Z`, `-HH:MM` e a compacta `-HHMM` — e não reinterpretado
+    como hora local do negócio. Caso concreto: `2026-08-20T23:30-04:00` e
+    `2026-08-20T23:30-0400` armazenam `2026-08-21T03:30:00Z` e exibem `21/08/2026`,
+    não `20/08/2026`. Um teste que use apenas `Z` passaria sem provar isso;
 15. horário de verão, com instantes concretos: `2018-11-04` só-data (lacuna,
     meia-noite inexistente) resolve para `2018-11-04T03:00:00Z` e exibe
     `04/11/2018`; local `2019-02-16T23:30` (sobreposição) resolve para a primeira
