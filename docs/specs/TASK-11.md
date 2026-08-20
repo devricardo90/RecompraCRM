@@ -242,13 +242,50 @@ nos dois casos:
 
 | Caso | Regra |
 | --- | --- |
-| lacuna (horário local inexistente) | usar o **primeiro instante válido após a lacuna** |
+| lacuna (horário local inexistente) | **avançar pelo tamanho da lacuna**, preservando a distância dentro da hora — local `00:00` ⇒ `03:00Z` (`01:00` local) e local `00:30` ⇒ `03:30Z` (`01:30` local) |
 | sobreposição (horário local ambíguo) | usar a **primeira ocorrência**, isto é, o offset ainda vigente antes da virada — local `2019-02-16T23:30` ⇒ `2019-02-17T01:30Z`, não `02:30Z` |
 | entrada com offset explícito | não se aplica — o instante já está determinado |
 
 Assim `soldAt: "2018-11-04"` é armazenado como `2018-11-04T03:00:00Z`, que é
 `01:00` local, e continua exibido como `04/11/2018`: o dia de calendário
 solicitado é preservado, que é a propriedade que importa aqui.
+
+A regra de lacuna é **avançar**, não **fixar no primeiro instante válido**, e a
+diferença só aparece fora da fronteira: para local `00:00` as duas políticas dão
+`01:00`, mas para local `00:30` fixar daria `01:00` e avançar dá `01:30`. Fixar
+colapsaria entradas distintas no mesmo instante, o que destrói ordenação entre
+vendas dentro da lacuna. Por isso a evidência precisa de um caso **dentro** da
+lacuna e não apenas na fronteira — só ele distingue as duas políticas.
+
+### Aritmética da previsão atravessando transição
+
+A previsão é calculada no banco pela TASK-09 como **duração fixa**:
+`soldAt + (quantidade × dias) × interval '1 day'`, ou seja, múltiplos de 24 h.
+
+Isso não coincide com dia de calendário quando o intervalo atravessa uma
+transição de horário de verão. Verificado: uma venda em local `2019-02-16`
+(armazenada `2019-02-16T02:00:00Z`, offset −02) com previsão de **1 dia** resulta
+em `2019-02-17T02:00:00Z`, que é `16/02/2019 23:00` local — a previsão cai no
+**mesmo dia de calendário da venda**, não no dia seguinte.
+
+Decisão: a semântica permanece **duração fixa**, declarada aqui em vez de
+suposta, por três razões concretas:
+
+1. é o que a TASK-09 já implementa, e mudar
+   `compute_expected_repurchase_at` é migração no centro da malha de triggers
+   TASK-07/08/09 — a mesma superfície que levou nove rodadas de revisão para
+   estabilizar;
+2. mudar a fórmula **reescreveria silenciosamente toda previsão já gravada**,
+   inclusive as que a TASK-09 validou;
+3. o Brasil aboliu o horário de verão em 2019, então para qualquer venda de 2019
+   em diante o offset é constante `−03` e duração fixa **coincide** com dia de
+   calendário. A divergência atinge apenas venda retroagida cruzando transição
+   anterior a 2019, que não é o caso de uso de um CRM registrando vendas atuais.
+
+Fica como limitação **L4**, com caso de evidência fixando o comportamento, para
+que seja consciente e não descoberto depois. Migrar para aritmética de calendário
+de negócio é candidato natural ao ARCH-01, que já discute o custo de manter a
+previsão persistida.
 
 ### Linhas gravadas antes desta mudança
 
@@ -308,6 +345,7 @@ antes de qualquer mudança de fuso.
 | --- | --- |
 | L1 | Renomear um produto altera o nome exibido em vendas passadas; não há snapshot histórico de nome. Fora do escopo por tocar `SaleItem`, centro da malha de triggers TASK-07/08/09. |
 | L2 | Sem preço no histórico enquanto o registro de venda não capturar preço. |
+| L4 | A previsão usa duração fixa (múltiplos de 24 h), não dia de calendário. Para venda retroagida cruzando transição de horário de verão anterior a 2019, a previsão pode exibir o dia da própria venda — verificado com `2019-02-16` e previsão de 1 dia. Coincide com dia de calendário para toda venda de 2019 em diante. |
 | L3 | Vendas gravadas antes da regra de fuso permanecem no instante original e podem exibir o dia anterior. Sem migração automática porque a intenção é irrecuperável; o banco local **persiste** (volume nomeado `postgres_data`), então exige-se reset explícito documentado. |
 
 ## Fora do escopo
@@ -367,9 +405,15 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
     meia-noite inexistente) resolve para `2018-11-04T03:00:00Z` e exibe
     `04/11/2018`; local `2019-02-16T23:30` (sobreposição) resolve para a primeira
     ocorrência `2019-02-17T01:30:00Z`, **não** `2019-02-17T02:30:00Z`;
-16. uma linha gravada à meia-noite UTC **antes** desta regra é exibida pelo dia de
+16. lacuna **fora da fronteira**: local `2018-11-04T00:30` resolve para
+    `2018-11-04T03:30:00Z` (`01:30` local), e **não** para `03:00:00Z` — sem este
+    caso, fixar e avançar são indistinguíveis e a política não fica provada;
+17. previsão atravessando transição: venda em local `2019-02-16` com previsão de
+    1 dia produz `2019-02-17T02:00:00Z`, exibido como `16/02/2019` — comportamento
+    de duração fixa declarado em L4, fixado por teste;
+18. uma linha gravada à meia-noite UTC **antes** desta regra é exibida pelo dia de
     calendário do instante armazenado, comportamento declarado e não acidental;
-17. renomear um produto reflete no histórico — comportamento declarado em L1,
+19. renomear um produto reflete no histórico — comportamento declarado em L1,
     coberto por teste para que a mudança seja consciente e não acidental.
 
 Playwright efêmero obrigatório (há interface), mobile e desktop, conforme
