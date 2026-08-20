@@ -147,13 +147,30 @@ vendas do cliente. Esta task adiciona `@@index([customerId, soldAt, id])` por
 migration. É índice aditivo — não toca dados nem a malha de triggers das
 TASK-07/08/09.
 
-**Invariante sob escrita concorrente**, enunciada de forma não contraditória: uma
-travessia cobre **exatamente uma vez cada venda do conjunto existente quando a
-travessia começou**. Uma venda registrada no meio da navegação, com `soldAt` mais
-recente que o cursor, ordena *antes* do ponto de corte e por construção não pode
-aparecer em nenhuma página seguinte — ela só aparece ao recarregar. O que a
-paginação garante é ausência de duplicata e ausência de salto no conjunto
-original, não uma visão instantânea do total pós-inserção.
+**Invariante sob escrita concorrente.** A garantia é sobre o conjunto original,
+e é assimétrica porque `soldAt` é informado pelo chamador e uma venda nova pode
+ordenar dos dois lados do cursor:
+
+- **nenhuma venda do conjunto original é duplicada ou pulada** — esta é a
+  garantia forte, e é a que interessa a quem está navegando;
+- uma venda inserida durante a travessia com `soldAt` **mais recente** que o
+  cursor ordena *antes* do ponto de corte e, por construção, não aparece em
+  nenhuma página seguinte: só ao recarregar;
+- uma venda inserida durante a travessia com `soldAt` **retroagido**, atrás do
+  cursor, **pode aparecer** numa página seguinte, embora não estivesse no
+  conjunto original.
+
+O último caso é consequência direta de aceitar `soldAt` do chamador. Afirmar
+"exatamente o conjunto original" seria falso: só valeria com watermark de
+travessia (por exemplo, filtrar `Sale.id <= id máximo no início`), e isso foi
+deliberadamente **não** adotado — esconderia da navegação uma venda que a própria
+usuária acabou de registrar com data passada, o que numa tela de histórico é pior
+do que mostrá-la.
+
+A evidência precisa cobrir os **dois** sentidos: inserção à frente do cursor não
+aparece, inserção retroagida atrás do cursor pode aparecer, e em nenhum dos casos
+uma venda do conjunto original é duplicada ou pulada. Testar só o primeiro sentido
+não detecta a assimetria.
 
 ## Estados de interface
 
@@ -405,8 +422,10 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
    ordem de `soldAt`, provando que o seek é composto e não por `id`;
 9. cursor que existe mas pertence a **outro cliente** é rejeitado com `400`, e o
    histórico do cliente permanece completo;
-10. inserir uma venda mais recente no meio da travessia não duplica nem pula
-    nenhuma venda do conjunto original;
+10. inserção concorrente nos dois sentidos: uma venda mais recente inserida no
+    meio da travessia não aparece nas páginas seguintes, e uma venda
+    **retroagida** inserida atrás do cursor pode aparecer — em ambos os casos
+    nenhuma venda do conjunto original é duplicada ou pulada;
 11. `limit` fora da faixa é rejeitado, e `cursor` inexistente também;
 12. `soldAt` só com data é armazenado e exibido no mesmo dia de calendário do
     fuso do negócio, incluindo virada de dia;
