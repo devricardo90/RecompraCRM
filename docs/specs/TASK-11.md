@@ -212,15 +212,64 @@ Então a regra é de **interpretação e armazenamento**, não só de exibição
 | --- | --- |
 | só data, `YYYY-MM-DD` | meia-noite **no fuso do negócio**, armazenada como o instante UTC correspondente |
 | data e hora com offset explícito (`Z`, `+HH:MM`) | instante exato informado, respeitado como veio |
-| data e hora sem offset | meia-noite/hora local **no fuso do negócio** |
+| data e hora sem offset (`2026-08-20T14:30`) | hora local **no fuso do negócio**, não UTC — em host UTC o parser atual guardaria `14:30Z`, e a regra exige `17:30Z` |
 | ausente | instante atual |
 
 Com isso, `soldAt: "2026-08-20"` é armazenado como `2026-08-20T03:00:00Z` e
 exibido como `20/08/2026`, e a previsão canônica cai no dia de calendário certo.
 
 Esta regra altera o parsing da TASK-10, que hoje faz `new Date(valor)`. É
-alteração deliberada e necessária: sem ela A3 quebra dados válidos. Precisa de
-testes de fronteira para entrada só-data, entrada com offset e virada de dia.
+alteração deliberada e necessária: sem ela A3 quebra dados válidos.
+
+### Horário de verão: lacunas e sobreposições
+
+"Meia-noite no fuso do negócio" nem sempre identifica um instante. São Paulo teve
+horário de verão até 2019 e a API aceita datas retroativas, então o caso é real e
+verificável:
+
+- **2018-11-04**: o relógio pulou de `00:00` para `01:00`. A meia-noite local
+  **não existiu** naquele dia — verificado: `2018-11-04T03:00:00Z` é renderizado
+  como `01:00` local. Isso atinge inclusive entrada **só-data**, não apenas
+  data-hora sem offset.
+- **2019-02-17**: o relógio voltou, então horários locais da sobreposição
+  ocorreram **duas vezes**.
+
+Deixar isso indefinido faria o instante armazenado depender da implementação da
+conversão, e o instante afeta ordenação e previsão. Regra explícita, determinística
+nos dois casos:
+
+| Caso | Regra |
+| --- | --- |
+| lacuna (horário local inexistente) | usar o **primeiro instante válido após a lacuna** |
+| sobreposição (horário local ambíguo) | usar a **primeira ocorrência**, isto é, o offset ainda vigente antes da virada |
+| entrada com offset explícito | não se aplica — o instante já está determinado |
+
+Assim `soldAt: "2018-11-04"` é armazenado como `2018-11-04T03:00:00Z`, que é
+`01:00` local, e continua exibido como `04/11/2018`: o dia de calendário
+solicitado é preservado, que é a propriedade que importa aqui.
+
+### Linhas gravadas antes desta mudança
+
+Uma venda enviada como só-data **antes** desta regra ficou armazenada à
+meia-noite UTC. Com o formatador em `America/Sao_Paulo` ela renderiza um dia
+antes, junto com sua previsão.
+
+Não há migração de correção, e a razão é que a intenção é irrecuperável: um
+instante `T00:00:00Z` gravado no passado é indistinguível entre "o chamador
+mandou só a data" e "o chamador mandou esse instante exato". Reescrever essas
+linhas chutando intenção seria pior do que exibi-las pelo instante que de fato
+guardam.
+
+Isso é seguro hoje por um fato verificável, não por otimismo: **não existe
+ambiente durável** — a TASK-16 (deploy de homologação) ainda está pendente no
+roadmap, e os bancos de desenvolvimento e de CI são recriados a cada execução.
+Não há, portanto, linha pré-mudança persistente para corromper.
+
+A evidência mesmo assim precisa cobrir uma linha gravada à meia-noite UTC,
+exigindo que ela seja exibida pelo dia de calendário do **instante armazenado**.
+O objetivo é que esse comportamento seja consciente e verificado, não descoberto
+depois. Se um ambiente durável passar a existir antes desta task, esta seção
+precisa ser revisitada.
 
 ## Assumptions
 
@@ -237,6 +286,7 @@ testes de fronteira para entrada só-data, entrada com offset e virada de dia.
 | --- | --- |
 | L1 | Renomear um produto altera o nome exibido em vendas passadas; não há snapshot histórico de nome. Fora do escopo por tocar `SaleItem`, centro da malha de triggers TASK-07/08/09. |
 | L2 | Sem preço no histórico enquanto o registro de venda não capturar preço. |
+| L3 | Vendas gravadas antes da regra de fuso permanecem no instante original e podem exibir o dia anterior. Sem migração porque a intenção é irrecuperável; seguro hoje porque não existe ambiente durável (TASK-16 pendente). |
 
 ## Fora do escopo
 
@@ -286,9 +336,17 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
     nenhuma venda do conjunto original;
 11. `limit` fora da faixa é rejeitado, e `cursor` inexistente também;
 12. `soldAt` só com data é armazenado e exibido no mesmo dia de calendário do
-    fuso do negócio, incluindo o caso de virada de dia, e entrada com offset
-    explícito é respeitada como instante;
-13. renomear um produto reflete no histórico — comportamento declarado em L1,
+    fuso do negócio, incluindo virada de dia;
+13. `soldAt` **sem offset** (`2026-08-20T14:30`) é interpretado como hora local do
+    negócio e armazenado como `17:30Z`, não como `14:30Z` — sem este caso uma
+    implementação passaria mantendo o comportamento atual;
+14. `soldAt` com offset explícito é respeitado como instante exato;
+15. horário de verão: `2018-11-04` (lacuna, meia-noite inexistente) resolve para o
+    primeiro instante válido e exibe `04/11/2018`; um horário da sobreposição de
+    `2019-02-17` resolve para a primeira ocorrência;
+16. uma linha gravada à meia-noite UTC **antes** desta regra é exibida pelo dia de
+    calendário do instante armazenado, comportamento declarado e não acidental;
+17. renomear um produto reflete no histórico — comportamento declarado em L1,
     coberto por teste para que a mudança seja consciente e não acidental.
 
 Playwright efêmero obrigatório (há interface), mobile e desktop, conforme
