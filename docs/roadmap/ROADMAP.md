@@ -4,8 +4,8 @@ status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
-current_task: TASK-11
-next_eligible_task: TASK-11
+current_task: TASK-12
+next_eligible_task: TASK-12
 
 ## Política
 
@@ -135,12 +135,26 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - evidence: docs/evidence/TASK-10-validation.md
   - architecture_signal: NOT_EMITTED — 4 rodadas com findings confirmados (limite: 5); contagem calculada pelo controller a partir do LOOP-REGISTER, não estimada
   - done_when: fluxo mobile-first validado com Playwright efêmero.
-- [ ] TASK-11 — Histórico do cliente
+- [x] TASK-11 — Histórico do cliente
   - depends_on: TASK-10
-  - inherited_contract: usar lib/sales/saleTransaction.ts para qualquer escrita de Sale/SaleItem; não reimplementar a forma nem o retry
+  - status: COMPLETED
+  - spec: docs/specs/TASK-11.md
+  - technical_head: 955baeb6cbc3cbc89f43e6f948392c291cfbea77
+  - review: CODEX_REVIEW_CLEAN on 955baeb6cbc3cbc89f43e6f948392c291cfbea77 (10 rounds: 9 de spec antes de qualquer código, 1 de implementação; 20 findings)
+  - pr: #17 MERGED (squash)
+  - merge_main: d7194558f21bf9cf07c88062f85f0d75b255634b
+  - main_ci: Validate 32370638624 SUCCESS
+  - playwright: 11 cenários efêmeros PASS (mobile + desktop), retries 0
+  - evidence: docs/evidence/TASK-11-validation.md
+  - business_timezone: assumption A3 (America/Sao_Paulo) isolada em lib/format/businessDate.ts
+  - limitations: L1 nome atual do produto; L2 sem preço; L3 linhas pré-regra à meia-noite UTC; L4 previsão por duração fixa
+  - architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL (9 rodadas com findings confirmados) -> ARCH-02
   - done_when: histórico correto, ordenado e com previsões.
 - [ ] TASK-12 — Dashboard de recompra
-  - depends_on: TASK-09, TASK-11
+  - depends_on: TASK-09, TASK-11, ARCH-01
+  - blocked_by: ARCH-01 — decidir previsão persistida vs calculada antes que um dashboard se acople ao desenho atual
+  - inherited_contract: datas via lib/format/businessDate.ts; leitura via projeção, sem reimplementar escrita de venda
+  - relevant_limitation: L4 — previsão por duração fixa pode cair no dia da própria venda para venda retroagida cruzando virada de horário de verão
   - done_when: classificação correta de vencidos, hoje e próximos sete dias.
 - [ ] TASK-13 — Dashboard de estoque
   - depends_on: TASK-06, TASK-08
@@ -162,6 +176,21 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 
 Itens levantados por evidência de execução. Não reabrem tasks concluídas e não
 autorizam refatoração imediata.
+
+- [ ] ARCH-02 — Consolidar o contrato de data e hora do domínio
+  - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-11 (9 rodadas, 15 classes de defeito distintas)
+  - subsystem: interpretação, armazenamento e exibição de `Sale.soldAt` e das previsões derivadas
+  - blocking: false
+  - status: OPEN
+  - decide_before: TASK-14 (hardening) — antes que mais telas dependam do comportamento atual
+  - evidence: das 20 correções da TASK-11, a maioria esmagadora foi neste contrato: entrada só-data deslocando um dia, formas de offset, horário de verão (lacuna e sobreposição), corte da última virada, deriva de milissegundos e validação de calendário no caminho com offset
+  - question: o domínio deveria tratar `soldAt` como **data de calendário** em vez de instante?
+  - options:
+      - A. manter instante + fuso declarado (atual), com A3 isolada em lib/format/businessDate.ts
+      - B. armazenar data de calendário (`DATE`) para a venda, derivando instantes só quando necessário
+      - C. adotar uma biblioteca de datas com suporte a fuso (por exemplo Temporal) em vez da conversão manual via Intl
+  - criteria: número de casos de borda que deixam de existir; risco de migração sobre `Sale.soldAt`; efeito na fórmula canônica de previsão; compatibilidade com L3 e L4; legibilidade
+  - non_goal: não refatorar a TASK-11 agora; A3 continua válida até que isto seja decidido
 
 - [ ] ARCH-01 — Avaliar previsão de recompra persistida vs calculada
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-09 (9 rodadas de revisão com defeitos distintos e confirmados)

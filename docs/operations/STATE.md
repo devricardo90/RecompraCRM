@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 44
+state_version: 45
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -26,10 +26,11 @@ completed_tasks:
   - TASK-08
   - TASK-09
   - TASK-10
-last_completed_task: TASK-10
-current_task: TASK-11
+  - TASK-11
+last_completed_task: TASK-11
+current_task: TASK-12
 current_task_status: NOT_STARTED
-next_eligible_task: TASK-11
+next_eligible_task: TASK-12
 branch: main
 pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -63,7 +64,25 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-11.md
+task_spec: docs/specs/TASK-12.md
+task_11_status: COMPLETED
+task_11_technical_head: 955baeb6cbc3cbc89f43e6f948392c291cfbea77
+task_11_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_11_review_rounds: 10
+task_11_spec_rounds: 9
+task_11_findings_fixed: 20
+task_11_pr: 17 MERGED_SQUASH
+task_11_merge_main_head: d7194558f21bf9cf07c88062f85f0d75b255634b
+task_11_main_ci_run: 32370638624
+task_11_main_ci_status: SUCCESS
+task_11_playwright: PASS_11_EPHEMERAL_RETRIES_0
+task_11_evidence: docs/evidence/TASK-11-validation.md
+task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_UTC_ROWS, L4_FIXED_DURATION_FORECAST
+business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
+task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
+task_11_architecture_item: ARCH-02
+task_12_blocked_by: ARCH-01
+open_architecture_items: ARCH-01, ARCH-02
 task_10_status: COMPLETED
 task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
 task_10_branch_ci: 32291165510
@@ -94,44 +113,52 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean
-next_action: START_TASK_11
+next_action: RESOLVE_ARCH_01_THEN_START_TASK_12
 next_action_authorized: true
-updated_at: "2026-08-19T19:35:00Z"
+updated_at: "2026-08-20T12:55:00Z"
 updated_by: Claude Code
 ```
 
-TASK-01 through TASK-10 are completed and integrated into `main`. Rick Loop
-v1.3.1 adds the architecture-complexity signal, the exact-HEAD review invariant,
-the reviewer-suggestions-are-hypotheses rule, pre/post-fix evidence, external
-gate continuation, failed-attempt learning, and the rule that executable loop
-changes go through a PR.
+TASK-01 through TASK-11 are completed and integrated into `main`.
 
-TASK-10 (interface de registro de venda) closes the residual TASK-09 left
-behind. The concurrency contract was decided and committed before any product
-code existed, and both strategies shipped: a deterministic mutation shape (one
-transaction, items sorted by ascending `productId`, one `SaleItem` per
-statement, duplicates summed) and bounded retry (three attempts, only `40P01`,
-`40001` and Prisma's normalized `P2034`, whole transaction redone from scratch).
-Domain invariants — `23514`, `23503`, `P2003` and TASK-09's deliberate `22003`
-forecast-range failure — are never retried and reach the user as readable 4xx.
+TASK-11 (histórico do cliente) is a read-only projection: one customer's sales,
+newest first, each item carrying the forecast the database derived. Ordering is
+total — sales by `soldAt DESC` with an `id DESC` tiebreak, items by `productId`
+then `id`, because `(saleId, productId)` is not unique. Pagination seeks
+composite `(soldAt, id)`, since `soldAt` is caller-supplied and an id-only
+cursor would skip or repeat rows once a sale is backdated; a cursor naming
+another customer's sale is rejected rather than silently truncating the history.
 
-`lib/sales/saleTransaction.ts` owns that policy and is the only authorized
-writer of `Sale`/`SaleItem`. Any future task that persists a sale must go
-through it rather than reimplementing the shape or the retry.
+Most of this task's value came from the spec gate. Nine spec rounds ran **before
+any product code existed** and produced seventeen findings — four would have
+become data-correctness bugs, and two corrected premises stated as verified,
+including a false claim that no durable database existed when the local docker
+volume persists by design. Implementation review found three more.
 
-Five review rounds produced ten confirmed findings, including two P1s: retry was
-silently disabled for typed writes because Prisma collapses `40P01`/`40001` into
-`P2034`, and the concurrency harness originally exercised a private copy of the
-policy rather than production — which is precisely why the first P1 survived.
-The harness now drives the production module and asserts the emitted write shape
-and order from Prisma query events, so replacing the loop with `createMany`
-fails it.
+`lib/format/businessDate.ts` is now the single place the business day is
+decided. The SDD requires dates in the business timezone and never names it;
+TASK-04 and TASK-06 deferred showing dates for that reason and TASK-10 then
+rendered one in the browser's zone. The timezone is recorded as assumption A3
+and isolated in one module. It interprets input as well as rendering output,
+because changing only the formatter would have shifted valid date-only input
+back a day. DST gaps move forward and overlaps resolve to the first occurrence.
 
-The architecture-complexity signal did **not** fire for TASK-10: four review
-rounds carried confirmed findings against a threshold of five, computed from
-`LOOP-REGISTER.jsonl` rather than estimated. `ARCH-01` remains open and
-non-blocking, and must still be decided before TASK-12.
+Four limitations are carried forward, each pinned by a test: L1 the current
+product name is shown with no snapshot, L2 no price exists to show, L3 rows
+written before the parsing rule keep their instant, L4 forecast arithmetic is
+fixed-duration and can display on the sale's own day for a backdated sale
+crossing a DST transition.
 
-TASK-11 (histórico do cliente) is the next eligible task: its dependency
-TASK-10 is satisfied and it is the lowest-numbered pending task with
-dependencies met. TASK-13 is also unblocked but comes later in roadmap order.
+The architecture-complexity signal fired for TASK-11 as well: nine review rounds
+carrying confirmed findings against a threshold of five, computed from the loop
+register rather than estimated. It is recorded as `ARCH-02` — consolidating the
+domain's date and time contract — because the overwhelming majority of the
+twenty corrections landed there rather than in the history feature itself. It is
+non-blocking and does not reopen TASK-11.
+
+**TASK-12 is not yet executable.** Its dependencies TASK-09 and TASK-11 are
+satisfied, but `ARCH-01` — whether `expectedRepurchaseAt` should remain a
+synchronously persisted derived field — must be resolved first, because a
+repurchase dashboard is precisely the consumer that would couple to the current
+persistence design. TASK-13 (dashboard de estoque) has its dependencies met and
+carries no such block.
