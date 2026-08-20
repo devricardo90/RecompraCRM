@@ -80,7 +80,7 @@ and the L1 product rename.
 
 ## Playwright — ephemeral
 
-10 scenarios, `retries: 0`, **10 passed in 15.9 s**, then removed per
+11 scenarios, `retries: 0`, **11 passed in 23.7 s** (re-run after the round-1 fixes, with a new case proving a failed pagination keeps the loaded history on screen), then removed per
 `docs/operations/PLAYWRIGHT-EPHEMERAL.md`. Mobile 390×844 plus desktop 1280×900:
 ordering and forecasts, multi-item sale, customer isolation, empty state, missing
 customer, load failure with retry, paging without duplication, reachability from
