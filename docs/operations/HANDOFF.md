@@ -2,32 +2,33 @@
 
 ```yaml
 schema_version: "1.1"
-run_id: RCRM-MVP01-RUN-004
-loop_id: RCRM-TASK10-CLOSURE
-status: TASK_10_COMPLETED_READY_FOR_TASK_11
+run_id: RCRM-MVP01-RUN-005
+loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
+status: TASK_13_SPEC_REQUIRED
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_1
-current_task: TASK-11
-current_task_status: NOT_STARTED
-next_eligible_task: TASK-11
+loop_version: RICK_LOOP_V1_3_2
+current_task: TASK-13
+current_task_status: SPEC_REQUIRED
+next_eligible_task: TASK-13
 current_branch: main
 current_pr: none
 external_gate: none
-task_10_status: COMPLETED
-task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
-task_10_branch_ci: 32291165510
-task_10_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
-task_10_review_rounds: 5
-task_10_findings_fixed: 10
-task_10_pr: 16 MERGED_SQUASH
-task_10_merge_main_head: f69f4e13666b0740f0952fcf17148da4d6cda2cd
-task_10_main_ci_run: 32291852224
-task_10_main_ci_status: SUCCESS
-task_10_playwright: PASS_11_EPHEMERAL_RETRIES_0
-task_10_architecture_signal: NOT_EMITTED_4_OF_5_ROUNDS
-task_10_evidence: docs/evidence/TASK-10-validation.md
-open_architecture_item: ARCH-01 (decide before TASK-12)
-next_action: START_TASK_11
+loop_upgrade_pr: 18 MERGED_SQUASH
+loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
+loop_upgrade_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+loop_upgrade_merge_main_head: ad2f7487f4fecc404fe310dacbeec018f4fe8d9a
+loop_upgrade_main_ci: Validate #125 SUCCESS
+task_11_status: COMPLETED
+task_11_pr: 17 MERGED_SQUASH
+task_11_main_ci: Validate 32370638624 SUCCESS
+task_12_status: BLOCKED_BY_ARCH_01
+task_12_blocked_by: ARCH-01
+task_13_status: SPEC_REQUIRED
+task_13_dependencies: TASK-06, TASK-08
+task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
+task_13_spec: docs/specs/TASK-13.md
+open_architecture_items: ARCH-01, ARCH-02
+next_action: CREATE_TASK_13_SPEC
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -35,33 +36,21 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` is at `f69f4e13666b0740f0952fcf17148da4d6cda2cd` and Validate `32291852224` is SUCCESS.
-2. Derive `docs/specs/TASK-11.md` from the SDD and the roadmap before writing
-   code.
-3. Create `feat/TASK-11-customer-history` from `main`, verify a green baseline,
-   take a pre-write checkpoint, then implement.
-4. TASK-11 changes UI, so the ephemeral Playwright run is required.
+1. Confirm `main` contains Rick Loop v1.3.2 at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a` and post-merge Validate #125 is SUCCESS.
+2. Treat TASK-12 as task-scoped blocked by ARCH-01; do not stop the roadmap because TASK-13 is independently eligible.
+3. Derive `docs/specs/TASK-13.md` from the SDD and TASK-13 roadmap contract before any product-code write.
+4. Create `feat/TASK-13-stock-dashboard` from the verified green baseline, take the pre-write checkpoint, implement, validate, open PR, wait for CI, obtain exact-HEAD independent review, then merge only if clean.
+5. After TASK-13 completion, re-run the deterministic resolver. TASK-12 remains blocked until ARCH-01 is resolved; do not infer an owner-only gate unless the architecture decision itself proves one is required.
 
-## Contracts TASK-11 inherits
+## Why TASK-13 is selected
 
-- **Any write to `Sale`/`SaleItem` must go through
-  `lib/sales/saleTransaction.ts`.** It owns the deterministic write shape and
-  the bounded retry policy. Reimplementing either reopens TASK-09's residual,
-  and the concurrency harness asserts the emitted statement shape, so a
-  divergent writer will not go unnoticed.
-- `expectedRepurchaseAt` is database-derived. Never send it, never compute it.
-- Domain invariants are reported, not reimplemented: `23514`, `23503`, `P2003`
-  and `22003` map to readable 4xx; only `40P01`, `40001` and `P2034` are
-  retryable.
-- Node `>=24.0.0` is required — the concurrency harness imports the production
-  TypeScript module directly and relies on native type stripping.
+TASK-12 depends on TASK-09, TASK-11 and ARCH-01 and explicitly names ARCH-01 as its blocker. ARCH-01 is still OPEN. Rick Loop v1.3.2 therefore blocks TASK-12 only, not the roadmap.
 
-## Open, non-blocking
+TASK-13 depends on TASK-06 and TASK-08. Both are completed, and TASK-13 has no explicit blocker. It is therefore the first pending eligible task under the deterministic resolver.
 
-`ARCH-01` — whether `expectedRepurchaseAt` should remain a synchronously
-persisted derived field maintained by triggers. TASK-09 emitted
-`ARCHITECTURE_COMPLEXITY_SIGNAL` (7 rounds). TASK-10 came within one round of
-the threshold (4 of 5), with most findings clustered around the error
-classification and write shape that the persisted forecast demands. Decide
-before TASK-12 couples a dashboard to the current design. It does not reopen
-TASK-09 or TASK-10.
+## Contracts TASK-13 inherits
+
+- Stock changes caused by a sale remain owned by the existing atomic sale/stock transaction path from TASK-08; the dashboard is a reader and must not invent a second stock mutation path.
+- Product and stock UI behavior from TASK-06 is the baseline for stock semantics, including current stock and minimum stock.
+- The dashboard must update after completed sales using repository/database truth; no duplicated client-side source of truth.
+- No ARCH-01/ARCH-02 refactor belongs to TASK-13. Both architecture items remain separate and non-blocking for this task.
