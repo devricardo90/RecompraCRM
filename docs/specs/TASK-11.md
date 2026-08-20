@@ -414,10 +414,19 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
     negócio e armazenado como `17:30Z`, não como `14:30Z` — sem este caso uma
     implementação passaria mantendo o comportamento atual;
 14. `soldAt` com offset explícito é respeitado como instante exato em **todas** as
-    formas hoje aceitas — `Z`, `-HH:MM` e a compacta `-HHMM` — e não reinterpretado
-    como hora local do negócio. Caso concreto: `2026-08-20T23:30-04:00` e
-    `2026-08-20T23:30-0400` armazenam `2026-08-21T03:30:00Z` e exibem `21/08/2026`,
-    não `20/08/2026`. Um teste que use apenas `Z` passaria sem provar isso;
+    formas hoje aceitas por `[+-]\d{2}:?\d{2}`, com asserção concreta para cada
+    sinal e cada grafia, porque um teste que cubra só um lado passa enquanto o
+    outro regride:
+
+    | Entrada | Instante | Exibe |
+    | --- | --- | --- |
+    | `2026-08-20T23:30Z` | `2026-08-20T23:30:00Z` | `20/08/2026` |
+    | `2026-08-20T23:30-04:00` | `2026-08-21T03:30:00Z` | `21/08/2026` |
+    | `2026-08-20T23:30-0400` | `2026-08-21T03:30:00Z` | `21/08/2026` |
+    | `2026-08-20T23:30+04:00` | `2026-08-20T19:30:00Z` | `20/08/2026` |
+    | `2026-08-20T23:30+0400` | `2026-08-20T19:30:00Z` | `20/08/2026` |
+
+    e nenhuma delas pode ser reinterpretada como hora local do negócio;
 15. horário de verão, com instantes concretos: `2018-11-04` só-data (lacuna,
     meia-noite inexistente) resolve para `2018-11-04T03:00:00Z` e exibe
     `04/11/2018`; local `2019-02-16T23:30` (sobreposição) resolve para a primeira
