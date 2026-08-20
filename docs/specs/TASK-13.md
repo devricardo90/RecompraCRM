@@ -163,6 +163,11 @@ AC8. Zero alertas produz empty state próprio e não mensagem de erro.
 
 AC9. A regra de low-stock é compartilhada/reutilizável fora da UI, sem duas definições independentes entre `/products` e `/inventory`.
 
+AC9.1. A extração não altera o comportamento visível de `/products`: o selo
+"Estoque baixo" e o contador continuam usando o mesmo predicado, inclusive no
+ponto de igualdade `currentStock == minimumStock`, e isso é provado por cenário
+Playwright próprio — os harnesses existentes não renderizam essa tela.
+
 AC10. Mobile `390x844`, landscape `844x390` e desktop `1440x900` não apresentam overflow horizontal nem ação principal inacessível.
 
 AC11. Nenhuma escrita de estoque, venda ou previsão é introduzida pelo dashboard.
@@ -198,7 +203,14 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
 4. **empty state** — nenhum produto em alerta;
 5. **error/retry** — falha controlada de leitura mostra erro, retry recupera;
 6. **venda → alerta** — produto começa acima do mínimo, venda é registrada pelo fluxo canônico, dashboard é aberto/recarregado e passa a mostrar o produto com o estoque reduzido;
-7. console sem erro crítico.
+7. **`/products` não regride** — a AC9 obriga extrair `isLowStock` de
+   `ProductWorkspace`, então `/products` muda por construção. Nenhum outro
+   cenário abre essa tela, e os harnesses de Product e Sale/Stock não renderizam
+   UI: o selo "Estoque baixo" e o contador da TASK-06 poderiam quebrar com todos
+   os gates verdes. O cenário abre `/products` com produtos abaixo, **igual** e
+   acima do mínimo e exige selo exatamente nos dois primeiros e contador igual a
+   `2`, provando o mesmo predicado compartilhado no ponto de igualdade;
+8. console sem erro crítico.
 
 Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
 
@@ -217,6 +229,10 @@ Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY`
 ## Riscos conhecidos
 
 R1. **Duplicação da regra de alerta** — já existe `isLowStock` na UI de produtos. Mitigação: extrair/reutilizar uma função única fora da camada visual.
+
+R1.1. **Regressão silenciosa em `/products` durante a extração** — mover a regra
+altera uma tela entregue pela TASK-06 que nenhum gate atual observa. Mitigação:
+cenário Playwright dedicado a `/products` (item 7), exigido antes do merge.
 
 R2. **Falso freshness** — cache pode fazer o dashboard parecer desatualizado após venda. Mitigação: leitura atual sem cache persistente e teste venda → próxima leitura.
 
