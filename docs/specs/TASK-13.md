@@ -1,0 +1,356 @@
+# TASK-13 Spec — Dashboard de estoque
+
+Status: SPEC_DRAFT_ROUND_0_PENDING_REVIEW
+Source: Google Docs `Fonte da Verdade - Recompra CRM` + `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
+Depends on: TASK-06, TASK-08
+Baseline: `2995589c88ea7ab46781b59ba273b440eb2eebdd` (`main`)
+Branch: `feat/TASK-13-stock-dashboard`
+
+## Gate de fonte da verdade
+
+A fonte primária do Google Docs foi lida antes desta spec. Não há contradição com o SDD do repositório para esta task:
+
+- RB-12: produto com estoque **igual ou abaixo** do estoque mínimo deve aparecer como alerta;
+- TASK-13: resultado esperado = produtos abaixo ou iguais ao estoque mínimo;
+- TASK-13: aceite = alertas atualizam após vendas.
+
+Portanto a task está `READY` do ponto de vista de produto. ARCH-01 e ARCH-02 não são dependências da TASK-13 e não autorizam refatoração nesta task.
+
+## Objetivo
+
+Entregar uma visão mobile-first, somente leitura, que mostre imediatamente quais produtos precisam de atenção de estoque usando a verdade atual persistida em `Product.currentStock` e `Product.minimumStock`.
+
+A task **não** cria uma segunda regra de estoque, não altera estoque e não recalcula venda. A mutação de estoque continua pertencendo à transação da TASK-08.
+
+## Regra canônica de alerta
+
+Um produto está em alerta se, e somente se:
+
+```text
+currentStock <= minimumStock
+```
+
+Consequências obrigatórias:
+
+- `currentStock == minimumStock` **é alerta**;
+- `currentStock < minimumStock` **é alerta**;
+- `currentStock > minimumStock` **não é alerta**;
+- estoque negativo continua impossível pelo contrato de banco da TASK-08; o dashboard não cria tratamento alternativo para esse estado inválido.
+
+A regra deve existir em uma função reutilizável fora da camada visual. A UI de `/products` e o novo dashboard não devem manter duas implementações independentes de `currentStock <= minimumStock`.
+
+## Fonte dos dados
+
+Preferência canônica desta task: reutilizar `GET /api/products` e a persistência já entregue pelas TASK-05/06.
+
+Motivos:
+
+- a API já retorna `id`, `name`, `unit`, `currentStock`, `minimumStock` e demais campos necessários;
+- criar um segundo endpoint apenas para aplicar um filtro simples duplicaria contrato sem requisito do SDD;
+- a task é um consumidor de leitura, não um novo domínio.
+
+A leitura deve usar dados atuais, sem cache que possa esconder uma venda recém-confirmada. Se a implementação atual da API já usa verdade de banco sem cache persistente, preserve esse comportamento.
+
+## Página e navegação
+
+Criar uma página dedicada de dashboard de estoque em `/inventory`.
+
+A página deve ser acessível pela navegação principal das telas relevantes sem
+remover os destinos existentes de clientes, produtos e registro de venda.
+
+"Telas relevantes" é enumerado, não deixado a critério: `/` (clientes),
+`/products` e `/sales`. Cada uma dessas telas tem hoje a sua própria `nav`
+independente, então o link **Estoque** precisa ser adicionado nas três — do
+contrário `/inventory` fica alcançável apenas por URL digitada, o que a AC13
+proíbe.
+
+A rota `/inventory` é uma convenção de implementação para manter o padrão atual de rotas em inglês (`/products`, `/sales`, `/customers`). O texto visível ao usuário permanece em português: **Estoque** / **Alertas de estoque**.
+
+## Conteúdo do dashboard
+
+### Resumo
+
+Mostrar pelo menos:
+
+- quantidade total de produtos em alerta;
+- estado textual que deixe claro que o critério é estoque atual `<=` estoque mínimo.
+
+### Lista de alertas
+
+Cada item deve mostrar:
+
+- nome do produto;
+- unidade;
+- estoque atual;
+- estoque mínimo;
+- indicação visual/textual de estoque baixo.
+
+Não mostrar produtos acima do mínimo na lista de alertas.
+
+### Ordenação determinística
+
+Ordenar alertas por urgência usando:
+
+1. `currentStock - minimumStock ASC` (maior déficit primeiro);
+2. `id ASC` como desempate total.
+
+Não usar ordem de retorno do banco como contrato implícito.
+
+## Semântica de “atualizam após vendas”
+
+O aceite significa que, após uma venda confirmada reduzir o estoque pela transação canônica da TASK-08, a próxima leitura do dashboard deve refletir o novo valor e a nova classificação.
+
+Prova mínima obrigatória:
+
+1. produto começa acima do mínimo e não aparece no dashboard;
+2. uma venda confirmada reduz `currentStock` até o mínimo ou abaixo;
+3. ao abrir/recarregar o dashboard depois da confirmação, o produto aparece como alerta com o estoque persistido correto.
+
+Não há requisito de atualização em tempo real enquanto a página permanece aberta em outra aba. WebSocket, SSE, polling contínuo e sincronização cross-tab estão fora do MVP e fora desta task.
+
+## Estados de interface
+
+A página deve distinguir claramente:
+
+- **carregando**: skeleton/estado de progresso sem falso “zero alertas”;
+- **erro**: mensagem legível + ação `Tentar novamente`;
+- **sem alertas**: estado positivo próprio, por exemplo “Nenhum produto precisa de reposição agora”;
+- **com alertas**: resumo + lista determinística.
+
+Um erro de rede/banco nunca pode ser apresentado como lista vazia.
+
+## Responsividade e acessibilidade
+
+- mobile-first;
+- sem overflow horizontal em `390x844`;
+- conteúdo e ações principais acessíveis em `844x390`;
+- desktop validado em `1440x900`;
+- foco visível em links/botões;
+- status não pode depender apenas de cor;
+- títulos e landmarks devem permitir navegação por leitor de tela;
+- touch targets relevantes com no mínimo `44px` de altura renderizada, o mesmo
+  `min-h-11` já usado nas telas entregues, e medidos por Playwright em `390x844`.
+
+## Fronteiras de domínio
+
+A TASK-13 não pode:
+
+- escrever `Product.currentStock`;
+- alterar triggers ou constraints da TASK-08;
+- criar nova forma de registrar venda;
+- recalcular estoque no cliente;
+- recalcular previsão de recompra;
+- modificar `Sale`, `SaleItem` ou `expectedRepurchaseAt`;
+- resolver ARCH-01 ou ARCH-02 incidentalmente.
+
+Se algum desses pontos se mostrar necessário para exibir o dashboard, isso é sinal de scope drift e deve bloquear a implementação até a spec ser corrigida.
+
+## Banco e migrations
+
+Esperado: **nenhuma migration** e nenhuma alteração de schema.
+
+A informação necessária já existe no modelo Product e é mantida pela transação de venda/estoque. Uma migration nesta task exige justificativa nova e revisão de spec antes de ser criada.
+
+## Critérios de aceite
+
+AC1. Produto com `currentStock < minimumStock` aparece como alerta.
+
+AC2. Produto com `currentStock == minimumStock` aparece como alerta.
+
+AC3. Produto com `currentStock > minimumStock` não aparece na lista de alertas.
+
+AC4. A contagem de alertas corresponde exatamente ao conjunto filtrado pela regra canônica.
+
+AC5. A ordem é determinística por déficit (`currentStock - minimumStock ASC`) e depois `id ASC`.
+
+AC6. Uma venda confirmada que cruza o limiar de estoque faz o produto aparecer na próxima leitura do dashboard, com o valor de estoque realmente persistido.
+
+AC7. Falha de carregamento produz estado de erro e retry; não produz falso empty state.
+
+AC8. Zero alertas produz empty state próprio e não mensagem de erro.
+
+AC9. A regra de low-stock é compartilhada/reutilizável fora da UI, sem duas definições independentes entre `/products` e `/inventory`.
+
+AC9.1. A extração não altera o comportamento visível de `/products`: o selo
+"Estoque baixo" e o contador continuam usando o mesmo predicado, inclusive no
+ponto de igualdade `currentStock == minimumStock`, e isso é provado por cenário
+Playwright próprio — os harnesses existentes não renderizam essa tela.
+
+AC9.2. O compartilhamento é provado **estruturalmente**, não por comportamento.
+Igualdade visível não distingue "as duas telas usam a mesma função" de
+"`ProductWorkspace` manteve o seu `isLowStock` local e `/inventory` escreveu uma
+comparação idêntica" — o segundo caso passa em todos os cenários e viola a AC9,
+mantendo exatamente o risco R1 de regra duplicada. O gate é um teste de fonte:
+ambos os consumidores importam o helper canônico, e nenhuma comparação
+`currentStock <= minimumStock` sobrevive fora dele.
+
+AC10. Mobile `390x844`, landscape `844x390` e desktop `1440x900` não apresentam overflow horizontal nem ação principal inacessível.
+
+AC13. `/inventory` é alcançável pela navegação visível de `/`, `/products` e
+`/sales`, e nenhuma dessas telas perde os destinos que já expunha.
+
+AC14. Durante o carregamento a página mostra progresso e **não** mostra "zero
+alertas" nem o empty state. O estado de carregamento é observável com a resposta
+atrasada, não apenas inferido do código.
+
+AC11. Nenhuma escrita de estoque, venda ou previsão é introduzida pelo dashboard.
+
+AC11.1. A fronteira somente-leitura tem observador executável, não revisão de
+diff. Dois gates, ambos determinísticos:
+
+- **fonte**: o módulo de leitura de alertas e a página `/inventory` não podem
+  importar o escritor de venda nem usar método de mutação do Prisma
+  (`create`, `update`, `delete`, `upsert`, `*Many`, `$executeRaw*`);
+- **runtime**: no Playwright, toda requisição originada por `/inventory` é
+  interceptada e o cenário falha se qualquer uma para `/api/*` não for `GET`.
+
+Sem isso, uma mutação introduzida no carregamento passaria: os harnesses de
+domínio continuariam verdes e nenhuma asserção de saída olharia para o método
+HTTP.
+
+AC12. Schema/migrations permanecem inalterados.
+
+AC12.1. Provado por diff determinístico contra a baseline da task, não pelo scan
+genérico de escopo: `prisma/schema.prisma` e `prisma/migrations/` não podem
+aparecer na lista de arquivos alterados. Um campo novo e válido, ou uma migration
+nova e aplicável, deixaria `db:generate`, `db:validate` e o deploy da cadeia
+inteiramente verdes — nenhum gate atual rejeitaria.
+
+## Validação determinística
+
+Antes de abrir a implementação para merge:
+
+- baseline/CI verde;
+- `npm run db:generate`;
+- `npm run db:validate`;
+- migrations existentes aplicadas em PostgreSQL descartável;
+- harness de Product e Sale/Stock continua verde;
+- teste direcionado da projeção de alertas cobre AC1–AC6 e ordenação, incluindo
+  desempate por `id` entre déficits iguais;
+- teste de fonte da AC9.2: `/products` e `/inventory` importam o mesmo helper e
+  não existe comparação `currentStock <= minimumStock` duplicada fora dele;
+- Product API integration continua verde;
+- `npm run test:loop-controller`;
+- lint;
+- typecheck;
+- build;
+- `git diff --check`;
+- gate da AC12.1: `git diff --name-only <baseline>..HEAD` não contém
+  `prisma/schema.prisma` nem `prisma/migrations/`;
+- gate de fonte da AC11.1: sem import do escritor de venda e sem método de
+  mutação do Prisma no código do dashboard;
+- scan de escopo/segredos;
+- Playwright efêmero obrigatório por ser mudança de UI.
+
+## Playwright efêmero
+
+Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
+
+1. **desktop `1440x900`** — fixtures com produto abaixo, **dois com déficit
+   igual entre si**, um exatamente igual ao mínimo e um acima. Apenas os de
+   alerta aparecem, com contagem correta, **e a sequência visível é asserida**:
+
+   - a ordem de `GET /api/products` (`updatedAt DESC, name ASC`) é construída para
+     **conflitar** com a ordem por urgência, senão renderizar o array na ordem em
+     que chega passaria com a AC5 quebrada;
+   - os dois de déficit igual entram com ordem de API **oposta** aos seus `id`,
+     porque é a única forma de exercitar a segunda metade da AC5: com déficits
+     todos distintos, o desempate por `id` nunca é consultado e uma implementação
+     que ordene só por déficit passa;
+
+   e o conteúdo de pelo menos um alerta é asserido — nome, **unidade**, **estoque
+   mínimo** e a indicação textual de estoque baixo — porque uma tela que
+   mostrasse só nomes e o total satisfaria pertinência, contagem e ordem sem
+   entregar o conteúdo exigido.
+
+   O resumo também é asserido: além do número, precisa do **texto que explica o
+   critério** `estoque atual <= estoque mínimo`, exigido no conteúdo do
+   dashboard. Sem essa asserção, um resumo puramente numérico passaria em todos
+   os gates enquanto o usuário fica sem saber por que aqueles produtos estão ali;
+2. **mobile `390x844`** — lista de alertas legível, navegação acessível e sem overflow horizontal;
+3. **landscape `844x390`** — resumo e primeiro alerta acessíveis sem corte de ação essencial, **e a mesma medição de overflow**;
+3.1. **desktop `1440x900`** — a medição de overflow também é feita aqui. A AC10 cobre os três viewports, mas só o mobile media: landscape e desktop podiam ficar com `scrollWidth > clientWidth` com todos os gates verdes;
+4. **empty state** — nenhum produto em alerta;
+5. **error/retry** — falha controlada de leitura mostra erro, retry recupera;
+6. **venda → alerta** — produto começa acima do mínimo, venda é registrada pelo fluxo canônico, dashboard é aberto/recarregado e passa a mostrar o produto com o estoque reduzido;
+7. **carregando com resposta atrasada** — a leitura de produtos é atrasada de
+   forma controlada; enquanto está pendente, o cenário exige progresso visível e
+   exige a **ausência** de "zero alertas" e do empty state; depois de resolver, a
+   lista aparece. Sem este cenário, uma implementação que mostrasse falso "zero
+   alertas" durante todo carregamento passaria em todos os outros, porque todos
+   esperam a resposta final;
+8. **entrada pela navegação, das três telas** — o cenário chega a `/inventory`
+   clicando no link **Estoque** a partir de `/`, de `/products` e de `/sales`,
+   uma de cada vez, e confirma que cada uma continua expondo os destinos que já
+   tinha. Clicar só de `/products` não prova a AC13: uma implementação que
+   adicionasse o link apenas ali passaria, e as outras duas telas ficariam sem
+   acesso ao dashboard. Abrir `/inventory` por URL direta não prova nada disso;
+9. **`/products` não regride** — a AC9 obriga extrair `isLowStock` de
+   `ProductWorkspace`, então `/products` muda por construção. Nenhum outro
+   cenário abre essa tela, e os harnesses de Product e Sale/Stock não renderizam
+   UI: o selo "Estoque baixo" e o contador da TASK-06 poderiam quebrar com todos
+   os gates verdes. O cenário abre `/products` com produtos abaixo, **igual** e
+   acima do mínimo e exige selo exatamente nos dois primeiros e contador igual a
+   `2`, provando o mesmo predicado compartilhado no ponto de igualdade;
+10. **acessibilidade observável** — travessia por teclado alcança os controles
+    principais com foco **visível** (indicador de foco presente, não removido por
+    CSS), e a página expõe os landmarks e títulos que a seção de acessibilidade
+    exige: um `main`, uma `nav` e hierarquia de títulos utilizável. Sem este
+    cenário, uma página construída com contêineres genéricos e `outline: none`
+    passaria em todos os checks funcionais, de viewport e de console.
+
+    O mesmo cenário mede os **touch targets** em `390x844`: os controles
+    principais da página — link de navegação e ação `Tentar novamente` — precisam
+    de altura renderizada de no mínimo **44 px**. O número não é arbitrário: é o
+    `min-h-11` que as telas já entregues usam como alvo padrão. Sem medir, um
+    controle de poucos pixels continuaria focável por teclado, legível e sem
+    overflow, passando em tudo que já está listado;
+11. **somente leitura em runtime** — todas as requisições originadas por
+    `/inventory` são interceptadas; qualquer chamada a `/api/*` que não seja
+    `GET` falha o cenário. É o observador de runtime da AC11.1;
+12. console sem erro crítico.
+
+Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
+
+## Não escopo
+
+- previsão de recompra ou dashboard de recompra (TASK-12);
+- compra/reposição de estoque;
+- fornecedores;
+- sugestão automática de quantidade para comprar;
+- notificações push/email/WhatsApp;
+- filtros avançados, exportação ou relatório financeiro;
+- atualização realtime/polling;
+- autenticação/permissões;
+- mudanças de arquitetura de data/hora ou forecast.
+
+## Riscos conhecidos
+
+R1. **Duplicação da regra de alerta** — já existe `isLowStock` na UI de produtos. Mitigação: extrair/reutilizar uma função única fora da camada visual.
+
+R1.2. **Gate verde que não observa nada** — três requisitos desta spec (ordem
+renderizada, estado de carregando e alcançabilidade por navegação) podem ficar
+quebrados com todos os gates verdes, porque nenhum cenário os observava. É a
+mesma classe de defeito que a TASK-10 teve quando o harness exercitava uma cópia
+da política em vez da produção. Mitigação: cada um ganhou cenário próprio com
+asserção sobre o comportamento observável, não sobre a existência do código.
+
+R1.1. **Regressão silenciosa em `/products` durante a extração** — mover a regra
+altera uma tela entregue pela TASK-06 que nenhum gate atual observa. Mitigação:
+cenário Playwright dedicado a `/products` (item 7), exigido antes do merge.
+
+R2. **Falso freshness** — cache pode fazer o dashboard parecer desatualizado após venda. Mitigação: leitura atual sem cache persistente e teste venda → próxima leitura.
+
+R3. **Scope creep para reposição** — “dashboard de estoque” pode virar gestão de compras. Mitigação: esta task é somente alerta/leitura.
+
+R4. **Erro confundido com zero alertas** — mitigação: estados de erro e vazio distintos e cobertos por Playwright.
+
+## Assumptions explícitas
+
+A1. `/inventory` é a rota escolhida para o dashboard porque as rotas atuais são nomeadas em inglês. O SDD define a função, não a URL.
+
+A2. “Atualiza após vendas” significa consistência na próxima leitura após a transação confirmada. Realtime enquanto a tela permanece aberta não é requisito do MVP.
+
+A3. Não é necessário um novo endpoint de API enquanto `GET /api/products` continuar fornecendo todos os campos e refletindo a verdade atual do banco.
+
+Estas assumptions são locais à TASK-13 e podem ser alteradas durante revisão da spec se houver evidência de repositório que as contradiga.
