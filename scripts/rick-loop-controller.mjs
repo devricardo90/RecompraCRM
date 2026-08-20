@@ -3,10 +3,14 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { dirname, basename, join } from "node:path";
+import { parseRoadmapPlan, resolveNextEligibleTask } from "./rick-loop-roadmap.mjs";
+
+export { parseRoadmapPlan, resolveNextEligibleTask } from "./rick-loop-roadmap.mjs";
 
 const repoRoot = process.cwd();
 const RUNTIME_STATE_PATH = ".rick/tmp/loop-runtime.json";
 const PREWRITE_STATE_PATH = ".rick/tmp/prewrite.json";
+const LOOP_VERSION = "RICK_LOOP_V1_3_2";
 
 export const CANONICAL_TASK_STATES = Object.freeze([
   "READY",
@@ -83,19 +87,12 @@ export function taskSpecPath(task) {
   return task ? `docs/specs/${task}.md` : null;
 }
 
-// A review satisfies the gate only when it is anchored to the exact HEAD under
-// judgement. Approval for an older SHA is evidence, never a gate. This is
-// deliberately strict: the previous implementation compared the PR head to
-// itself, so any review on any older commit passed the gate.
 export function selectAnchoredReview(reviews, headOid) {
   if (!Array.isArray(reviews) || !headOid) return null;
   const anchored = reviews.filter((entry) => entry?.commit?.oid === headOid);
   return anchored.length ? anchored[anchored.length - 1] : null;
 }
 
-// The reviewer also signals "clean" as a PR comment naming the reviewed commit
-// rather than as a review object, and abbreviates the SHA there. That path is
-// valid, but only when the named commit is the exact HEAD.
 export function selectAnchoredCleanComment(comments, headOid) {
   if (!Array.isArray(comments) || !headOid) return null;
   const clean = comments.filter((entry) => {
@@ -107,11 +104,6 @@ export function selectAnchoredCleanComment(comments, headOid) {
   return clean.length ? clean[clean.length - 1] : null;
 }
 
-// Item A: a task that needed many review rounds, each carrying a distinct
-// confirmed defect, is reporting an architecture problem rather than bad luck.
-// Non-blocking: it never restarts a task, never authorizes scope creep, and
-// never blocks convergence. The count is over review rounds, not comments, and
-// a new commit cannot reset it.
 export function evaluateArchitectureComplexitySignal(entries, task, threshold = 5) {
   const rounds = new Set();
   const classes = [];
@@ -146,10 +138,48 @@ export function deriveCanonicalTaskState({ git, pr, review, ci }) {
   return "REVIEW_LANDED";
 }
 
-export function detectStateDrift({ state, git, pr, prewrite = null }) {
+function comparablePointer(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized.toLowerCase() === "none" || normalized === "" ? null : normalized;
+}
+
+export function detectStateDrift({ state, handoff = null, git, pr, prewrite = null }) {
   if (!state) return [];
   const drift = [];
   const branchTask = taskFromBranch(pr?.headRefName ?? git?.branch);
+
+  if (handoff) {
+    const stateTask = comparablePointer(state.current_task);
+    const handoffTask = comparablePointer(handoff.current_task);
+    if (stateTask && handoffTask && stateTask !== handoffTask) {
+      drift.push({ code: "HANDOFF_CURRENT_TASK_STALE", message: `HANDOFF current_task ${handoffTask} differs from STATE current_task ${stateTask}` });
+    }
+
+    const stateNext = comparablePointer(state.next_eligible_task);
+    const handoffNext = comparablePointer(handoff.next_eligible_task);
+    if (stateNext && handoffNext && stateNext !== handoffNext) {
+      drift.push({ code: "HANDOFF_NEXT_ELIGIBLE_STALE", message: `HANDOFF next_eligible_task ${handoffNext} differs from STATE next_eligible_task ${stateNext}` });
+    }
+
+    const stateMode = comparablePointer(state.mode);
+    const handoffMode = comparablePointer(handoff.mode);
+    if (stateMode && handoffMode && stateMode !== handoffMode) {
+      drift.push({ code: "HANDOFF_MODE_STALE", message: `HANDOFF mode ${handoffMode} differs from STATE mode ${stateMode}` });
+    }
+
+    const stateBranch = comparablePointer(state.branch);
+    const handoffBranch = comparablePointer(handoff.current_branch);
+    if (stateBranch && handoffBranch && stateBranch !== handoffBranch) {
+      drift.push({ code: "HANDOFF_BRANCH_STALE", message: `HANDOFF current_branch ${handoffBranch} differs from STATE branch ${stateBranch}` });
+    }
+
+    const statePr = comparablePointer(state.pr_number);
+    const handoffPr = comparablePointer(handoff.current_pr);
+    if (statePr && handoffPr && statePr !== handoffPr) {
+      drift.push({ code: "HANDOFF_PR_STALE", message: `HANDOFF current_pr ${handoffPr} differs from STATE pr_number ${statePr}` });
+    }
+  }
 
   if (pr && pr.state === "OPEN" && START_LIKE_STATUSES.has(String(state.current_task_status ?? ""))) {
     drift.push({ code: "TASK_ALREADY_IN_PROGRESS", message: `${state.current_task} has open PR #${pr.number} but state says ${state.current_task_status}` });
@@ -186,7 +216,7 @@ export function startWait({ state, task, prNumber = null, targetHead = null, now
   const backoffSeconds = backoffSecondsForPollCount(0);
   return {
     schema_version: "1.1",
-    loop_version: "RICK_LOOP_V1_3",
+    loop_version: LOOP_VERSION,
     state,
     task,
     pr_number: prNumber,
@@ -228,7 +258,7 @@ export function startPrewrite({ task, action, expectedState = null, targetHead =
   if (!task || !action) throw new Error("task and action are required for pre-write");
   return {
     schema_version: "1.0",
-    loop_version: "RICK_LOOP_V1_3",
+    loop_version: LOOP_VERSION,
     idempotency_key: prewriteKey({ task, action, expectedState, targetHead }),
     task,
     action,
@@ -279,10 +309,17 @@ function readState() {
   return parseFlatYaml(readFileSync(path, "utf8"));
 }
 
+function readHandoff() {
+  const path = "docs/operations/HANDOFF.md";
+  if (!existsSync(path)) return null;
+  return parseFlatYaml(readFileSync(path, "utf8"));
+}
+
 function readRoadmap() {
   const path = "docs/roadmap/ROADMAP.md";
   if (!existsSync(path)) return null;
-  return countRoadmapTasks(readFileSync(path, "utf8"));
+  const text = readFileSync(path, "utf8");
+  return { ...countRoadmapTasks(text), plan: parseRoadmapPlan(text) };
 }
 
 function gitFacts() {
@@ -343,13 +380,31 @@ function ciForSha(branch, sha, repo) {
   return Array.isArray(runs) ? runs.find((r) => r.headSha === sha) || null : null;
 }
 
-function classify(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent }) {
+export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection }) {
   if (!state) return { transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" };
   if (git.dirty) return { transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" };
-  if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/PR facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
+  if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
   if (roadmap && roadmap.pending === 0 && roadmap.total > 0) return { transition: "ROADMAP_COMPLETE", reason: "no pending TASK entries remain in ROADMAP.md" };
-  if (state.current_task && !taskSpecPresent) return { transition: "SPEC_REQUIRED", reason: `${taskSpecPath(state.current_task)} is required before implementation/recovery writes` };
-  if (!pr) return { transition: "PASS", reason: `no active PR found; proceed with ${state.current_task} from the task spec` };
+
+  if (!pr && effectiveTask && state.current_task && effectiveTask !== state.current_task) {
+    return {
+      transition: "TASK_ADVANCE",
+      task: effectiveTask,
+      reason: `${state.current_task} is not currently eligible; deterministically advance to ${effectiveTask}`,
+      skipped: taskSelection?.skipped ?? [],
+    };
+  }
+
+  if (!effectiveTask) {
+    return {
+      transition: "NO_ELIGIBLE_TASK",
+      reason: "pending tasks exist but every candidate is blocked by unresolved dependencies or explicit task-scoped blockers",
+      skipped: taskSelection?.skipped ?? [],
+    };
+  }
+
+  if (!taskSpecPresent) return { transition: "SPEC_REQUIRED", task: effectiveTask, reason: `${taskSpecPath(effectiveTask)} is required before implementation/recovery writes` };
+  if (!pr) return { transition: "PASS", task: effectiveTask, reason: `no active PR found; proceed with ${effectiveTask} from the task spec` };
   if (pr.state === "MERGED") return { transition: "POST_MERGE_VALIDATION", reason: `PR #${pr.number} merged; validate main before advancing` };
   if (!ci) return { transition: "EXTERNAL_RETRYABLE", reason: "no CI run found yet for current PR HEAD" };
   if (ci.status !== "completed") return { transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` };
@@ -360,33 +415,59 @@ function classify(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent 
 
 function reconcile() {
   const state = readState();
+  const handoff = readHandoff();
   const roadmap = readRoadmap();
+  const taskSelection = roadmap?.plan ? resolveNextEligibleTask(roadmap.plan) : { task: state?.current_task ?? null, reason: "STATE_FALLBACK", skipped: [] };
   const git = gitFacts();
   const repo = repoSlug();
   const hasGh = ghAvailable();
+  const branchTask = taskFromBranch(git.branch);
   const isTaskBranch = /^(feat|fix)\/TASK-\d+/.test(git.branch ?? "");
   let pr = null;
+
   if (hasGh && repo) {
     pr = isTaskBranch ? findPrForBranch(git.branch, repo) : null;
     if (!pr && state?.current_task) pr = findPrForTask(state.current_task, repo);
+    if (!pr && taskSelection.task && taskSelection.task !== state?.current_task) pr = findPrForTask(taskSelection.task, repo);
   }
+
+  const effectiveTask = taskFromBranch(pr?.headRefName) ?? branchTask ?? taskSelection.task ?? state?.current_task ?? null;
   const review = pr && repo ? prReview(pr.number, repo) : null;
   const ciBranch = pr?.headRefName ?? git.branch;
   const ciHead = pr?.headRefOid ?? git.head;
   const ci = pr && repo ? ciForSha(ciBranch, ciHead, repo) : null;
   const prewrite = loadPrewriteState();
-  const drift = detectStateDrift({ state, git, pr, prewrite });
-  const taskSpec = taskSpecPath(state?.current_task);
+  const drift = detectStateDrift({ state, handoff, git, pr, prewrite });
+  const taskSpec = taskSpecPath(effectiveTask);
   const taskSpecPresent = taskSpec ? existsSync(taskSpec) : false;
   const canonicalTaskState = deriveCanonicalTaskState({ git, pr, review, ci });
-  const decision = classify(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent });
-  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), state?.current_task);
-  const writeTransitions = new Set(["PASS", "REVIEW_LANDED", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
+  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection });
+  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), effectiveTask);
+  const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "REVIEW_LANDED", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
+
   return {
     generated_at: new Date().toISOString(),
-    loop_version: "RICK_LOOP_V1_3",
-    state_summary: state ? { mode: state.mode, current_task: state.current_task, persisted_task_status: state.current_task_status ?? null, canonical_task_state: canonicalTaskState, next_eligible_task: state.next_eligible_task, next_action: state.next_action, completed_tasks: state.completed_tasks } : null,
-    roadmap_summary: roadmap,
+    loop_version: LOOP_VERSION,
+    state_summary: state ? {
+      mode: state.mode,
+      current_task: state.current_task,
+      persisted_task_status: state.current_task_status ?? null,
+      canonical_task_state: canonicalTaskState,
+      next_eligible_task: state.next_eligible_task,
+      resolved_task: effectiveTask,
+      roadmap_next_eligible_task: taskSelection.task,
+      next_action: state.next_action,
+      completed_tasks: state.completed_tasks,
+    } : null,
+    handoff_summary: handoff ? {
+      current_task: handoff.current_task ?? null,
+      current_task_status: handoff.current_task_status ?? null,
+      next_eligible_task: handoff.next_eligible_task ?? null,
+      current_branch: handoff.current_branch ?? null,
+      current_pr: handoff.current_pr ?? null,
+    } : null,
+    roadmap_summary: roadmap ? { pending: roadmap.pending, done: roadmap.done, total: roadmap.total } : null,
+    task_selection: taskSelection,
     git,
     gh_available: hasGh,
     pr: pr ? { number: pr.number, state: pr.state, headRefName: pr.headRefName, headRefOid: pr.headRefOid, mergeable: pr.mergeable } : null,
