@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { formatBusinessDate } from "@/lib/format/businessDate";
+
 type Customer = { id: number; name: string; phone: string | null };
 
 type Product = {
@@ -41,13 +43,6 @@ function newLine(): SaleItemLine {
 async function readError(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;
   return payload?.error ?? fallback;
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export default function SaleWorkspace() {
@@ -259,7 +254,7 @@ export default function SaleWorkspace() {
                   </span>
                   <span className="text-sm text-emerald-900">
                     Estoque agora: {item.product.currentStock} {item.product.unit} · Próxima compra:{" "}
-                    <strong data-testid="forecast-value">{formatDate(item.expectedRepurchaseAt)}</strong>
+                    <strong data-testid="forecast-value">{formatBusinessDate(item.expectedRepurchaseAt)}</strong>
                   </span>
                 </li>
               ))}

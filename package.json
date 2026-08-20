@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:customer && npm run test:product && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration",
+    "test": "npm run test:customer && npm run test:product && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration && npm run test:customer-history",
     "test:customer": "node scripts/customer-model-check.mjs",
     "test:product": "node scripts/product-model-check.mjs",
     "test:sale": "node scripts/sale-model-check.mjs",
@@ -30,7 +30,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:health": "node scripts/db-healthcheck.mjs",
     "db:setup": "npm run db:up && npm run db:generate && npm run db:migrate && npm run db:health",
-    "test:sale-registration": "node scripts/sale-registration-concurrency-check.mjs"
+    "test:sale-registration": "node scripts/sale-registration-concurrency-check.mjs",
+    "test:customer-history": "node scripts/customer-history-check.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

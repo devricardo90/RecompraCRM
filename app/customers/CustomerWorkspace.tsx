@@ -245,7 +245,10 @@ export default function CustomerWorkspace() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
-                    <button type="button" onClick={() => openEditForm(customer)} className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Editar</button>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/customers/${customer.id}/history`} data-testid="customer-history-link" className="min-h-10 inline-flex items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Histórico</Link>
+                      <button type="button" onClick={() => openEditForm(customer)} className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Editar</button>
+                    </div>
                   </div>
                 </article>
               ))}
