@@ -144,40 +144,43 @@ function comparablePointer(value) {
   return normalized.toLowerCase() === "none" || normalized === "" ? null : normalized;
 }
 
+function hasOwn(object, key) {
+  return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function pointersDiffer(leftObject, leftKey, rightObject, rightKey) {
+  if (!hasOwn(leftObject, leftKey) || !hasOwn(rightObject, rightKey)) return false;
+  return comparablePointer(leftObject[leftKey]) !== comparablePointer(rightObject[rightKey]);
+}
+
+function pointerLabel(value) {
+  return comparablePointer(value) ?? "none";
+}
+
 export function detectStateDrift({ state, handoff = null, git, pr, prewrite = null }) {
   if (!state) return [];
   const drift = [];
   const branchTask = taskFromBranch(pr?.headRefName ?? git?.branch);
 
   if (handoff) {
-    const stateTask = comparablePointer(state.current_task);
-    const handoffTask = comparablePointer(handoff.current_task);
-    if (stateTask && handoffTask && stateTask !== handoffTask) {
-      drift.push({ code: "HANDOFF_CURRENT_TASK_STALE", message: `HANDOFF current_task ${handoffTask} differs from STATE current_task ${stateTask}` });
+    if (pointersDiffer(state, "current_task", handoff, "current_task")) {
+      drift.push({ code: "HANDOFF_CURRENT_TASK_STALE", message: `HANDOFF current_task ${pointerLabel(handoff.current_task)} differs from STATE current_task ${pointerLabel(state.current_task)}` });
     }
 
-    const stateNext = comparablePointer(state.next_eligible_task);
-    const handoffNext = comparablePointer(handoff.next_eligible_task);
-    if (stateNext && handoffNext && stateNext !== handoffNext) {
-      drift.push({ code: "HANDOFF_NEXT_ELIGIBLE_STALE", message: `HANDOFF next_eligible_task ${handoffNext} differs from STATE next_eligible_task ${stateNext}` });
+    if (pointersDiffer(state, "next_eligible_task", handoff, "next_eligible_task")) {
+      drift.push({ code: "HANDOFF_NEXT_ELIGIBLE_STALE", message: `HANDOFF next_eligible_task ${pointerLabel(handoff.next_eligible_task)} differs from STATE next_eligible_task ${pointerLabel(state.next_eligible_task)}` });
     }
 
-    const stateMode = comparablePointer(state.mode);
-    const handoffMode = comparablePointer(handoff.mode);
-    if (stateMode && handoffMode && stateMode !== handoffMode) {
-      drift.push({ code: "HANDOFF_MODE_STALE", message: `HANDOFF mode ${handoffMode} differs from STATE mode ${stateMode}` });
+    if (pointersDiffer(state, "mode", handoff, "mode")) {
+      drift.push({ code: "HANDOFF_MODE_STALE", message: `HANDOFF mode ${pointerLabel(handoff.mode)} differs from STATE mode ${pointerLabel(state.mode)}` });
     }
 
-    const stateBranch = comparablePointer(state.branch);
-    const handoffBranch = comparablePointer(handoff.current_branch);
-    if (stateBranch && handoffBranch && stateBranch !== handoffBranch) {
-      drift.push({ code: "HANDOFF_BRANCH_STALE", message: `HANDOFF current_branch ${handoffBranch} differs from STATE branch ${stateBranch}` });
+    if (pointersDiffer(state, "branch", handoff, "current_branch")) {
+      drift.push({ code: "HANDOFF_BRANCH_STALE", message: `HANDOFF current_branch ${pointerLabel(handoff.current_branch)} differs from STATE branch ${pointerLabel(state.branch)}` });
     }
 
-    const statePr = comparablePointer(state.pr_number);
-    const handoffPr = comparablePointer(handoff.current_pr);
-    if (statePr && handoffPr && statePr !== handoffPr) {
-      drift.push({ code: "HANDOFF_PR_STALE", message: `HANDOFF current_pr ${handoffPr} differs from STATE pr_number ${statePr}` });
+    if (pointersDiffer(state, "pr_number", handoff, "current_pr")) {
+      drift.push({ code: "HANDOFF_PR_STALE", message: `HANDOFF current_pr ${pointerLabel(handoff.current_pr)} differs from STATE pr_number ${pointerLabel(state.pr_number)}` });
     }
   }
 
@@ -413,15 +416,22 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drif
   return { transition: "REVIEW_LANDED", reason: "review anchored to the exact current PR HEAD; inspect inline findings and classify PASS vs RECOVERING", review: review.anchored };
 }
 
+export function resolveEffectiveTask({ pr, gitBranch, taskSelection, state, roadmapAvailable }) {
+  const activeTask = taskFromBranch(pr?.headRefName) ?? taskFromBranch(gitBranch);
+  if (activeTask) return activeTask;
+  if (roadmapAvailable) return taskSelection?.task ?? null;
+  return taskSelection?.task ?? state?.current_task ?? null;
+}
+
 function reconcile() {
   const state = readState();
   const handoff = readHandoff();
   const roadmap = readRoadmap();
-  const taskSelection = roadmap?.plan ? resolveNextEligibleTask(roadmap.plan) : { task: state?.current_task ?? null, reason: "STATE_FALLBACK", skipped: [] };
+  const roadmapAvailable = Boolean(roadmap?.plan);
+  const taskSelection = roadmapAvailable ? resolveNextEligibleTask(roadmap.plan) : { task: state?.current_task ?? null, reason: "STATE_FALLBACK", skipped: [] };
   const git = gitFacts();
   const repo = repoSlug();
   const hasGh = ghAvailable();
-  const branchTask = taskFromBranch(git.branch);
   const isTaskBranch = /^(feat|fix)\/TASK-\d+/.test(git.branch ?? "");
   let pr = null;
 
@@ -431,7 +441,7 @@ function reconcile() {
     if (!pr && taskSelection.task && taskSelection.task !== state?.current_task) pr = findPrForTask(taskSelection.task, repo);
   }
 
-  const effectiveTask = taskFromBranch(pr?.headRefName) ?? branchTask ?? taskSelection.task ?? state?.current_task ?? null;
+  const effectiveTask = resolveEffectiveTask({ pr, gitBranch: git.branch, taskSelection, state, roadmapAvailable });
   const review = pr && repo ? prReview(pr.number, repo) : null;
   const ciBranch = pr?.headRefName ?? git.branch;
   const ciHead = pr?.headRefOid ?? git.head;
