@@ -195,7 +195,26 @@ atrasada, não apenas inferido do código.
 
 AC11. Nenhuma escrita de estoque, venda ou previsão é introduzida pelo dashboard.
 
+AC11.1. A fronteira somente-leitura tem observador executável, não revisão de
+diff. Dois gates, ambos determinísticos:
+
+- **fonte**: o módulo de leitura de alertas e a página `/inventory` não podem
+  importar o escritor de venda nem usar método de mutação do Prisma
+  (`create`, `update`, `delete`, `upsert`, `*Many`, `$executeRaw*`);
+- **runtime**: no Playwright, toda requisição originada por `/inventory` é
+  interceptada e o cenário falha se qualquer uma para `/api/*` não for `GET`.
+
+Sem isso, uma mutação introduzida no carregamento passaria: os harnesses de
+domínio continuariam verdes e nenhuma asserção de saída olharia para o método
+HTTP.
+
 AC12. Schema/migrations permanecem inalterados.
+
+AC12.1. Provado por diff determinístico contra a baseline da task, não pelo scan
+genérico de escopo: `prisma/schema.prisma` e `prisma/migrations/` não podem
+aparecer na lista de arquivos alterados. Um campo novo e válido, ou uma migration
+nova e aplicável, deixaria `db:generate`, `db:validate` e o deploy da cadeia
+inteiramente verdes — nenhum gate atual rejeitaria.
 
 ## Validação determinística
 
@@ -216,6 +235,10 @@ Antes de abrir a implementação para merge:
 - typecheck;
 - build;
 - `git diff --check`;
+- gate da AC12.1: `git diff --name-only <baseline>..HEAD` não contém
+  `prisma/schema.prisma` nem `prisma/migrations/`;
+- gate de fonte da AC11.1: sem import do escritor de venda e sem método de
+  mutação do Prisma no código do dashboard;
 - scan de escopo/segredos;
 - Playwright efêmero obrigatório por ser mudança de UI.
 
@@ -282,7 +305,10 @@ Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
     `min-h-11` que as telas já entregues usam como alvo padrão. Sem medir, um
     controle de poucos pixels continuaria focável por teclado, legível e sem
     overflow, passando em tudo que já está listado;
-11. console sem erro crítico.
+11. **somente leitura em runtime** — todas as requisições originadas por
+    `/inventory` são interceptadas; qualquer chamada a `/api/*` que não seja
+    `GET` falha o cenário. É o observador de runtime da AC11.1;
+12. console sem erro crítico.
 
 Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
 
