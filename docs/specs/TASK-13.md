@@ -55,7 +55,14 @@ A leitura deve usar dados atuais, sem cache que possa esconder uma venda recém-
 
 Criar uma página dedicada de dashboard de estoque em `/inventory`.
 
-A página deve ser acessível pela navegação principal das telas relevantes sem remover os destinos existentes de clientes, produtos e registro de venda.
+A página deve ser acessível pela navegação principal das telas relevantes sem
+remover os destinos existentes de clientes, produtos e registro de venda.
+
+"Telas relevantes" é enumerado, não deixado a critério: `/` (clientes),
+`/products` e `/sales`. Cada uma dessas telas tem hoje a sua própria `nav`
+independente, então o link **Estoque** precisa ser adicionado nas três — do
+contrário `/inventory` fica alcançável apenas por URL digitada, o que a AC13
+proíbe.
 
 A rota `/inventory` é uma convenção de implementação para manter o padrão atual de rotas em inglês (`/products`, `/sales`, `/customers`). O texto visível ao usuário permanece em português: **Estoque** / **Alertas de estoque**.
 
@@ -170,6 +177,13 @@ Playwright próprio — os harnesses existentes não renderizam essa tela.
 
 AC10. Mobile `390x844`, landscape `844x390` e desktop `1440x900` não apresentam overflow horizontal nem ação principal inacessível.
 
+AC13. `/inventory` é alcançável pela navegação visível de `/`, `/products` e
+`/sales`, e nenhuma dessas telas perde os destinos que já expunha.
+
+AC14. Durante o carregamento a página mostra progresso e **não** mostra "zero
+alertas" nem o empty state. O estado de carregamento é observável com a resposta
+atrasada, não apenas inferido do código.
+
 AC11. Nenhuma escrita de estoque, venda ou previsão é introduzida pelo dashboard.
 
 AC12. Schema/migrations permanecem inalterados.
@@ -197,20 +211,37 @@ Antes de abrir a implementação para merge:
 
 Cenários mínimos, sem persistir screenshot/trace/video após sucesso:
 
-1. **desktop `1440x900`** — lista com produto abaixo, igual e acima do mínimo; apenas os dois primeiros aparecem; contagem correta;
+1. **desktop `1440x900`** — lista com produto abaixo, igual e acima do mínimo;
+   apenas os dois primeiros aparecem; contagem correta; **e a ordem renderizada é
+   asserida**, não só a pertinência. As fixtures são construídas para que a ordem
+   de `GET /api/products` (`updatedAt DESC, name ASC`) **conflite** com a ordem por
+   urgência: sem isso, uma implementação que renderize o array da API na ordem em
+   que ele chega passaria com a AC5 quebrada. A asserção é sobre a sequência
+   visível, por déficit crescente e depois `id`;
 2. **mobile `390x844`** — lista de alertas legível, navegação acessível e sem overflow horizontal;
 3. **landscape `844x390`** — resumo e primeiro alerta acessíveis sem corte de ação essencial;
 4. **empty state** — nenhum produto em alerta;
 5. **error/retry** — falha controlada de leitura mostra erro, retry recupera;
 6. **venda → alerta** — produto começa acima do mínimo, venda é registrada pelo fluxo canônico, dashboard é aberto/recarregado e passa a mostrar o produto com o estoque reduzido;
-7. **`/products` não regride** — a AC9 obriga extrair `isLowStock` de
+7. **carregando com resposta atrasada** — a leitura de produtos é atrasada de
+   forma controlada; enquanto está pendente, o cenário exige progresso visível e
+   exige a **ausência** de "zero alertas" e do empty state; depois de resolver, a
+   lista aparece. Sem este cenário, uma implementação que mostrasse falso "zero
+   alertas" durante todo carregamento passaria em todos os outros, porque todos
+   esperam a resposta final;
+8. **entrada pela navegação** — o cenário chega a `/inventory` clicando no link
+   **Estoque** a partir de `/products`, e confirma que `/`, `/products` e `/sales`
+   continuam expondo os destinos que já tinham. Abrir `/inventory` por URL direta
+   não prova a AC13: a rota poderia estar inacessível pela interface com todos os
+   gates verdes;
+9. **`/products` não regride** — a AC9 obriga extrair `isLowStock` de
    `ProductWorkspace`, então `/products` muda por construção. Nenhum outro
    cenário abre essa tela, e os harnesses de Product e Sale/Stock não renderizam
    UI: o selo "Estoque baixo" e o contador da TASK-06 poderiam quebrar com todos
    os gates verdes. O cenário abre `/products` com produtos abaixo, **igual** e
    acima do mínimo e exige selo exatamente nos dois primeiros e contador igual a
    `2`, provando o mesmo predicado compartilhado no ponto de igualdade;
-8. console sem erro crítico.
+10. console sem erro crítico.
 
 Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY` e não libera a task.
 
@@ -229,6 +260,13 @@ Retry do Playwright deve ser `0`. Um cenário que só passa com retry é `FLAKY`
 ## Riscos conhecidos
 
 R1. **Duplicação da regra de alerta** — já existe `isLowStock` na UI de produtos. Mitigação: extrair/reutilizar uma função única fora da camada visual.
+
+R1.2. **Gate verde que não observa nada** — três requisitos desta spec (ordem
+renderizada, estado de carregando e alcançabilidade por navegação) podem ficar
+quebrados com todos os gates verdes, porque nenhum cenário os observava. É a
+mesma classe de defeito que a TASK-10 teve quando o harness exercitava uma cópia
+da política em vez da produção. Mitigação: cada um ganhou cenário próprio com
+asserção sobre o comportamento observável, não sobre a existência do código.
 
 R1.1. **Regressão silenciosa em `/products` durante a extração** — mover a regra
 altera uma tela entregue pela TASK-06 que nenhum gate atual observa. Mitigação:
