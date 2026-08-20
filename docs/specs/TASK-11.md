@@ -1,6 +1,6 @@
 # TASK-11 Spec — Histórico do cliente
 
-Status: SPEC_DERIVED_AWAITING_REVIEW
+Status: SPEC_REVIEWED_ROUND_1_APPROVED_FOR_IMPLEMENTATION
 Source: `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-10 (registro de venda)
 Baseline: `c3b8e16704a0b1971d8d5f3802fa9a18d99b0976` (main)
@@ -37,14 +37,22 @@ Ordem **total**, portanto reproduzível:
 | Nível | Critério |
 | --- | --- |
 | vendas | `soldAt DESC`, desempate `id DESC` |
-| itens dentro da venda | `productId ASC` |
+| itens dentro da venda | `productId ASC`, desempate `id ASC` |
 
-`Sale.id` é único, então o desempate torna a ordem total mesmo quando várias
-vendas compartilham o mesmo `soldAt` — caso real, porque `soldAt` pode ser
+`Sale.id` é único, então o desempate torna a ordem de vendas total mesmo quando
+várias vendas compartilham o mesmo `soldAt` — caso real, porque `soldAt` pode ser
 informado pelo cliente da API e várias vendas podem cair no mesmo instante.
 
-`productId ASC` é a mesma ordem em que a TASK-10 grava os itens e em que
-`GET /api/sales` já os devolve, então a leitura não contradiz a escrita.
+`productId ASC` sozinho **não** é ordem total dos itens: o schema não torna
+`(saleId, productId)` único, e duas linhas do mesmo produto na mesma venda são
+possíveis. O fluxo da TASK-10 normaliza duplicatas e não as produz, mas escrita
+direta e dados legados produzem — os próprios harnesses das TASK-09/10 criam
+vendas com dois itens do mesmo produto. Sem desempate, essas linhas podem voltar
+em qualquer ordem. Por isso o desempate por `id ASC`, e por isso a evidência
+precisa cobrir venda com produto repetido.
+
+`productId ASC` continua sendo a mesma ordem em que a TASK-10 grava os itens e em
+que `GET /api/sales` já os devolve, então a leitura não contradiz a escrita.
 
 ## Campos exibidos
 
@@ -112,9 +120,33 @@ O histórico cresce sem limite, então a leitura é paginada.
 - `cursor`: `Sale.id` da última venda da página anterior; ausente ⇒ primeira
   página;
 - resposta inclui `nextCursor` (ou `null` quando não há mais páginas);
-- paginação por cursor, não por `offset`: sobre a ordem total definida acima,
-  uma venda registrada durante a navegação não desloca nem duplica itens já
-  vistos.
+- paginação por cursor, não por `offset`.
+
+**O seek é composto, não escalar.** `Sale.id` sozinho não é valor de corte
+válido para `soldAt DESC, id DESC`: `soldAt` é informado pelo chamador, então uma
+venda pode ser retroagida e a ordem de `id` deixar de acompanhar a ordem de
+`soldAt`. Uma implementação do tipo `id < cursor` pularia ou repetiria linhas
+válidas enquanto ainda parecesse seguir um cursor escalar.
+
+O contrato é:
+
+1. resolver a venda do `cursor`;
+2. exigir que ela pertença ao cliente `:id` — se existir mas for de outro
+   cliente, responder `400`. Sem essa checagem, o `soldAt` de uma venda alheia
+   viraria a fronteira do seek e parte do histórico do cliente sumiria
+   silenciosamente;
+3. seguir lexicograficamente por `(soldAt, id)`: retornar as vendas com
+   `soldAt < cursor.soldAt`, mais as com `soldAt = cursor.soldAt AND id <
+   cursor.id`;
+4. `cursor` inexistente ⇒ `400`.
+
+**Invariante sob escrita concorrente**, enunciada de forma não contraditória: uma
+travessia cobre **exatamente uma vez cada venda do conjunto existente quando a
+travessia começou**. Uma venda registrada no meio da navegação, com `soldAt` mais
+recente que o cursor, ordena *antes* do ponto de corte e por construção não pode
+aparecer em nenhuma página seguinte — ela só aparece ao recarregar. O que a
+paginação garante é ausência de duplicata e ausência de salto no conjunto
+original, não uma visão instantânea do total pós-inserção.
 
 ## Estados de interface
 
@@ -166,6 +198,30 @@ TASK-10, para o aplicativo ter uma regra só.
 justamente para poder ser trocada em um ponto quando o fuso canônico for
 definido.
 
+### Trocar só o formatador não basta
+
+`POST /api/sales` aceita `soldAt` só com data (`"2026-08-20"`), e o JavaScript
+interpreta isso como **meia-noite UTC**. Formatar esse instante em
+`America/Sao_Paulo` (UTC−3) exibiria `19/08/2026` — um dia antes do que o
+chamador informou — e a previsão derivada desloca junto. Ou seja, aplicar A3
+apenas na exibição transformaria datas válidas em datas erradas.
+
+Então a regra é de **interpretação e armazenamento**, não só de exibição:
+
+| Entrada | Interpretação |
+| --- | --- |
+| só data, `YYYY-MM-DD` | meia-noite **no fuso do negócio**, armazenada como o instante UTC correspondente |
+| data e hora com offset explícito (`Z`, `+HH:MM`) | instante exato informado, respeitado como veio |
+| data e hora sem offset | meia-noite/hora local **no fuso do negócio** |
+| ausente | instante atual |
+
+Com isso, `soldAt: "2026-08-20"` é armazenado como `2026-08-20T03:00:00Z` e
+exibido como `20/08/2026`, e a previsão canônica cai no dia de calendário certo.
+
+Esta regra altera o parsing da TASK-10, que hoje faz `new Date(valor)`. É
+alteração deliberada e necessária: sem ela A3 quebra dados válidos. Precisa de
+testes de fronteira para entrada só-data, entrada com offset e virada de dia.
+
 ## Assumptions
 
 | # | Assumption | Por que, e o que a derrubaria |
@@ -211,18 +267,29 @@ Harness PostgreSQL real, schema isolado por execução, no padrão das TASK-07..
 
 1. ordenação total: vendas com `soldAt` iguais desempatam por `id DESC` de forma
    reproduzível;
-2. itens ordenados por `productId ASC`;
+2. itens ordenados por `productId ASC` com desempate `id ASC`, incluindo uma
+   venda com **duas linhas do mesmo produto** (escrita direta, como fazem os
+   harnesses das TASK-09/10);
 3. isolamento: dois clientes com vendas, cada histórico contém exatamente as
    suas;
 4. previsões conferem com a fórmula canônica e `NULL` aparece como ausência, não
    como erro;
 5. histórico vazio devolve lista vazia, não erro;
 6. cliente inexistente é distinguido de histórico vazio;
-7. paginação por cursor: páginas não se sobrepõem, cobrem o total, e inserir uma
-   venda entre páginas não duplica nem pula registros já vistos;
-8. `limit` fora da faixa é rejeitado;
-9. renomear um produto reflete no histórico — comportamento declarado em L1,
-   coberto por teste para que a mudança seja consciente e não acidental.
+7. paginação por cursor: páginas não se sobrepõem e cobrem exatamente uma vez o
+   conjunto existente no início da travessia;
+8. paginação com **venda retroagida**, em que a ordem de criação contraria a
+   ordem de `soldAt`, provando que o seek é composto e não por `id`;
+9. cursor que existe mas pertence a **outro cliente** é rejeitado com `400`, e o
+   histórico do cliente permanece completo;
+10. inserir uma venda mais recente no meio da travessia não duplica nem pula
+    nenhuma venda do conjunto original;
+11. `limit` fora da faixa é rejeitado, e `cursor` inexistente também;
+12. `soldAt` só com data é armazenado e exibido no mesmo dia de calendário do
+    fuso do negócio, incluindo o caso de virada de dia, e entrada com offset
+    explícito é respeitada como instante;
+13. renomear um produto reflete no histórico — comportamento declarado em L1,
+    coberto por teste para que a mudança seja consciente e não acidental.
 
 Playwright efêmero obrigatório (há interface), mobile e desktop, conforme
 `docs/operations/PLAYWRIGHT-EPHEMERAL.md`.
@@ -233,7 +300,8 @@ Playwright efêmero obrigatório (há interface), mobile e desktop, conforme
 - isolamento entre clientes provado;
 - paginação determinística provada;
 - estados de carregando, vazio, erro e cliente inexistente implementados;
-- fuso de exibição unificado em um único módulo;
+- fuso unificado em um único módulo, aplicado tanto à exibição quanto à
+  interpretação de `soldAt` só-data no registro de venda;
 - harness determinístico e Playwright efêmero verdes;
 - lint, typecheck, build e suíte de regressão verdes;
 - revisão independente sem findings bloqueantes no HEAD exato;
