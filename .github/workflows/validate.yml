@@ -73,6 +73,9 @@ jobs:
       - name: Test sale registration concurrency
         run: npm run test:sale-registration
 
+      - name: Test customer history
+        run: npm run test:customer-history
+
       - name: Test Product API integration
         run: npm run test:product-api
 

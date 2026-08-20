@@ -48,6 +48,9 @@ model Sale {
   items      SaleItem[]
 
   @@index([customerId])
+  // Matches the customer-history cursor order (TASK-11): without it a
+  // lexicographic seek scans and sorts the customer's sales on every page.
+  @@index([customerId, soldAt, id])
 }
 
 model SaleItem {
