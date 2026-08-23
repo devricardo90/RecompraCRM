@@ -265,6 +265,24 @@ This invariant was added from the Loop finding `TRANSIENT_WAIT_NO_REENTRY`,
 observed on PR #23 when the run ended in `WAIT_FOR_CODEX` while the clean
 exact-head review had already been published.
 
+## The loop register is append-only
+
+`docs/operations/LOOP-REGISTER.jsonl` is never edited in place. An entry that was
+wrong when it was written stays exactly as written: it is the record of what was
+believed at that moment. Accuracy comes from reading the log as a whole, not from
+each line in isolation.
+
+A wrong entry is corrected by appending a new entry carrying `correction_note`
+and, where it overturns an earlier assertion, `superseded_claim`. If a previous
+commit already rewrote an entry, restore it byte-for-byte and append the
+correction.
+
+Living documents - `STATE.md`, `HANDOFF.md`, the roadmap and the protocol
+amendments - are edited freely. The register and `LESSONS.md` are not.
+
+Any diff that modifies an existing line of the register is a violation; only new
+lines at the end are valid.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one

@@ -340,3 +340,20 @@ prevention: ".rick/tmp e cache de conveniencia, nunca fonte de verdade. Interrup
 early_detection: "Falhar o teste se describeReentry sem runtime e com PR aberto reportar wait_state_missing."
 evidence: "PR #24; CI 32647772120 SUCCESS em 7a6dadb; reconcile recuperou PR, CI, review null, drift PR_POINTER_STALE e resolver TASK-12 sem estado local."
 ```
+### LESSON-RCRM-0020 — O LOOP-REGISTER e append-only
+
+```yaml
+id: LESSON-RCRM-0020
+status: validated
+type: loop_governance
+severity: medium
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: APPEND_ONLY_REGISTER_VIOLATED_BY_REWRITING_A_PUBLISHED_ENTRY
+symptom: "Uma entrada publicada foi reescrita in loco para corrigir uma contagem errada de rodadas. O mesmo erro ja havia ocorrido em TASK-07 e esta registrado na linha 14 do proprio register."
+root_cause: "Tratou-se exatidao e imutabilidade como se fossem a mesma coisa. Uma entrada errada quando foi escrita continua sendo o registro do que se acreditava naquele momento."
+fix: "Restaurar a entrada original byte a byte e anexar uma entrada de correcao com correction_note e superseded_claim."
+prevention: "O register nunca e editado in loco. Exatidao vem do log lido por inteiro, nao de cada linha isolada. Documentos vivos como STATE, HANDOFF e as emendas sao editaveis; o register e o LESSONS nao."
+early_detection: "Qualquer diff que altere linhas existentes de docs/operations/LOOP-REGISTER.jsonl e uma violacao; so linhas novas no fim sao validas."
+evidence: "PR #24 rodada 6, finding 3838930372; precedente em LOOP-REGISTER.jsonl linha 14 (TASK-07 tentativa 7)."
+```

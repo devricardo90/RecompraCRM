@@ -188,6 +188,21 @@ LOOP-GOVERNANCE. The live count is always derived from the register; as of HEAD
 `8427dbe` it is seven distinct rounds - PR #23 rounds 2 to 4 and PR #24 rounds 1
 to 4 - against a threshold of five.
 
+## Review round 6 findings
+
+One finding, no code defects.
+
+**The register was rewritten in place (P2).** Round 5 corrected the round-4
+entry's stale six-round count by editing the published entry. The register is
+append-only, and it already records the identical remedy for the analogous
+TASK-07 case at line 14, where the same violation was flagged on review. The
+round-4 entry is restored byte-for-byte, including its stale claim, and the
+round-6 entry carries the correction and supersedes the round-5 assertion that
+editing in place was right.
+
+Recorded as `LESSON-RCRM-0020`, and the append-only contract is now written into
+the protocol rather than living only as precedent inside the log it governs.
+
 ## Validation
 
 `node scripts/rick-loop-controller-check.mjs` asserts that no `WAIT_*`
