@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { isLowStock } from "@/lib/products/stockAlerts";
+
 type Product = {
   id: number;
   name: string;
@@ -36,10 +38,6 @@ const POSTGRES_INTEGER_MAX = 2_147_483_647;
 async function readError(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;
   return payload?.error ?? fallback;
-}
-
-function isLowStock(product: Product) {
-  return product.currentStock <= product.minimumStock;
 }
 
 export default function ProductWorkspace() {
@@ -187,6 +185,7 @@ export default function ProductWorkspace() {
           <nav className="flex flex-wrap items-center gap-2" aria-label="Navegação principal">
             <Link href="/" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Clientes</Link>
             <Link href="/sales" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Registrar venda</Link>
+            <Link href="/inventory" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Estoque</Link>
             <button type="button" onClick={openCreateForm} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">
               <span aria-hidden="true" className="text-lg leading-none">+</span>
               Novo produto

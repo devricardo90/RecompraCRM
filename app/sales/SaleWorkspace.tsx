@@ -213,6 +213,12 @@ export default function SaleWorkspace() {
             >
               Produtos
             </Link>
+            <Link
+              href="/inventory"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
+            >
+              Estoque
+            </Link>
           </nav>
         </header>
 

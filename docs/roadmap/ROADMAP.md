@@ -4,8 +4,8 @@ status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
-current_task: TASK-12
-next_eligible_task: TASK-12
+current_task: TASK-13
+next_eligible_task: TASK-13
 
 ## Política
 
@@ -158,6 +158,13 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - done_when: classificação correta de vencidos, hoje e próximos sete dias.
 - [ ] TASK-13 — Dashboard de estoque
   - depends_on: TASK-06, TASK-08
+  - status: VALIDATED_AWAITING_REVIEW
+  - spec: docs/specs/TASK-13.md
+  - branch: feat/TASK-13-stock-dashboard
+  - technical_head: fc75538
+  - pr: #20 OPEN
+  - local_validation: PASS
+  - playwright: PASS_12_EPHEMERAL_RETRIES_0
   - done_when: alertas atualizam após vendas.
 - [ ] TASK-14 — Hardening do MVP
   - depends_on: TASK-01..TASK-13
