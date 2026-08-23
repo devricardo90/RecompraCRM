@@ -1,6 +1,6 @@
 # TASK-13 Spec — Dashboard de estoque
 
-Status: SPEC_DRAFT_ROUND_0_PENDING_REVIEW
+Status: SPEC_REVIEWED_ROUND_1_APPROVED_FOR_IMPLEMENTATION
 Source: Google Docs `Fonte da Verdade - Recompra CRM` + `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md`
 Depends on: TASK-06, TASK-08
 Baseline: `2995589c88ea7ab46781b59ba273b440eb2eebdd` (`main`)
