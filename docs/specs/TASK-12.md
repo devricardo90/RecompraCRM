@@ -56,9 +56,22 @@ Consequências obrigatórias para esta task:
 
 ## Regra canônica de classificação
 
+### Instante de referência
+
+Toda a resposta deriva de **um único instante capturado no início da requisição**.
+Esse instante é o `generatedAt` emitido, e dele saem: `hoje`, os limites UTC do
+filtro SQL, e o balde de cada item.
+
+Ler o relógio mais de uma vez dentro da mesma requisição é proibido. Uma
+requisição que atravessa a meia-noite do negócio poderia consultar pela fronteira
+do dia antigo e classificar pelo dia novo, omitindo o sétimo dia recém-elegível;
+com um instante único isso não pode acontecer.
+
+### Baldes
+
 A classificação é feita sobre **dias do negócio**, não sobre instantes. Seja
-`hoje` o dia do negócio corrente e `dia(x)` o dia do negócio de um instante `x`,
-ambos no fuso definido por `lib/format/businessDate.ts`:
+`hoje` o dia do negócio do instante de referência e `dia(x)` o dia do negócio de
+um instante `x`, ambos no fuso definido por `lib/format/businessDate.ts`:
 
 ```text
 vencida   := dia(expectedRepurchaseAt) <  hoje
@@ -81,9 +94,16 @@ Decisões de fronteira, explícitas para não ficarem a critério da implementa�
   de quem lê.
 
 A regra deve existir em uma função reutilizável fora da camada visual, em
-`lib/sales/repurchaseForecast.ts`. A rota, a página e qualquer teste consomem a
-mesma função; não podem existir duas implementações independentes da
-classificação.
+`lib/sales/repurchaseForecast.ts`.
+
+**A classificação acontece uma única vez, no servidor.** A rota e os testes
+consomem essa função; a página **não** classifica e **não** reclassifica: ela
+renderiza o balde que veio na resposta.
+
+Sem isso, uma resposta buscada pouco antes da meia-noite do negócio e renderizada
+logo depois seria reclassificada pelo dia novo enquanto `counts` ainda descreve
+os baldes do dia anterior, e o resumo passaria a divergir dos grupos exibidos. O
+par `items`/`counts` é um retrato de um instante, e é renderizado como tal.
 
 ## Fonte dos dados
 
@@ -121,6 +141,7 @@ Forma da resposta:
       "expectedRepurchaseAt": "2026-08-20T03:00:00.000Z",
       "quantity": 2,
       "sale": { "id": 17, "soldAt": "2026-07-01T03:00:00.000Z" },
+      // phone tem tipo string | null e a chave está sempre presente
       "customer": { "id": 5, "name": "Maria", "phone": "+5511999999999" },
       "product": { "id": 9, "name": "Shampoo", "unit": "un" }
     }
@@ -130,6 +151,11 @@ Forma da resposta:
 
 `counts` deve ser derivado do mesmo conjunto que produz `items`: um resumo que
 possa divergir da lista é proibido.
+
+`customer.phone` é declarado `string | null`: a chave está **sempre presente** e
+vale `null` quando o cliente não tem telefone. Campo omitido e campo nulo geram
+tipos de API diferentes e fariam rota e UI divergirem; a representação exata é
+fixada aqui e coberta por teste.
 
 ## Consulta e índice
 
@@ -152,11 +178,22 @@ Justificativa e limites:
 - é a única migration desta task. Qualquer outra alteração de schema está fora
   de escopo e exige nova decisão de arquitetura.
 
-O recorte da janela (`>= início do dia de hoje` e `<= fim do dia `hoje + 7``)
-deve ser calculado em instantes UTC derivados do contrato de dia do negócio e
-aplicado no banco, para que o filtro use o índice em vez de trazer todas as
-linhas e filtrar em memória. Itens com `expectedRepurchaseAt IS NULL` são
-excluídos pela própria consulta.
+O recorte é **aberto para trás e fechado para a frente**:
+
+```text
+expectedRepurchaseAt IS NOT NULL
+AND expectedRepurchaseAt <= fim do dia (hoje + 7)
+```
+
+Não há limite inferior. Um limite inferior de "início do dia de hoje" excluiria
+exatamente o conjunto `vencida` e tornaria AC1 impossível de satisfazer; o balde
+de vencidas existe justamente para o que já passou. O limite de oito dias vale
+**só para a frente**.
+
+O limite superior é calculado em instantes UTC derivados do instante de
+referência pelo contrato de dia do negócio, e aplicado no banco, para que o
+filtro use o índice em vez de trazer todas as linhas e filtrar em memória. Itens
+com `expectedRepurchaseAt IS NULL` são excluídos pela própria consulta.
 
 ## Página e navegação
 
@@ -301,6 +338,14 @@ AC16. `/api/repurchases` aceita apenas GET e responde `405` para os demais méto
 
 AC17. A única alteração de schema é o índice aditivo em `expectedRepurchaseAt`.
 
+AC18. Um item vencido há muito tempo, muito além de qualquer janela para a frente, é retornado e classificado como vencida; a consulta não tem limite inferior.
+
+AC19. Toda a resposta deriva de um único instante de referência, emitido como `generatedAt`: `hoje`, os limites UTC do filtro e o balde de cada item vêm dele.
+
+AC20. A página renderiza o balde recebido e não reclassifica; `counts` e os grupos exibidos não podem divergir, mesmo que a renderização ocorra depois da virada do dia do negócio.
+
+AC21. `customer.phone` está sempre presente na resposta com tipo `string | null`, e vale `null` para cliente sem telefone.
+
 ## Validação determinística
 
 Gates obrigatórios, todos verdes: `db:generate`, `db:validate`, `db:migrate`,
@@ -329,6 +374,36 @@ Contato automático, WhatsApp, mensagens, histórico de contato, marcação de
 priorização por valor, e qualquer alteração no cálculo ou na propriedade da
 previsão.
 
+## Decisão de dono pendente
+
+**OWNER-01 — granularidade das linhas do dashboard.**
+
+O SDD estabelece que previsões são geradas **por item de venda**. Ele não diz
+como o dashboard de contato apresenta isso. As duas leituras são defensáveis e
+produzem produtos diferentes:
+
+- **Opção A — uma linha por item de venda.** Um cliente com três produtos
+  previstos aparece três vezes, cada uma com a sua data e o seu balde.
+- **Opção B — uma linha por cliente, agregando produtos.** Um cliente aparece
+  uma vez, com os produtos dentro.
+
+Isto não é detalhe de implementação: muda a cardinalidade da lista, as contagens
+dos baldes e o fluxo de contato da usuária.
+
+Critérios: o objetivo declarado do SDD é "identificar clientes que devem ser
+contatados", o que puxa para B; mas cada item tem a sua própria data e itens do
+mesmo cliente podem cair em baldes diferentes, o que obrigaria B a escolher uma
+data representativa ou a repetir o cliente entre baldes — reintroduzindo A por
+outro caminho.
+
+**Recomendação: Opção A.** Preserva a semântica de "uma previsão por item" sem
+inventar regra de agregação, e a Opção B pode ser construída depois como uma
+visão sobre os mesmos dados, sem mudar o contrato de origem.
+
+Esta decisão bloqueia a implementação da TASK-12; não bloqueia a revisão desta
+spec. As demais seções estão escritas para a Opção A e mudam apenas na
+cardinalidade caso o dono escolha B.
+
 ## Riscos conhecidos
 
 - **L4 (herdado)**: previsão por duração fixa pode cair no dia da própria venda
@@ -347,7 +422,7 @@ previsão.
 - **A1**: "próximos sete dias" exclui hoje e inclui `hoje + 7`.
 - **A2**: o fuso do negócio é o já assumido em A3 da TASK-11
   (`America/Sao_Paulo`), consumido por `lib/format/businessDate.ts`.
-- **A3**: itens fora da janela de oito dias não interessam ao dashboard e não
-  são retornados pela API.
-- **A4**: o dashboard lista itens de venda, não clientes agregados; um cliente
-  com três recompras aparece três vezes.
+- **A3**: o limite de oito dias vale apenas para a frente. Itens previstos para
+  depois de `hoje + 7` não são retornados; itens vencidos são retornados sem
+  limite inferior, por mais antigos que sejam.
+- **A4**: *escalado como decisão de dono* — ver "Decisão de dono pendente".
