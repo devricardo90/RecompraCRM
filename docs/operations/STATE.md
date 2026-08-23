@@ -2,12 +2,12 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 48
+state_version: 49
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_2
+loop_version: RICK_LOOP_V1_3_3
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
@@ -19,6 +19,20 @@ loop_upgrade_03_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
 loop_upgrade_03_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
 loop_upgrade_03_merge_main_head: ad2f7487f4fecc404fe310dacbeec018f4fe8d9a
 loop_upgrade_03_validation: Validate #125 SUCCESS
+loop_upgrade_04_status: MERGED_V1_3_3
+loop_upgrade_04_pr: 23 MERGED_SQUASH
+loop_upgrade_04_reviewed_head: 6047a8360156225ede01eb303c398257dca59b16
+loop_upgrade_04_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+loop_upgrade_04_review_published_at: "2026-08-23T14:53:23Z"
+loop_upgrade_04_merged_at: "2026-08-23T15:04:05Z"
+loop_upgrade_04_review_before_merge: PROVEN_IN_LIVE_EXECUTION
+loop_upgrade_04_review_rounds: 5
+loop_upgrade_04_findings_fixed: 6
+loop_upgrade_04_merge_main_head: 2b1e2f76c7b72e583fcfef84ee74b89b0ac5db44
+loop_upgrade_04_main_ci_run: 32647380522
+loop_upgrade_04_main_ci_status: SUCCESS
+loop_finding_transient_wait: TRANSIENT_WAIT_NO_REENTRY
+loop_finding_transient_wait_status: FIX_IN_PROGRESS_V1_3_4
 loop_freeze_until: TASK-17
 executor_bridge: SCHEDULE_WAKEUP
 completed_tasks:
@@ -38,7 +52,7 @@ last_completed_task: TASK-13
 current_task: TASK-12
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
-branch: reconcile/TASK13-loop-finding
+branch: fix/loop-transient-wait-reentry
 pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
@@ -146,7 +160,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: CREATE_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T08:30:00Z"
+updated_at: "2026-08-23T15:10:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

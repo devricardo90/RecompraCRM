@@ -4,13 +4,13 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: ARCH_01_RESOLVED_TASK_12_SPEC_REQUIRED
+status: LOOP_V1_3_3_MERGED_TASK_12_SPEC_REQUIRED
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_2
+loop_version: RICK_LOOP_V1_3_3
 current_task: TASK-12
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
-current_branch: reconcile/TASK13-loop-finding
+current_branch: fix/loop-transient-wait-reentry
 current_pr: none
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
@@ -18,6 +18,13 @@ loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
 loop_upgrade_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
 loop_upgrade_merge_main_head: ad2f7487f4fecc404fe310dacbeec018f4fe8d9a
 loop_upgrade_main_ci: Validate #125 SUCCESS
+loop_governance_pr: 23 MERGED_SQUASH
+loop_governance_reviewed_head: 6047a8360156225ede01eb303c398257dca59b16
+loop_governance_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+loop_governance_review_before_merge: PROVEN_IN_LIVE_EXECUTION
+loop_governance_merge_main_head: 2b1e2f76c7b72e583fcfef84ee74b89b0ac5db44
+loop_governance_main_ci: Validate 32647380522 SUCCESS
+loop_finding_open: TRANSIENT_WAIT_NO_REENTRY
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS

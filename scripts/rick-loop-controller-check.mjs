@@ -17,6 +17,13 @@ import {
   buildAnchoredResults,
   selectMergeResult,
   collectPagedList,
+  TERMINAL_TRANSITIONS,
+  WAIT_TRANSITIONS,
+  isTerminalTransition,
+  isWaitTransition,
+  evaluateWaitEscalation,
+  describeReentry,
+  MAX_WAIT_POLLS,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
@@ -430,6 +437,53 @@ try {
     { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 1 },
   );
   assert(findingDecision.transition === "RECOVERABLE_FAILURE", "the executable controller path must route findings to recovery");
+
+  // FINDING TRANSIENT_WAIT_NO_REENTRY: a WAIT_* state is an external timing fact, never an
+  // outcome, and must never end an autonomous run while executable work remains.
+  for (const waitTransition of WAIT_TRANSITIONS) {
+    assert(isWaitTransition(waitTransition), waitTransition + " must be recognised as a wait");
+    assert(!isTerminalTransition(waitTransition), waitTransition + " must never be a terminal transition");
+    assert(!TERMINAL_TRANSITIONS.includes(waitTransition), waitTransition + " must not appear in TERMINAL_TRANSITIONS");
+  }
+  assert(isTerminalTransition("ROADMAP_COMPLETE"), "a finished roadmap is a legitimate stop");
+  assert(isTerminalTransition("BLOCKED_EXTERNAL"), "a proven external blocker is a legitimate stop");
+  assert(isTerminalTransition("OWNER_DECISION"), "an owner decision is a legitimate stop");
+  assert(!isTerminalTransition("SPEC_REQUIRED"), "SPEC_REQUIRED means write the spec, not stop the loop");
+  assert(!isTerminalTransition("READY_TO_MERGE"), "READY_TO_MERGE must continue into the merge");
+  assert(!isTerminalTransition("RECOVERABLE_FAILURE"), "a recoverable failure must continue into recovery");
+  assert(!isTerminalTransition("POST_MERGE_VALIDATION"), "post-merge validation must continue");
+  assert(!isTerminalTransition("STATE_DRIFT_DETECTED"), "drift is reconcilable by the loop itself");
+
+  const waitT0 = new Date("2026-08-11T10:00:00.000Z");
+  const freshWait = startWait({ state: "WAIT_FOR_CODEX", task: "TASK-12", prNumber: 24, targetHead: "abc123", now: waitT0 });
+  assert(evaluateWaitEscalation(null).status === "CONTINUE", "no persisted wait is not an escalation");
+  assert(evaluateWaitEscalation(freshWait).status === "CONTINUE", "a fresh wait must keep polling");
+  assert(evaluateWaitEscalation({ ...freshWait, poll_count: MAX_WAIT_POLLS - 1 }).status === "CONTINUE", "a wait below the poll budget must keep polling");
+  const escalated = evaluateWaitEscalation({ ...freshWait, poll_count: MAX_WAIT_POLLS, last_error: "codex offline" });
+  assert(escalated.status === "BLOCKED_EXTERNAL", "an exhausted wait budget must escalate, not spin or stop silently");
+  assert(escalated.evidence.target_head === "abc123" && escalated.evidence.pr_number === 24, "an escalation must carry exact evidence");
+  assert(escalated.evidence.last_error === "codex offline", "an escalation must carry the last observed error");
+
+  const waitingReentry = describeReentry({ decision: { transition: "WAIT_FOR_CODEX" }, runtime: freshWait });
+  assert(waitingReentry.terminal === false && waitingReentry.must_reenter === true, "a pending review must re-enter the controller, never end the run");
+  assert(waitingReentry.wait_state.target_head === "abc123", "a resumable wait must name the exact head it is waiting on");
+
+  const unpersisted = describeReentry({ decision: { transition: "WAIT_FOR_CI" }, runtime: null });
+  assert(unpersisted.must_reenter === true, "an unpersisted wait still must re-enter");
+  assert(unpersisted.wait_state_missing === true, "an unpersisted wait must be reported so recovery is deterministic");
+  assert(typeof unpersisted.persist_command === "string" && unpersisted.persist_command.includes("wait start"), "an unpersisted wait must name how to persist itself");
+
+  const blockedReentry = describeReentry({ decision: { transition: "WAIT_FOR_CODEX" }, runtime: { ...freshWait, poll_count: MAX_WAIT_POLLS } });
+  assert(blockedReentry.terminal === true && blockedReentry.must_reenter === false, "only an escalated wait may stop the run");
+  assert(blockedReentry.escalation.status === "BLOCKED_EXTERNAL", "the stop must be reported as BLOCKED_EXTERNAL with evidence");
+
+  const completeReentry = describeReentry({ decision: { transition: "ROADMAP_COMPLETE" }, runtime: null });
+  assert(completeReentry.terminal === true && completeReentry.waiting === false, "a finished roadmap ends the run without waiting");
+
+  assert(cleanDecision.terminal === false, "READY_TO_MERGE from the controller must not be terminal");
+  assert(genericDecision.terminal === false, "a WAIT_FOR_CODEX decision from the controller must not be terminal");
+  assert(findingDecision.terminal === false, "a RECOVERABLE_FAILURE decision from the controller must not be terminal");
+  assert(specDecision.terminal === false, "a SPEC_REQUIRED decision from the controller must not be terminal");
 
   assert(backoffSecondsForPollCount(0) === 30, "first backoff wrong");
   assert(backoffSecondsForPollCount(2) === 60, "third backoff wrong");

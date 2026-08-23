@@ -27,6 +27,35 @@ export const CANONICAL_TASK_STATES = Object.freeze([
 ]);
 
 const START_LIKE_STATUSES = new Set(["READY", "READY_TO_START"]);
+const DEFAULT_BRANCH = "main";
+
+// A WAIT_* condition is an external timing fact, never an outcome. Only these transitions
+// may end an autonomous run: the roadmap is finished, or a human/external decision that
+// the loop cannot make for itself is genuinely outstanding.
+export const TERMINAL_TRANSITIONS = Object.freeze([
+  "ROADMAP_COMPLETE",
+  "NO_ELIGIBLE_TASK",
+  "BLOCKED_EXTERNAL",
+  "OWNER_DECISION",
+  "HUMAN_REQUIRED",
+]);
+
+// Transitions that are waiting on something outside the repository. They resolve by
+// polling, so they must re-enter the controller rather than end the run.
+export const WAIT_TRANSITIONS = Object.freeze([
+  "WAIT_FOR_CI",
+  "WAIT_FOR_CODEX",
+  "EXTERNAL_RETRYABLE",
+]);
+
+export function isTerminalTransition(transition) {
+  return TERMINAL_TRANSITIONS.includes(transition);
+}
+
+export function isWaitTransition(transition) {
+  return WAIT_TRANSITIONS.includes(transition);
+}
+
 const DOCS_ONLY_ALLOWLIST = /^docs\/(operations\/(STATE|HANDOFF)\.md|operations\/LOOP-REGISTER\.jsonl|operations\/LESSONS\.md|roadmap\/ROADMAP\.md|evidence\/.*|specs\/TASK-\d+\.md)$/;
 
 export function parseFlatYaml(text) {
@@ -375,6 +404,68 @@ export function nextStagnationState(stagnantAttempt, { progressed, max = 3 }) {
   return { stagnant_attempt: nextAttempt, max_stagnant_attempts: max, status: nextAttempt >= max ? "HUMAN_REQUIRED" : "CONTINUE" };
 }
 
+export const MAX_WAIT_POLLS = 40;
+
+// A wait that never resolves must not be abandoned silently and must not spin forever.
+// Past the poll budget it escalates to BLOCKED_EXTERNAL carrying the exact evidence a
+// human needs, which is the only way a WAIT_* is allowed to end a run.
+export function evaluateWaitEscalation(runtime, { maxPolls = MAX_WAIT_POLLS } = {}) {
+  if (!runtime) return { status: "CONTINUE", polls: 0, max_polls: maxPolls };
+  const polls = Math.max(0, Number(runtime.poll_count) || 0);
+  if (polls < maxPolls) {
+    return { status: "CONTINUE", polls, max_polls: maxPolls, next_poll_at: runtime.next_poll_at ?? null };
+  }
+  return {
+    status: "BLOCKED_EXTERNAL",
+    polls,
+    max_polls: maxPolls,
+    evidence: {
+      wait_state: runtime.state ?? null,
+      task: runtime.task ?? null,
+      pr_number: runtime.pr_number ?? null,
+      target_head: runtime.target_head ?? null,
+      started_at: runtime.started_at ?? null,
+      last_poll_at: runtime.last_poll_at ?? null,
+      last_error: runtime.last_error ?? null,
+    },
+  };
+}
+
+// The re-entry contract the autonomous loop must honour. A non-terminal decision always
+// reports must_reenter, and a WAIT_* without a persisted runtime state reports exactly how
+// to persist one so an interrupted session resumes the same wait instead of restarting.
+export function describeReentry({ decision, runtime = null, maxPolls = MAX_WAIT_POLLS } = {}) {
+  const transition = decision?.transition ?? null;
+  const waiting = isWaitTransition(transition);
+  const escalation = waiting ? evaluateWaitEscalation(runtime, { maxPolls }) : null;
+  const blocked = escalation?.status === "BLOCKED_EXTERNAL";
+  const terminal = blocked || isTerminalTransition(transition);
+  const reentry = {
+    transition,
+    terminal,
+    must_reenter: !terminal,
+    waiting,
+    escalation,
+    resume_command: "node scripts/rick-loop-controller.mjs",
+  };
+  if (!waiting) return reentry;
+  reentry.wait_state = runtime
+    ? {
+        state: runtime.state ?? null,
+        task: runtime.task ?? null,
+        pr_number: runtime.pr_number ?? null,
+        target_head: runtime.target_head ?? null,
+        poll_count: runtime.poll_count ?? 0,
+        next_poll_at: runtime.next_poll_at ?? null,
+      }
+    : null;
+  reentry.wait_state_missing = runtime === null;
+  if (runtime === null) {
+    reentry.persist_command = `node scripts/rick-loop-controller.mjs wait start ${transition} <task> [prNumber] [targetHead]`;
+  }
+  return reentry;
+}
+
 export function prewriteKey({ task, action, expectedState = null, targetHead = null }) {
   return createHash("sha256").update([task, action, expectedState ?? "", targetHead ?? ""].join("|")).digest("hex").slice(0, 16);
 }
@@ -556,7 +647,12 @@ function ciForSha(branch, sha, repo) {
   return Array.isArray(runs) ? runs.find((r) => r.headSha === sha) || null : null;
 }
 
-export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+export function classifyLoopDecision(...args) {
+  const decision = classifyLoopDecisionInner(...args);
+  return { ...decision, terminal: isTerminalTransition(decision.transition) };
+}
+
+function classifyLoopDecisionInner(state, roadmap, git, pr, review, ci, {
   drift,
   taskSpecPresent,
   effectiveTask,
@@ -625,11 +721,14 @@ function reconcile() {
   const git = gitFacts();
   const repo = repoSlug();
   const hasGh = ghAvailable();
-  const isTaskBranch = /^(feat|fix)\/TASK-\d+/.test(git.branch ?? "");
+  // Any branch other than the default may carry the active PR. Restricting this to
+  // feat|fix/TASK-* left governance branches reporting pr: null while their PR was open,
+  // so the controller could not see its own CI or review state.
+  const onDefaultBranch = (git.branch ?? "") === DEFAULT_BRANCH;
   let pr = null;
 
   if (hasGh && repo) {
-    pr = isTaskBranch ? findPrForBranch(git.branch, repo) : null;
+    pr = onDefaultBranch ? null : findPrForBranch(git.branch, repo);
     if (!pr && state?.current_task) pr = findPrForTask(state.current_task, repo);
     if (!pr && taskSelection.task && taskSelection.task !== state?.current_task) pr = findPrForTask(taskSelection.task, repo);
   }
@@ -691,6 +790,7 @@ function reconcile() {
     task_spec: { path: taskSpec, present: taskSpecPresent },
     state_drift: drift,
     decision,
+    reentry: describeReentry({ decision, runtime: loadRuntimeState() }),
     prewrite_required_before_write: writeTransitions.has(decision.transition),
     active_prewrite: prewrite,
     runtime_wait: loadRuntimeState(),

@@ -241,6 +241,30 @@ changes or findings routes to recovery; a published result without independent,
 clean, or complete finding evidence remains in the review wait state. Missing
 finding evidence fails closed rather than defaulting to zero.
 
+## WAIT_* states are non-terminal
+
+A `WAIT_*` condition is an external timing fact, never an outcome. It must never
+become a normal controller exit while executable roadmap work remains. On
+reaching one the controller does exactly one of three things: keeps polling until
+the condition resolves; persists a resumable wait state and re-enters
+deterministically when execution resumes; or emits `BLOCKED_EXTERNAL` with exact
+evidence once an external hard blocker is proven.
+
+Only `ROADMAP_COMPLETE`, `NO_ELIGIBLE_TASK`, `BLOCKED_EXTERNAL`,
+`OWNER_DECISION` and `HUMAN_REQUIRED` may end an autonomous run.
+`SPEC_REQUIRED` means generate and validate the spec, not stop for approval;
+`READY_TO_MERGE`, `RECOVERABLE_FAILURE`, `POST_MERGE_VALIDATION` and
+`STATE_DRIFT_DETECTED` all continue.
+
+Every decision from `classifyLoopDecision()` carries `terminal`, and
+`reconcile()` reports a `reentry` block naming whether the loop must re-enter,
+the wait it is resuming, and - when no runtime wait is persisted - the exact
+command that persists one.
+
+This invariant was added from the Loop finding `TRANSIENT_WAIT_NO_REENTRY`,
+observed on PR #23 when the run ended in `WAIT_FOR_CODEX` while the clean
+exact-head review had already been published.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one

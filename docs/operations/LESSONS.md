@@ -306,3 +306,20 @@ fix: "MERGE_ALLOWED exige CI do HEAD exato verde, gates verdes, review publicado
 prevention: "Uma review REQUEST não satisfaz o gate; review publicada após merge é evidência posterior e não conforma retroativamente o merge."
 evidence: "PR #20; review 5001957796; CI 32627221744; merge e36710799; post-merge CI 32627428431."
 ```
+### LESSON-RCRM-0018 — Estado WAIT_* nao encerra o loop
+
+```yaml
+id: LESSON-RCRM-0018
+status: validated
+type: loop_governance
+severity: high
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: TRANSIENT_WAIT_NO_REENTRY
+symptom: "A execucao terminou em WAIT_FOR_CODEX enquanto o review limpo do HEAD exato 6047a836 ja estava publicado as 14:53:23Z; o roadmap ficou parado com trabalho executavel pendente."
+root_cause: "Nada no controller distinguia um WAIT_* de uma parada legitima, e reconcile() so procurava PR em branches feat|fix/TASK-*, entao na branch de governanca reportava pr: null."
+fix: "TERMINAL_TRANSITIONS e WAIT_TRANSITIONS explicitos; terminal em cada decisao; evaluateWaitEscalation emite BLOCKED_EXTERNAL com evidencia; describeReentry exige must_reenter e informa como persistir o wait; descoberta de PR independente do nome da branch."
+prevention: "WAIT_* e um fato de tempo externo, nunca um resultado. So ROADMAP_COMPLETE, NO_ELIGIBLE_TASK, BLOCKED_EXTERNAL, OWNER_DECISION e HUMAN_REQUIRED encerram uma execucao autonoma."
+early_detection: "Falhar o teste se qualquer WAIT_* aparecer em TERMINAL_TRANSITIONS ou se SPEC_REQUIRED for tratado como parada."
+evidence: "PR #23; review limpo 2026-08-23T14:53:23Z; merge 2b1e2f76 as 15:04:05Z; CI pos-merge 32647380522 SUCCESS."
+```
