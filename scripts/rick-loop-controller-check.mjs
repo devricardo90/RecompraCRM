@@ -10,6 +10,9 @@ import {
   deriveCanonicalTaskState,
   selectAnchoredReview,
   selectAnchoredCleanComment,
+  hasExplicitCleanVerdict,
+  countUnresolvedFindings,
+  isCleanReviewResult,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
@@ -131,6 +134,37 @@ try {
   assert(selectAnchoredCleanComment(comments, "abc123def0aaaa")?.createdAt === "c2", "clean comment not anchored by abbreviated SHA");
   assert(selectAnchoredCleanComment(comments, "zzz000") === null, "clean comment must not anchor to a different SHA");
   assert(selectAnchoredCleanComment([{ body: "Reviewed commit: `abc123def0`" }], "abc123def0") === null, "a comment without a clean verdict must not anchor");
+
+  assert(hasExplicitCleanVerdict("Codex Review: Didn't find any major issues."), "explicit clean verdict not recognised");
+  assert(!hasExplicitCleanVerdict("Here are some automated review suggestions for this pull request."), "a generic review header is not a clean verdict");
+  assert(!hasExplicitCleanVerdict(null), "a missing body is not a clean verdict");
+
+  const thread = (id, oid, extra = {}) => ({ isResolved: false, isOutdated: false, comments: { nodes: [{ databaseId: id, commit: { oid } }] }, ...extra });
+  assert(countUnresolvedFindings(null, "abc123") === null, "missing thread evidence must stay unknown, not zero");
+  assert(countUnresolvedFindings([], "abc123") === 0, "an empty thread list is zero findings");
+  assert(countUnresolvedFindings([thread(1, "abc123")], null) === null, "missing head must stay unknown");
+  assert(
+    countUnresolvedFindings([thread(1, "abc123"), thread(2, "abc123")], "abc123") === 2,
+    "findings from every exact-head thread must be counted, not only the last review's",
+  );
+  assert(
+    countUnresolvedFindings([thread(1, "abc123", { isResolved: true }), thread(2, "abc123")], "abc123") === 1,
+    "a resolved thread must not count as an unresolved finding",
+  );
+  assert(
+    countUnresolvedFindings([thread(1, "abc123", { isOutdated: true })], "abc123") === 0,
+    "a thread that no longer applies to the current head must not count",
+  );
+  assert(countUnresolvedFindings([thread(1, "old999")], "abc123") === 0, "a thread anchored to another head must not count");
+
+  const genericCommentedBody = "Codex Review: here are some automated review suggestions for this pull request.";
+  assert(!isCleanReviewResult({ state: "COMMENTED", body: genericCommentedBody }, 0), "COMMENTED without an explicit clean verdict must not be treated as clean");
+  assert(isCleanReviewResult({ state: "COMMENTED", body: "Didn't find any major issues." }, 0), "COMMENTED with an explicit clean verdict must be clean");
+  assert(isCleanReviewResult({ state: "APPROVED", body: "" }, 0), "APPROVED with zero findings must be clean");
+  assert(!isCleanReviewResult({ state: "APPROVED", body: "" }, 1), "APPROVED with unresolved findings must not be clean");
+  assert(!isCleanReviewResult({ state: "APPROVED", body: "" }, null), "unknown finding evidence must fail closed");
+  assert(!isCleanReviewResult({ state: "CHANGES_REQUESTED", body: "Didn't find any major issues." }, 0), "CHANGES_REQUESTED must never be clean");
+  assert(!isCleanReviewResult(null, 0), "a missing review must never be clean");
 
   const mergeCi = { headSha: "abc123", status: "completed", conclusion: "success" };
   const publishedCleanReview = {
@@ -288,6 +322,25 @@ try {
     { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
   );
   assert(cleanDecision.transition === "READY_TO_MERGE", "the executable controller path must expose READY_TO_MERGE only after all gates pass");
+
+  const genericCommentedReview = {
+    commit: { oid: "abc123" },
+    submittedAt: "2026-08-23T14:13:51Z",
+    independent: true,
+    state: "COMMENTED",
+    body: genericCommentedBody,
+  };
+  const genericDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: { ...genericCommentedReview, clean: isCleanReviewResult(genericCommentedReview, 0) }, unresolvedFindings: 0 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(genericDecision.transition !== "READY_TO_MERGE", "a COMMENTED review with no clean verdict must never reach READY_TO_MERGE");
+  assert(genericDecision.transition === "WAIT_FOR_CODEX", "a published review without a clean result must keep waiting for an independent clean result");
 
   const findingDecision = classifyLoopDecision(
     task13State,

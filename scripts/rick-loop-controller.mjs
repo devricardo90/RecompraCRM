@@ -93,15 +93,45 @@ export function selectAnchoredReview(reviews, headOid) {
   return anchored.length ? anchored[anchored.length - 1] : null;
 }
 
+const CLEAN_VERDICT_PATTERN = /(did\s*n.?t find any major issues|no major issues)/i;
+
+export function hasExplicitCleanVerdict(body) {
+  return CLEAN_VERDICT_PATTERN.test(String(body ?? ""));
+}
+
 export function selectAnchoredCleanComment(comments, headOid) {
   if (!Array.isArray(comments) || !headOid) return null;
   const clean = comments.filter((entry) => {
     const body = entry?.body ?? "";
-    if (!/(did\s*n.?t find any major issues|no major issues)/i.test(body)) return false;
+    if (!hasExplicitCleanVerdict(body)) return false;
     const named = body.match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
     return named ? headOid.startsWith(named[1]) : false;
   });
   return clean.length ? clean[clean.length - 1] : null;
+}
+
+// Findings are counted across every review thread that still applies to the exact current
+// head, not only the threads owned by the last anchored review: a later empty review must
+// never erase an earlier still-unresolved finding. A missing thread list is unknown
+// evidence and stays unknown (null) so the merge predicate fails closed.
+export function countUnresolvedFindings(threads, headOid) {
+  if (!Array.isArray(threads) || !headOid) return null;
+  return threads.filter((thread) => {
+    if (!thread || thread.isResolved === true || thread.isOutdated === true) return false;
+    const nodes = Array.isArray(thread.comments?.nodes) ? thread.comments.nodes : thread.comments;
+    return (Array.isArray(nodes) ? nodes : []).some((entry) => entry?.commit?.oid === headOid);
+  }).length;
+}
+
+// COMMENTED names the review action only; it never proves the body is clean. Cleanliness
+// requires an explicit clean signal (APPROVED, or a stated clean verdict) together with
+// zero unresolved findings - never the mere absence of inline comments.
+export function isCleanReviewResult(review, unresolvedFindings) {
+  if (!review) return false;
+  if (!Number.isInteger(unresolvedFindings) || unresolvedFindings !== 0) return false;
+  if (review.state === "APPROVED") return true;
+  if (review.state === "COMMENTED") return hasExplicitCleanVerdict(review.body);
+  return false;
 }
 
 export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = null, mergeTimestamp = null }) {
@@ -387,10 +417,22 @@ function readLoopRegister() {
   }
 }
 
+// GitHub keeps a review thread anchored to the latest head while it still applies, so the
+// thread list - not the comment list of one selected review - is the authoritative record
+// of findings outstanding against the current head. Returns null when the query fails so
+// finding evidence stays unknown rather than silently zero.
+function fetchReviewThreads(number, repo) {
+  const [owner, name] = String(repo ?? "").split("/");
+  if (!owner || !name) return null;
+  const query = "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated comments(first:100){nodes{databaseId commit{oid}}}}}}}}";
+  const raw = parseJson(sh("gh", ["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${number}`]));
+  const nodes = raw?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+  return Array.isArray(nodes) ? nodes : null;
+}
+
 function prReview(number, repo) {
   const pull = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}`]));
   const reviewsRaw = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}/reviews?per_page=100`])) ?? [];
-  const reviewComments = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}/comments?per_page=100`])) ?? [];
   const issueComments = parseJson(sh("gh", ["api", `repos/${repo}/issues/${number}/comments?per_page=100`])) ?? [];
   if (!pull || !Array.isArray(reviewsRaw)) return null;
 
@@ -400,18 +442,16 @@ function prReview(number, repo) {
     submittedAt: entry.submitted_at,
     commit: { oid: entry.commit_id },
   }));
+  const unresolvedFindings = countUnresolvedFindings(fetchReviewThreads(number, repo), headOid);
   const anchoredReview = selectAnchoredReview(reviews, headOid);
-  const anchoredReviewComments = anchoredReview
-    ? reviewComments.filter((entry) => entry.pull_request_review_id === anchoredReview.id && entry.commit_id === headOid)
-    : [];
   const anchoredClean = selectAnchoredCleanComment(issueComments, headOid);
   const anchored = anchoredReview
     ? {
         ...anchoredReview,
         independent: Boolean(anchoredReview.user?.login && anchoredReview.user.login !== pull.user?.login),
-        clean: anchoredReview.state === "APPROVED"
-          || (anchoredReview.state === "COMMENTED" && anchoredReviewComments.length === 0),
-        unresolvedFindings: anchoredReviewComments.length,
+        clean: isCleanReviewResult(anchoredReview, unresolvedFindings)
+          || (Boolean(anchoredClean) && unresolvedFindings === 0),
+        unresolvedFindings,
       }
     : anchoredClean
       ? {
@@ -419,9 +459,9 @@ function prReview(number, repo) {
           submittedAt: anchoredClean.created_at,
           commit: { oid: headOid },
           independent: Boolean(anchoredClean.user?.login && anchoredClean.user.login !== pull.user?.login),
-          clean: true,
-          unresolvedFindings: 0,
           state: "COMMENTED",
+          clean: isCleanReviewResult({ state: "COMMENTED", body: anchoredClean.body }, unresolvedFindings),
+          unresolvedFindings,
         }
       : null;
   return {
@@ -429,7 +469,7 @@ function prReview(number, repo) {
     lastReview: reviews.at(-1) ?? null,
     anchored,
     anchoredVia: anchoredReview ? "review" : anchoredClean ? "clean_comment" : null,
-    unresolvedFindings: anchored?.unresolvedFindings ?? null,
+    unresolvedFindings,
   };
 }
 
