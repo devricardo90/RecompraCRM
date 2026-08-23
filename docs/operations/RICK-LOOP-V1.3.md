@@ -234,6 +234,13 @@ This invariant was added from the real TASK-13 finding
 TASK-13 remains technically completed; the event is recorded as a Loop finding
 and does not alter its product status.
 
+The v1.3.3 controller enforces this invariant on its executable decision path:
+it returns `READY_TO_MERGE` only when the review is independent and clean and
+the finding count is explicitly known to be zero. A review with requested
+changes or findings routes to recovery; a published result without independent,
+clean, or complete finding evidence remains in the review wait state. Missing
+finding evidence fails closed rather than defaulting to zero.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one

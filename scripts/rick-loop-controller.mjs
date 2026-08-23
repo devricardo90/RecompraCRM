@@ -10,7 +10,7 @@ export { parseRoadmapPlan, resolveNextEligibleTask } from "./rick-loop-roadmap.m
 const repoRoot = process.cwd();
 const RUNTIME_STATE_PATH = ".rick/tmp/loop-runtime.json";
 const PREWRITE_STATE_PATH = ".rick/tmp/prewrite.json";
-const LOOP_VERSION = "RICK_LOOP_V1_3_2";
+const LOOP_VERSION = "RICK_LOOP_V1_3_3";
 
 export const CANONICAL_TASK_STATES = Object.freeze([
   "READY",
@@ -104,7 +104,7 @@ export function selectAnchoredCleanComment(comments, headOid) {
   return clean.length ? clean[clean.length - 1] : null;
 }
 
-export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = 0, mergeTimestamp = null }) {
+export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = null, mergeTimestamp = null }) {
   const reviewTimestamp = review?.submittedAt ? Date.parse(review.submittedAt) : NaN;
   const mergeTime = mergeTimestamp ? Date.parse(mergeTimestamp) : null;
   const checks = {
@@ -117,7 +117,9 @@ export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = fal
     allRequiredGatesGreen: requiredGatesGreen === true,
     reviewPublished: Number.isFinite(reviewTimestamp),
     reviewExactHead: Boolean(currentHead && review?.commit?.oid === currentHead),
-    zeroUnresolvedFindings: Number(unresolvedFindings) === 0,
+    independentReview: review?.independent === true,
+    cleanReview: review?.clean === true,
+    zeroUnresolvedFindings: Number.isInteger(unresolvedFindings) && unresolvedFindings === 0,
     reviewPublishedBeforeMerge: mergeTime === null
       ? true
       : Number.isFinite(reviewTimestamp) && reviewTimestamp <= mergeTime,
@@ -360,12 +362,12 @@ function ghAvailable() { return sh("gh", ["--version"]) !== null; }
 function parseJson(raw) { if (!raw) return null; try { return JSON.parse(raw); } catch { return null; } }
 
 function findPrForBranch(branch, repo) {
-  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title", "--limit", "1"]));
+  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title,author", "--limit", "1"]));
   return list?.[0] || null;
 }
 
 function findPrForTask(task, repo) {
-  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--state", "open", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title", "--limit", "100"]));
+  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--state", "open", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title,author", "--limit", "100"]));
   if (!Array.isArray(list)) return null;
   return list.find((candidate) => taskFromBranch(candidate.headRefName) === task || candidate.title?.includes(task)) || null;
 }
@@ -386,15 +388,48 @@ function readLoopRegister() {
 }
 
 function prReview(number, repo) {
-  const data = parseJson(sh("gh", ["pr", "view", String(number), "--repo", repo, "--json", "reviews,comments,headRefOid"]));
-  if (!data) return null;
-  const anchoredReview = selectAnchoredReview(data.reviews, data.headRefOid);
-  const anchoredClean = selectAnchoredCleanComment(data.comments, data.headRefOid);
+  const pull = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}`]));
+  const reviewsRaw = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}/reviews?per_page=100`])) ?? [];
+  const reviewComments = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}/comments?per_page=100`])) ?? [];
+  const issueComments = parseJson(sh("gh", ["api", `repos/${repo}/issues/${number}/comments?per_page=100`])) ?? [];
+  if (!pull || !Array.isArray(reviewsRaw)) return null;
+
+  const headOid = pull.head?.sha ?? null;
+  const reviews = reviewsRaw.map((entry) => ({
+    ...entry,
+    submittedAt: entry.submitted_at,
+    commit: { oid: entry.commit_id },
+  }));
+  const anchoredReview = selectAnchoredReview(reviews, headOid);
+  const anchoredReviewComments = anchoredReview
+    ? reviewComments.filter((entry) => entry.pull_request_review_id === anchoredReview.id && entry.commit_id === headOid)
+    : [];
+  const anchoredClean = selectAnchoredCleanComment(issueComments, headOid);
+  const anchored = anchoredReview
+    ? {
+        ...anchoredReview,
+        independent: Boolean(anchoredReview.user?.login && anchoredReview.user.login !== pull.user?.login),
+        clean: anchoredReview.state === "APPROVED"
+          || (anchoredReview.state === "COMMENTED" && anchoredReviewComments.length === 0),
+        unresolvedFindings: anchoredReviewComments.length,
+      }
+    : anchoredClean
+      ? {
+          ...anchoredClean,
+          submittedAt: anchoredClean.created_at,
+          commit: { oid: headOid },
+          independent: Boolean(anchoredClean.user?.login && anchoredClean.user.login !== pull.user?.login),
+          clean: true,
+          unresolvedFindings: 0,
+          state: "COMMENTED",
+        }
+      : null;
   return {
-    headRefOid: data.headRefOid,
-    lastReview: data.reviews?.at(-1) ?? null,
-    anchored: anchoredReview ?? anchoredClean,
+    headRefOid: headOid,
+    lastReview: reviews.at(-1) ?? null,
+    anchored,
     anchoredVia: anchoredReview ? "review" : anchoredClean ? "clean_comment" : null,
+    unresolvedFindings: anchored?.unresolvedFindings ?? null,
   };
 }
 
@@ -404,7 +439,14 @@ function ciForSha(branch, sha, repo) {
   return Array.isArray(runs) ? runs.find((r) => r.headSha === sha) || null : null;
 }
 
-export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection }) {
+export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+  drift,
+  taskSpecPresent,
+  effectiveTask,
+  taskSelection,
+  requiredGatesGreen = false,
+  unresolvedFindings = null,
+}) {
   if (!state) return { transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" };
   if (git.dirty) return { transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" };
   if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
@@ -434,7 +476,20 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drif
   if (ci.status !== "completed") return { transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` };
   if (ci.conclusion !== "success") return { transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` };
   if (!review || !review.anchored) return { transition: "WAIT_FOR_CODEX", reason: "no independent review anchored to the exact current PR HEAD; request @codex review and poll. A result for an older SHA is evidence only and does not satisfy this gate" };
-  return { transition: "REVIEW_LANDED", reason: "review anchored to the exact current PR HEAD; inspect inline findings and classify PASS vs RECOVERING", review: review.anchored };
+  const merge = evaluateMergeAllowed({
+    currentHead: pr.headRefOid,
+    ci,
+    requiredGatesGreen,
+    review: review.anchored,
+    unresolvedFindings,
+  });
+  if (merge.allowed) {
+    return { transition: "READY_TO_MERGE", reason: "published independent clean review and every merge invariant are satisfied for the exact current PR HEAD", review: review.anchored, merge };
+  }
+  if (Number.isInteger(unresolvedFindings) && unresolvedFindings > 0 || review.anchored.state === "CHANGES_REQUESTED") {
+    return { transition: "RECOVERABLE_FAILURE", reason: "published review has unresolved findings or requested changes; fix findings before re-review", review: review.anchored, merge };
+  }
+  return { transition: "WAIT_FOR_CODEX", reason: "review is published but is not an independent clean result with complete finding evidence for the exact current PR HEAD", review: review.anchored, merge };
 }
 
 export function resolveEffectiveTask({ pr, gitBranch, taskSelection, state, roadmapAvailable }) {
@@ -472,9 +527,16 @@ function reconcile() {
   const taskSpec = taskSpecPath(effectiveTask);
   const taskSpecPresent = taskSpec ? existsSync(taskSpec) : false;
   const canonicalTaskState = deriveCanonicalTaskState({ git, pr, review, ci });
-  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection });
+  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+    drift,
+    taskSpecPresent,
+    effectiveTask,
+    taskSelection,
+    requiredGatesGreen: ci?.status === "completed" && ci?.conclusion === "success",
+    unresolvedFindings: review?.unresolvedFindings ?? null,
+  });
   const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), effectiveTask);
-  const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "REVIEW_LANDED", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
+  const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "READY_TO_MERGE", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
 
   return {
     generated_at: new Date().toISOString(),
@@ -503,7 +565,7 @@ function reconcile() {
     gh_available: hasGh,
     pr: pr ? { number: pr.number, state: pr.state, headRefName: pr.headRefName, headRefOid: pr.headRefOid, mergeable: pr.mergeable } : null,
     review: review?.anchored
-      ? { submittedAt: review.anchored.submittedAt ?? review.anchored.createdAt ?? null, commit: review.anchored.commit?.oid ?? pr?.headRefOid ?? null, anchored_to_head: true, via: review.anchoredVia }
+        ? { submittedAt: review.anchored.submittedAt ?? review.anchored.createdAt ?? null, commit: review.anchored.commit?.oid ?? pr?.headRefOid ?? null, anchored_to_head: true, via: review.anchoredVia, independent: review.anchored.independent === true, clean: review.anchored.clean === true, unresolved_findings: review.unresolvedFindings }
       : review?.lastReview
         ? { submittedAt: review.lastReview.submittedAt, commit: review.lastReview.commit?.oid ?? null, anchored_to_head: false, note: "evidence only; does not satisfy the review gate for the current HEAD" }
         : null,

@@ -136,9 +136,11 @@ try {
   const publishedCleanReview = {
     commit: { oid: "abc123" },
     submittedAt: "2026-08-23T08:07:00Z",
+    independent: true,
+    clean: true,
   };
   assert(
-    evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview }).allowed,
+    evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview, unresolvedFindings: 0 }).allowed,
     "published clean exact-head review must satisfy the pre-merge gate",
   );
   assert(
@@ -156,6 +158,18 @@ try {
   assert(
     !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview, unresolvedFindings: 1 }).allowed,
     "unresolved findings must block the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview }).allowed,
+    "missing finding evidence must fail closed",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, independent: false }, unresolvedFindings: 0 }).allowed,
+    "the author's own review must not satisfy the independent-review gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, clean: false }, unresolvedFindings: 0 }).allowed,
+    "a non-clean review must not satisfy the merge gate",
   );
 
   const reg = [
@@ -263,6 +277,29 @@ try {
   );
   assert(blockedDecision.transition === "NO_ELIGIBLE_TASK", "all-blocked roadmap must expose no eligible work even when persisted task spec exists");
 
+  const reviewPr = { ...openPr, headRefOid: "abc123" };
+  const cleanDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: publishedCleanReview, unresolvedFindings: 0 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(cleanDecision.transition === "READY_TO_MERGE", "the executable controller path must expose READY_TO_MERGE only after all gates pass");
+
+  const findingDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: { ...publishedCleanReview, clean: false }, unresolvedFindings: 1 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 1 },
+  );
+  assert(findingDecision.transition === "RECOVERABLE_FAILURE", "the executable controller path must route findings to recovery");
+
   assert(backoffSecondsForPollCount(0) === 30, "first backoff wrong");
   assert(backoffSecondsForPollCount(2) === 60, "third backoff wrong");
   assert(backoffSecondsForPollCount(100) === 600, "backoff cap wrong");
@@ -303,9 +340,9 @@ try {
     assert(!existsSync(prewritePath), "prewrite clear failed");
   } finally { rmSync(tmpDir, { recursive: true, force: true }); }
 
-  console.log("Rick Loop controller v1.3.2 tests: PASS");
+  console.log("Rick Loop controller v1.3.3 tests: PASS");
 } catch (error) {
-  console.error("Rick Loop controller v1.3.2 tests: FAIL");
+  console.error("Rick Loop controller v1.3.3 tests: FAIL");
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 }
