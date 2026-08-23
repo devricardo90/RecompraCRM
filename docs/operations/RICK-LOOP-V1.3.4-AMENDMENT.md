@@ -139,6 +139,35 @@ classification returned `SPEC_REQUIRED` before reaching post-merge validation.
 Governance context now comes from the branch naming no task, regardless of PR
 state, and the merged check runs before the spec gate.
 
+## Review round 3 findings
+
+Two findings, both defects in the round 2 fixes.
+
+**describeReentry overruled the decision (P2).** It classified the transition
+again instead of reading `decision.terminal`, so an explicitly terminal
+`WAIT_FOR_CI` reported non-terminal and an explicitly non-terminal
+`ROADMAP_COMPLETE` reported terminal. The decision is now the authority: its own
+`terminal` field wins whenever it has one.
+
+**Early exits still lacked PR context (P2).** `STATE_DRIFT_DETECTED`,
+`HUMAN_REQUIRED`, `ROADMAP_COMPLETE` and `NO_ELIGIBLE_TASK` returned before the PR
+wrapper existed. The PR context is now established before the first exit, so
+every decision taken while a PR is active names it, and a decision taken with no
+active PR still invents none.
+
+## Architecture complexity signal
+
+While fixing round 3, the signal itself was found not to fire: nine recorded
+governance findings across seven review rounds reported only four rounds,
+because `review_round` restarts at 1 on each PR and a bare round number collides
+across PRs. Round identity is now the PR plus the number.
+
+With that corrected the signal fires for LOOP-GOVERNANCE at five rounds against
+a threshold of five. It is recorded as `ARCH-03` and is non-blocking: it does not
+reopen this PR or any completed task. The defect classes cluster in one place -
+what counts as a published clean review result, and what counts as a live wait -
+which is the contract worth consolidating rather than the individual fixes.
+
 ## Validation
 
 `node scripts/rick-loop-controller-check.mjs` asserts that no `WAIT_*`

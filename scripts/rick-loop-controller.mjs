@@ -262,7 +262,10 @@ export function evaluateArchitectureComplexitySignal(entries, task, threshold = 
     if (!entry || entry.task !== task) continue;
     if (!entry.finding && !entry.finding_2) continue;
     if (entry.review_round === undefined || entry.review_round === null) continue;
-    rounds.add(entry.review_round);
+    // Round numbers restart at 1 on each PR, so a bare round number collides across PRs and
+    // undercounts a task whose findings span more than one PR. The round identity is the PR
+    // it belongs to plus its number.
+    rounds.add(`${entry.pr ?? "none"}#${entry.review_round}`);
     for (const key of ["finding", "finding_2"]) {
       if (entry[key] && !classes.includes(entry[key])) classes.push(entry[key]);
     }
@@ -502,7 +505,9 @@ export function describeReentry({
   // the only thing that may end a wait. This block reports the budget so a caller knows a
   // promotion is due, but it never contradicts the decision it was given.
   const budget = waiting ? evaluateWaitEscalation(usableRuntime, { maxPolls }) : null;
-  const terminal = isTerminalTransition(transition);
+  // The decision is the authority. Its own terminal field wins whenever it has one; the
+  // transition is classified only when a caller supplies a decision without it.
+  const terminal = typeof decision?.terminal === "boolean" ? decision.terminal : isTerminalTransition(transition);
   const reentry = {
     transition,
     terminal,
@@ -733,10 +738,24 @@ function classifyLoopDecisionInner(state, roadmap, git, pr, review, ci, {
   requiredGatesGreen = false,
   unresolvedFindings = null,
 }) {
-  if (!state) return { transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" };
-  if (git.dirty) return { transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" };
-  if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
-  if (roadmap && roadmap.pending === 0 && roadmap.total > 0) return { transition: "ROADMAP_COMPLETE", reason: "no pending TASK entries remain in ROADMAP.md" };
+  // A PR whose branch names no task is governance work, not the next roadmap task. It keeps
+  // its own context: its gates are evaluated on its own terms, and the roadmap task's spec
+  // requirement does not apply to it. Without this, branch-agnostic PR discovery would let an
+  // unresolved governance PR be reported as SPEC_REQUIRED for the next task and advanced past.
+  const activePrTask = pr ? taskFromBranch(pr.headRefName) : null;
+  // Governance context comes from the branch naming no task, never from the PR's state: the
+  // branch lookup searches every state, so a merged governance PR must still be recognised
+  // as governance work and reach post-merge validation.
+  const governancePr = Boolean(pr && !activePrTask);
+  const prContext = governancePr ? "GOVERNANCE_PR" : "TASK_PR";
+  // Established before the first exit so that every decision taken while a PR is active names
+  // that PR and its context, including the early ones such as drift and roadmap exits.
+  const onPr = (decision) => (pr ? { ...decision, pr_number: pr.number, pr_context: prContext } : decision);
+
+  if (!state) return onPr({ transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" });
+  if (git.dirty) return onPr({ transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" });
+  if (drift.length > 0) return onPr({ transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift });
+  if (roadmap && roadmap.pending === 0 && roadmap.total > 0) return onPr({ transition: "ROADMAP_COMPLETE", reason: "no pending TASK entries remain in ROADMAP.md" });
 
   if (!pr && effectiveTask && state.current_task && effectiveTask !== state.current_task) {
     return {
@@ -748,26 +767,12 @@ function classifyLoopDecisionInner(state, roadmap, git, pr, review, ci, {
   }
 
   if (!effectiveTask) {
-    return {
+    return onPr({
       transition: "NO_ELIGIBLE_TASK",
       reason: "pending tasks exist but every candidate is blocked by unresolved dependencies or explicit task-scoped blockers",
       skipped: taskSelection?.skipped ?? [],
-    };
+    });
   }
-
-  // A PR whose branch names no task is governance work, not the next roadmap task. It keeps
-  // its own context: its gates are evaluated first, and the roadmap task's spec requirement
-  // does not apply to it. Without this, branch-agnostic PR discovery would let an unresolved
-  // governance PR be reported as SPEC_REQUIRED for the next task and be advanced past.
-  const activePrTask = pr ? taskFromBranch(pr.headRefName) : null;
-  // Governance context comes from the branch naming no task, never from the PR's state: the
-  // branch lookup searches every state, so a merged governance PR must still be recognised
-  // as governance work and reach post-merge validation.
-  const governancePr = Boolean(pr && !activePrTask);
-  const prContext = governancePr ? "GOVERNANCE_PR" : "TASK_PR";
-  // Every decision about a PR names that PR and its context, including the ones that return
-  // before the gate sequence.
-  const onPr = (decision) => (pr ? { ...decision, pr_number: pr.number, pr_context: prContext } : decision);
 
   // A merged PR needs its post-merge validation before any spec gate: the spec gate guards
   // implementation writes, which are not what a merged PR is waiting on.
