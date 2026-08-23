@@ -434,7 +434,32 @@ export function evaluateWaitEscalation(runtime, { maxPolls = MAX_WAIT_POLLS } = 
 // The re-entry contract the autonomous loop must honour. A non-terminal decision always
 // reports must_reenter, and a WAIT_* without a persisted runtime state reports exactly how
 // to persist one so an interrupted session resumes the same wait instead of restarting.
-export function describeReentry({ decision, runtime = null, maxPolls = MAX_WAIT_POLLS } = {}) {
+// An interruption can land between creating an external dependency and persisting the wait
+// for it, so recovery must never depend on .rick/tmp existing. The wait a run was in is
+// always reconstructible from repository facts alone: the open PR and the transition the
+// controller derived from it.
+export function reconstructWaitFromFacts({ decision, pr = null, task = null } = {}) {
+  const transition = decision?.transition ?? null;
+  if (!isWaitTransition(transition) || !pr) return null;
+  return {
+    state: transition,
+    task: task ?? null,
+    pr_number: pr.number ?? null,
+    target_head: pr.headRefOid ?? null,
+    poll_count: 0,
+    next_poll_at: null,
+    derived_from: "repository_facts",
+  };
+}
+
+export function describeReentry({
+  decision,
+  runtime = null,
+  maxPolls = MAX_WAIT_POLLS,
+  pr = null,
+  task = null,
+  executorBridge = null,
+} = {}) {
   const transition = decision?.transition ?? null;
   const waiting = isWaitTransition(transition);
   const escalation = waiting ? evaluateWaitEscalation(runtime, { maxPolls }) : null;
@@ -446,10 +471,14 @@ export function describeReentry({ decision, runtime = null, maxPolls = MAX_WAIT_
     must_reenter: !terminal,
     waiting,
     escalation,
+    // A non-terminal decision needs something to bring the loop back. If the run dies before
+    // the bridge is armed, this is what a resumed session reads to know it was owed a wake-up.
+    trigger_required: !terminal,
+    executor_bridge: executorBridge,
     resume_command: "node scripts/rick-loop-controller.mjs",
   };
   if (!waiting) return reentry;
-  reentry.wait_state = runtime
+  const persisted = runtime
     ? {
         state: runtime.state ?? null,
         task: runtime.task ?? null,
@@ -457,10 +486,12 @@ export function describeReentry({ decision, runtime = null, maxPolls = MAX_WAIT_
         target_head: runtime.target_head ?? null,
         poll_count: runtime.poll_count ?? 0,
         next_poll_at: runtime.next_poll_at ?? null,
+        derived_from: "runtime_state",
       }
     : null;
-  reentry.wait_state_missing = runtime === null;
-  if (runtime === null) {
+  reentry.wait_state = persisted ?? reconstructWaitFromFacts({ decision, pr, task });
+  reentry.wait_state_missing = reentry.wait_state === null;
+  if (!persisted) {
     reentry.persist_command = `node scripts/rick-loop-controller.mjs wait start ${transition} <task> [prNumber] [targetHead]`;
   }
   return reentry;
@@ -790,7 +821,13 @@ function reconcile() {
     task_spec: { path: taskSpec, present: taskSpecPresent },
     state_drift: drift,
     decision,
-    reentry: describeReentry({ decision, runtime: loadRuntimeState() }),
+    reentry: describeReentry({
+      decision,
+      runtime: loadRuntimeState(),
+      pr,
+      task: effectiveTask,
+      executorBridge: state?.executor_bridge ?? null,
+    }),
     prewrite_required_before_write: writeTransitions.has(decision.transition),
     active_prewrite: prewrite,
     runtime_wait: loadRuntimeState(),

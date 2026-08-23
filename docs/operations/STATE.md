@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 49
+state_version: 50
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -33,6 +33,10 @@ loop_upgrade_04_main_ci_run: 32647380522
 loop_upgrade_04_main_ci_status: SUCCESS
 loop_finding_transient_wait: TRANSIENT_WAIT_NO_REENTRY
 loop_finding_transient_wait_status: FIX_IN_PROGRESS_V1_3_4
+loop_finding_api_connection_loss: API_CONNECTION_LOSS_NO_REENTRY
+loop_finding_api_connection_loss_status: FIX_IN_PROGRESS_V1_3_4
+loop_governance_v134_pr: 24
+loop_governance_v134_branch_ci: 32647772120 SUCCESS
 loop_freeze_until: TASK-17
 executor_bridge: SCHEDULE_WAKEUP
 completed_tasks:
@@ -53,7 +57,7 @@ current_task: TASK-12
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
 branch: fix/loop-transient-wait-reentry
-pr_number: none
+pr_number: 24
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -160,7 +164,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: CREATE_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T15:10:00Z"
+updated_at: "2026-08-23T15:25:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

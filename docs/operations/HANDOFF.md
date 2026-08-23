@@ -11,7 +11,7 @@ current_task: TASK-12
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
 current_branch: fix/loop-transient-wait-reentry
-current_pr: none
+current_pr: 24
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -25,6 +25,7 @@ loop_governance_review_before_merge: PROVEN_IN_LIVE_EXECUTION
 loop_governance_merge_main_head: 2b1e2f76c7b72e583fcfef84ee74b89b0ac5db44
 loop_governance_main_ci: Validate 32647380522 SUCCESS
 loop_finding_open: TRANSIENT_WAIT_NO_REENTRY
+loop_finding_open_2: API_CONNECTION_LOSS_NO_REENTRY
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS

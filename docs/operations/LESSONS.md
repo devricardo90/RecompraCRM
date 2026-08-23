@@ -323,3 +323,20 @@ prevention: "WAIT_* e um fato de tempo externo, nunca um resultado. So ROADMAP_C
 early_detection: "Falhar o teste se qualquer WAIT_* aparecer em TERMINAL_TRANSITIONS ou se SPEC_REQUIRED for tratado como parada."
 evidence: "PR #23; review limpo 2026-08-23T14:53:23Z; merge 2b1e2f76 as 15:04:05Z; CI pos-merge 32647380522 SUCCESS."
 ```
+### LESSON-RCRM-0019 — Recuperacao nao pode depender de estado local
+
+```yaml
+id: LESSON-RCRM-0019
+status: validated
+type: loop_resilience
+severity: high
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: API_CONNECTION_LOSS_NO_REENTRY
+symptom: "A conexao da API caiu logo apos a criacao do PR #24. Nenhum wait havia sido persistido, nada reentrou no controller e foi preciso uma mensagem manual do owner para retomar."
+root_cause: "A reentrada dependia da sobrevivencia do turno do agente, e a interrupcao caiu no intervalo entre criar a dependencia externa (o PR) e persistir o wait correspondente."
+fix: "reconstructWaitFromFacts deriva o wait do PR aberto e da transicao; describeReentry prefere o runtime persistido e cai para a reconstrucao; reporta trigger_required e executor_bridge."
+prevention: ".rick/tmp e cache de conveniencia, nunca fonte de verdade. Interrupcao operacional nao e bloqueio de projeto: INTERRUPTION -> RECOVER STATE -> RECONCILE -> RESUME FIRST UNPROVEN STEP."
+early_detection: "Falhar o teste se describeReentry sem runtime e com PR aberto reportar wait_state_missing."
+evidence: "PR #24; CI 32647772120 SUCCESS em 7a6dadb; reconcile recuperou PR, CI, review null, drift PR_POINTER_STALE e resolver TASK-12 sem estado local."
+```

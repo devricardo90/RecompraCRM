@@ -23,6 +23,7 @@ import {
   isWaitTransition,
   evaluateWaitEscalation,
   describeReentry,
+  reconstructWaitFromFacts,
   MAX_WAIT_POLLS,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
@@ -476,6 +477,39 @@ try {
   const blockedReentry = describeReentry({ decision: { transition: "WAIT_FOR_CODEX" }, runtime: { ...freshWait, poll_count: MAX_WAIT_POLLS } });
   assert(blockedReentry.terminal === true && blockedReentry.must_reenter === false, "only an escalated wait may stop the run");
   assert(blockedReentry.escalation.status === "BLOCKED_EXTERNAL", "the stop must be reported as BLOCKED_EXTERNAL with evidence");
+
+  // FINDING API_CONNECTION_LOSS_NO_REENTRY: an interruption can land between creating the
+  // external dependency and persisting the wait for it, so recovery must reconstruct the
+  // wait from repository facts alone and never depend on .rick/tmp surviving.
+  const openPrFacts = { number: 24, headRefOid: "7a6dadb", state: "OPEN" };
+  const rebuilt = reconstructWaitFromFacts({ decision: { transition: "WAIT_FOR_CODEX" }, pr: openPrFacts, task: "LOOP-GOVERNANCE" });
+  assert(rebuilt.state === "WAIT_FOR_CODEX" && rebuilt.pr_number === 24 && rebuilt.target_head === "7a6dadb", "a wait must be reconstructible from the open PR alone");
+  assert(rebuilt.derived_from === "repository_facts", "a reconstructed wait must declare that it came from repository facts");
+  assert(reconstructWaitFromFacts({ decision: { transition: "WAIT_FOR_CODEX" }, pr: null }) === null, "no PR means no wait to reconstruct");
+  assert(reconstructWaitFromFacts({ decision: { transition: "READY_TO_MERGE" }, pr: openPrFacts }) === null, "a non-wait transition reconstructs no wait");
+
+  const statelessRecovery = describeReentry({
+    decision: { transition: "WAIT_FOR_CODEX" },
+    runtime: null,
+    pr: openPrFacts,
+    task: "LOOP-GOVERNANCE",
+    executorBridge: "SCHEDULE_WAKEUP",
+  });
+  assert(statelessRecovery.must_reenter === true, "a lost connection must not turn a wait into a stop");
+  assert(statelessRecovery.wait_state_missing === false, "recovery must not depend on .rick/tmp surviving the interruption");
+  assert(statelessRecovery.wait_state.target_head === "7a6dadb", "the reconstructed wait must name the exact head");
+  assert(statelessRecovery.trigger_required === true && statelessRecovery.executor_bridge === "SCHEDULE_WAKEUP", "a non-terminal decision must report that a re-entry trigger is owed and which bridge owes it");
+
+  const persistedWins = describeReentry({
+    decision: { transition: "WAIT_FOR_CODEX" },
+    runtime: { ...freshWait, poll_count: 3 },
+    pr: openPrFacts,
+    task: "LOOP-GOVERNANCE",
+  });
+  assert(persistedWins.wait_state.derived_from === "runtime_state" && persistedWins.wait_state.poll_count === 3, "a persisted wait must be preferred over reconstruction");
+
+  const noFacts = describeReentry({ decision: { transition: "WAIT_FOR_CI" }, runtime: null, pr: null });
+  assert(noFacts.wait_state_missing === true && typeof noFacts.persist_command === "string", "with neither runtime nor PR facts the wait is genuinely missing and must say how to persist one");
 
   const completeReentry = describeReentry({ decision: { transition: "ROADMAP_COMPLETE" }, runtime: null });
   assert(completeReentry.terminal === true && completeReentry.waiting === false, "a finished roadmap ends the run without waiting");

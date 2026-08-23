@@ -4,6 +4,7 @@
 amendment: RICK_LOOP_V1_3_4
 status: PROPOSED_ON_PR
 finding: TRANSIENT_WAIT_NO_REENTRY
+finding_2: API_CONNECTION_LOSS_NO_REENTRY
 supersedes_status_of: RICK_LOOP_V1_3_3
 ```
 
@@ -54,6 +55,33 @@ command that persists one so an interrupted session resumes the same wait.
 
 PR discovery no longer depends on branch naming: any branch other than the
 default is checked for its own PR.
+
+## Second finding — API_CONNECTION_LOSS_NO_REENTRY
+
+The API connection dropped immediately after PR #24 was created. No wait had
+been persisted yet, nothing re-entered the controller, and a manual owner
+message was required to resume. Branch CI `32647772120` was already SUCCESS for
+exact HEAD `7a6dadb` and no review had been requested.
+
+An operational interruption - session limit, context exhaustion, reviewer
+disconnect, API or network failure, terminal or IDE closure, shutdown, crash -
+is never a project blocker. The recovery path is always
+`INTERRUPTION -> RECOVER STATE -> RECONCILE -> RESUME FIRST UNPROVEN STEP`.
+
+The interruption landed in the gap between creating the external dependency and
+persisting the wait for it, so no resumable local state existed. Recovery
+therefore must not depend on `.rick/tmp` surviving: that directory is a
+convenience cache, never the source of truth.
+
+`reconstructWaitFromFacts()` derives the wait from the open PR and the
+transition the controller derived from repository facts. `describeReentry()`
+prefers a persisted runtime wait and falls back to reconstruction, and reports
+`trigger_required` together with the `executor_bridge` that owes the wake-up, so
+a resumed session can see it was owed one.
+
+Proven in live recovery: after reconnect, `reconcile()` alone recovered PR #24,
+CI `32647772120` SUCCESS, `review: null`, the `PR_POINTER_STALE` drift and
+resolver `TASK-12`, with zero local runtime state.
 
 ## Validation
 
