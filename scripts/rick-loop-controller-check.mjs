@@ -13,6 +13,9 @@ import {
   hasExplicitCleanVerdict,
   countUnresolvedFindings,
   isCleanReviewResult,
+  filterAnchoredCleanComments,
+  buildAnchoredResults,
+  selectMergeResult,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
@@ -165,6 +168,52 @@ try {
   assert(!isCleanReviewResult({ state: "APPROVED", body: "" }, null), "unknown finding evidence must fail closed");
   assert(!isCleanReviewResult({ state: "CHANGES_REQUESTED", body: "Didn't find any major issues." }, 0), "CHANGES_REQUESTED must never be clean");
   assert(!isCleanReviewResult(null, 0), "a missing review must never be clean");
+
+  const cleanCommentAtHead = { body: "Codex Review: Didnt find any major issues. Reviewed commit: abc123def0", created_at: "2026-08-23T09:00:00Z", user: { login: "reviewer-bot" } };
+  assert(filterAnchoredCleanComments(comments, "abc123def0aaaa").length === 1, "anchored clean comments must be filtered, not just the last one");
+  assert(filterAnchoredCleanComments(null, "abc123") .length === 0, "missing comments filter to an empty list");
+
+  const authorReviewAtHead = { commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T09:01:00Z", state: "COMMENTED", body: "replying on a thread", user: { login: "pr-author" } };
+  const changesRequestedAtHead = { commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:59:00Z", state: "CHANGES_REQUESTED", body: "blocking", user: { login: "reviewer-bot" } };
+
+  // A clean verdict written by one author must never make another author's review clean.
+  const mixedResults = buildAnchoredResults({
+    reviews: [changesRequestedAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  });
+  assert(mixedResults.length === 2, "each published result at the head must be kept separately");
+  const changesResult = mixedResults.find((entry) => entry.state === "CHANGES_REQUESTED");
+  assert(changesResult.clean === false, "a CHANGES_REQUESTED review must not borrow a clean verdict from a separate comment");
+  assert(selectMergeResult(mixedResults).state === "CHANGES_REQUESTED", "a CHANGES_REQUESTED result at the head must block whatever else was published");
+
+  // The author's own review at the head must not become the selected result and stall a
+  // genuinely clean independent one.
+  const authoredResults = buildAnchoredResults({
+    reviews: [authorReviewAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  });
+  assert(authoredResults.find((entry) => entry.source === "review").independent === false, "the PR author's own review is never independent");
+  const selectedClean = selectMergeResult(authoredResults);
+  assert(selectedClean.source === "clean_comment" && selectedClean.independent && selectedClean.clean, "an independent clean result must be selected on its own evidence");
+  assert(selectedClean.submittedAt === "2026-08-23T09:00:00Z", "the selected result must keep its own timestamp");
+
+  // With unresolved findings outstanding, no result may be clean.
+  const withFindings = buildAnchoredResults({
+    reviews: [authorReviewAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 1,
+  });
+  assert(withFindings.every((entry) => entry.clean === false), "unresolved findings must keep every result unclean");
+  assert(selectMergeResult(withFindings).clean === false, "no clean result may be selected while findings are outstanding");
+  assert(selectMergeResult([]) === null, "no anchored result selects nothing");
 
   const mergeCi = { headSha: "abc123", status: "completed", conclusion: "success" };
   const publishedCleanReview = {

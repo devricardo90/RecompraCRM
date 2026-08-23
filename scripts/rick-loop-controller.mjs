@@ -99,14 +99,18 @@ export function hasExplicitCleanVerdict(body) {
   return CLEAN_VERDICT_PATTERN.test(String(body ?? ""));
 }
 
-export function selectAnchoredCleanComment(comments, headOid) {
-  if (!Array.isArray(comments) || !headOid) return null;
-  const clean = comments.filter((entry) => {
+export function filterAnchoredCleanComments(comments, headOid) {
+  if (!Array.isArray(comments) || !headOid) return [];
+  return comments.filter((entry) => {
     const body = entry?.body ?? "";
     if (!hasExplicitCleanVerdict(body)) return false;
     const named = body.match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
     return named ? headOid.startsWith(named[1]) : false;
   });
+}
+
+export function selectAnchoredCleanComment(comments, headOid) {
+  const clean = filterAnchoredCleanComments(comments, headOid);
   return clean.length ? clean[clean.length - 1] : null;
 }
 
@@ -132,6 +136,52 @@ export function isCleanReviewResult(review, unresolvedFindings) {
   if (review.state === "APPROVED") return true;
   if (review.state === "COMMENTED") return hasExplicitCleanVerdict(review.body);
   return false;
+}
+
+// Every result published against the exact head is normalised on its own terms - its own
+// author, state, body and timestamp. Evidence is never combined across results, so a clean
+// verdict written by one author can never make another author's review clean.
+export function buildAnchoredResults({ reviews = [], cleanComments = [], headOid, authorLogin = null, unresolvedFindings = null }) {
+  if (!headOid) return [];
+  const results = [];
+  for (const entry of Array.isArray(reviews) ? reviews : []) {
+    if (entry?.commit?.oid !== headOid) continue;
+    const login = entry.user?.login ?? null;
+    results.push({
+      ...entry,
+      source: "review",
+      submittedAt: entry.submittedAt ?? entry.submitted_at ?? null,
+      commit: { oid: headOid },
+      independent: Boolean(login && login !== authorLogin),
+      clean: isCleanReviewResult(entry, unresolvedFindings),
+      unresolvedFindings,
+    });
+  }
+  for (const entry of Array.isArray(cleanComments) ? cleanComments : []) {
+    const login = entry?.user?.login ?? null;
+    const result = { state: "COMMENTED", body: entry?.body ?? "" };
+    results.push({
+      ...entry,
+      source: "clean_comment",
+      state: result.state,
+      submittedAt: entry?.created_at ?? null,
+      commit: { oid: headOid },
+      independent: Boolean(login && login !== authorLogin),
+      clean: isCleanReviewResult(result, unresolvedFindings),
+      unresolvedFindings,
+    });
+  }
+  return results.sort((a, b) => (Date.parse(a.submittedAt) || 0) - (Date.parse(b.submittedAt) || 0));
+}
+
+// A CHANGES_REQUESTED result against the exact head blocks whatever else was published;
+// otherwise the gate needs a single result that is independent and clean on its own
+// evidence. Falling back to the latest result keeps an unqualified head fail-closed.
+export function selectMergeResult(results) {
+  const list = Array.isArray(results) ? results : [];
+  const blocking = list.find((entry) => entry?.state === "CHANGES_REQUESTED");
+  if (blocking) return blocking;
+  return list.find((entry) => entry?.independent === true && entry?.clean === true) ?? list.at(-1) ?? null;
 }
 
 export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = null, mergeTimestamp = null }) {
@@ -417,17 +467,31 @@ function readLoopRegister() {
   }
 }
 
+const THREAD_PAGE_LIMIT = 50;
+
 // GitHub keeps a review thread anchored to the latest head while it still applies, so the
 // thread list - not the comment list of one selected review - is the authoritative record
-// of findings outstanding against the current head. Returns null when the query fails so
-// finding evidence stays unknown rather than silently zero.
+// of findings outstanding against the current head. Every page is walked before counting;
+// null is returned when the query fails or does not finish, so finding evidence stays
+// unknown rather than silently zero.
 function fetchReviewThreads(number, repo) {
   const [owner, name] = String(repo ?? "").split("/");
   if (!owner || !name) return null;
-  const query = "query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated comments(first:100){nodes{databaseId commit{oid}}}}}}}}";
-  const raw = parseJson(sh("gh", ["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${number}`]));
-  const nodes = raw?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-  return Array.isArray(nodes) ? nodes : null;
+  const query = "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated comments(first:100){nodes{databaseId commit{oid}}}}}}}}";
+  const threads = [];
+  let cursor = null;
+  for (let page = 0; page < THREAD_PAGE_LIMIT; page += 1) {
+    const args = ["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${number}`];
+    if (cursor) args.push("-F", `cursor=${cursor}`);
+    const connection = parseJson(sh("gh", args))?.data?.repository?.pullRequest?.reviewThreads;
+    if (!connection || !Array.isArray(connection.nodes)) return null;
+    threads.push(...connection.nodes);
+    if (connection.pageInfo?.hasNextPage !== true) return threads;
+    cursor = connection.pageInfo.endCursor;
+    if (!cursor) return null;
+  }
+  // More pages than we are willing to walk: the finding set is unknown, not empty.
+  return null;
 }
 
 function prReview(number, repo) {
@@ -443,32 +507,19 @@ function prReview(number, repo) {
     commit: { oid: entry.commit_id },
   }));
   const unresolvedFindings = countUnresolvedFindings(fetchReviewThreads(number, repo), headOid);
-  const anchoredReview = selectAnchoredReview(reviews, headOid);
-  const anchoredClean = selectAnchoredCleanComment(issueComments, headOid);
-  const anchored = anchoredReview
-    ? {
-        ...anchoredReview,
-        independent: Boolean(anchoredReview.user?.login && anchoredReview.user.login !== pull.user?.login),
-        clean: isCleanReviewResult(anchoredReview, unresolvedFindings)
-          || (Boolean(anchoredClean) && unresolvedFindings === 0),
-        unresolvedFindings,
-      }
-    : anchoredClean
-      ? {
-          ...anchoredClean,
-          submittedAt: anchoredClean.created_at,
-          commit: { oid: headOid },
-          independent: Boolean(anchoredClean.user?.login && anchoredClean.user.login !== pull.user?.login),
-          state: "COMMENTED",
-          clean: isCleanReviewResult({ state: "COMMENTED", body: anchoredClean.body }, unresolvedFindings),
-          unresolvedFindings,
-        }
-      : null;
+  const results = buildAnchoredResults({
+    reviews,
+    cleanComments: filterAnchoredCleanComments(issueComments, headOid),
+    headOid,
+    authorLogin: pull.user?.login ?? null,
+    unresolvedFindings,
+  });
+  const anchored = selectMergeResult(results);
   return {
     headRefOid: headOid,
     lastReview: reviews.at(-1) ?? null,
     anchored,
-    anchoredVia: anchoredReview ? "review" : anchoredClean ? "clean_comment" : null,
+    anchoredVia: anchored?.source ?? null,
     unresolvedFindings,
   };
 }
