@@ -4,8 +4,8 @@ status: RUNNING
 objective: Permitir cadastro de clientes e produtos, registro de vendas, controle de estoque e identificação diária de clientes para recompra.
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3
-current_task: TASK-13
-next_eligible_task: TASK-13
+current_task: TASK-12
+next_eligible_task: TASK-12
 
 ## Política
 
@@ -152,17 +152,24 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - done_when: histórico correto, ordenado e com previsões.
 - [ ] TASK-12 — Dashboard de recompra
   - depends_on: TASK-09, TASK-11, ARCH-01
-  - blocked_by: ARCH-01 — decidir previsão persistida vs calculada antes que um dashboard se acople ao desenho atual
+  - blocked_by: none
+  - architecture_decision: ARCH-01 RESOLVED — Option A, persisted synchronous trigger-owned forecast
+  - status: SPEC_REQUIRED
   - inherited_contract: datas via lib/format/businessDate.ts; leitura via projeção, sem reimplementar escrita de venda
   - relevant_limitation: L4 — previsão por duração fixa pode cair no dia da própria venda para venda retroagida cruzando virada de horário de verão
   - done_when: classificação correta de vencidos, hoje e próximos sete dias.
-- [ ] TASK-13 — Dashboard de estoque
+- [x] TASK-13 — Dashboard de estoque
   - depends_on: TASK-06, TASK-08
-  - status: VALIDATED_AWAITING_REVIEW
+  - status: COMPLETED
   - spec: docs/specs/TASK-13.md
   - branch: feat/TASK-13-stock-dashboard
   - technical_head: fc75538
-  - pr: #20 OPEN
+  - reviewed_head: 143d33b0fadac6058c023acad5aa6d708f919677
+  - review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD (review 5001957796)
+  - pr: #20 MERGED (squash)
+  - merge_main_head: e36710799d8423752bed8b3e8ec4edd18191ef26
+  - branch_ci: 32627221744 SUCCESS
+  - main_ci: 32627428431 SUCCESS
   - local_validation: PASS
   - playwright: PASS_12_EPHEMERAL_RETRIES_0
   - done_when: alertas atualizam após vendas.
@@ -199,11 +206,11 @@ autorizam refatoração imediata.
   - criteria: número de casos de borda que deixam de existir; risco de migração sobre `Sale.soldAt`; efeito na fórmula canônica de previsão; compatibilidade com L3 e L4; legibilidade
   - non_goal: não refatorar a TASK-11 agora; A3 continua válida até que isto seja decidido
 
-- [ ] ARCH-01 — Avaliar previsão de recompra persistida vs calculada
+- [x] ARCH-01 — Avaliar previsão de recompra persistida vs calculada
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-09 (9 rodadas de revisão com defeitos distintos e confirmados)
   - subsystem: SaleItem.expectedRepurchaseAt e a malha de triggers Sale/SaleItem/Product
   - blocking: false
-  - status: OPEN
+  - status: RESOLVED
   - decide_before: TASK-12 — Dashboard de recompra (primeiro consumidor forte do campo)
   - question: `expectedRepurchaseAt` deve continuar sendo um campo derivado persistido de forma síncrona por triggers PostgreSQL?
   - options:
@@ -212,5 +219,11 @@ autorizam refatoração imediata.
       - C. projeção assíncrona/materializada, se justificável
   - criteria: complexidade de concorrência; superfície de deadlock; amplificação de escrita; desempenho de leitura/consulta; requisitos de histórico e dashboard; consistência dos dados; complexidade de migração; observabilidade; manutenibilidade
   - evidence: docs/evidence/TASK-09-validation.md; LESSON-RCRM-0009..0014
+  - decision: A — manter expectedRepurchaseAt persistido e mantido sincronicamente por triggers PostgreSQL
+  - decision_doc: docs/architecture/ARCH-01-decision.md
+  - source_of_truth: SaleItem.expectedRepurchaseAt no banco
+  - schema_impact: none
+  - migration_impact: none
+  - consequence: TASK-12 pode consumir o campo persistido como projeção de leitura, sem recalcular
   - related_evidence: TASK-10 ficou a uma rodada do limite (4 findings rounds), a maioria em torno da classificação de erros e da forma de escrita exigidas pela previsão persistida
   - non_goal: não refatorar a TASK-09 agora

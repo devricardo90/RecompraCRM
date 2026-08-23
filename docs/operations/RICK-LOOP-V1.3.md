@@ -208,6 +208,32 @@ executable governance, and a script change is never "just documentation".
 Recorded after v1.3.1 itself was committed straight to `main` — it carried a
 controller fix and its tests, so it should have gone through a PR.
 
+## H. Merge requires a published review before the merge timestamp
+
+The required pre-merge invariant is:
+
+```text
+MERGE_ALLOWED =
+  exact HEAD CI green
+  AND all required gates green
+  AND independent review result PUBLISHED
+  AND review exact-head == current PR head
+  AND zero unresolved findings
+  AND review publication timestamp <= merge timestamp
+```
+
+A review request is not a review result. A review published after the merge is
+evidence of the later review only; it does not retroactively make the merge
+conformant. The merge action must be refused when any term is false. The
+executable predicate is `evaluateMergeAllowed()` in
+`scripts/rick-loop-controller.mjs`, with regression coverage for an unpublished
+request, an older HEAD, unresolved findings and a post-merge publication.
+
+This invariant was added from the real TASK-13 finding
+`MERGE_OCCURRED_BEFORE_REQUIRED_INDEPENDENT_REVIEW_RESULT_WAS_PUBLISHED`.
+TASK-13 remains technically completed; the event is recorded as a Loop finding
+and does not alter its product status.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one

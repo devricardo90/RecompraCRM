@@ -10,6 +10,7 @@ import {
   deriveCanonicalTaskState,
   selectAnchoredReview,
   selectAnchoredCleanComment,
+  evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
   parseRoadmapPlan,
@@ -130,6 +131,32 @@ try {
   assert(selectAnchoredCleanComment(comments, "abc123def0aaaa")?.createdAt === "c2", "clean comment not anchored by abbreviated SHA");
   assert(selectAnchoredCleanComment(comments, "zzz000") === null, "clean comment must not anchor to a different SHA");
   assert(selectAnchoredCleanComment([{ body: "Reviewed commit: `abc123def0`" }], "abc123def0") === null, "a comment without a clean verdict must not anchor");
+
+  const mergeCi = { headSha: "abc123", status: "completed", conclusion: "success" };
+  const publishedCleanReview = {
+    commit: { oid: "abc123" },
+    submittedAt: "2026-08-23T08:07:00Z",
+  };
+  assert(
+    evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview }).allowed,
+    "published clean exact-head review must satisfy the pre-merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { commit: { oid: "abc123" } } }).allowed,
+    "a review request without a published result must not satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, submittedAt: "2026-08-23T08:08:44Z" }, mergeTimestamp: "2026-08-23T08:07:49Z" }).allowed,
+    "a review published after merge must not retroactively satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, commit: { oid: "old999" } } }).allowed,
+    "a review for an older head must not satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview, unresolvedFindings: 1 }).allowed,
+    "unresolved findings must block the merge gate",
+  );
 
   const reg = [
     { task: "TASK-09", review_round: 3, finding: "A" },

@@ -290,3 +290,19 @@ early_detection: "Testar a escrita direta do campo derivado e exigir que o valor
 limits: "Recalcular, e não rejeitar, é o comportamento correto aqui; rejeitar quebraria a propagação."
 evidence: "TASK-09 rodada 9; migration 20260820000000_recompute_forecast_on_direct_write."
 ```
+### LESSON-RCRM-0017 — Merge exige review publicado antes do timestamp de merge
+
+```yaml
+id: LESSON-RCRM-0017
+status: validated
+type: loop_governance
+severity: high
+source_task: TASK-13
+class: LOOP_FINDING
+finding: MERGE_OCCURRED_BEFORE_REQUIRED_INDEPENDENT_REVIEW_RESULT_WAS_PUBLISHED
+symptom: "PR #20 foi mergeado às 08:07:49Z e o review independente do HEAD exato foi publicado às 08:08:44Z."
+root_cause: "O fluxo tratou a solicitação de review como suficiente e não verificou a publicação do resultado nem sua ordem temporal antes do merge."
+fix: "MERGE_ALLOWED exige CI do HEAD exato verde, gates verdes, review publicado no HEAD exato, zero findings e submitted_at <= mergedAt."
+prevention: "Uma review REQUEST não satisfaz o gate; review publicada após merge é evidência posterior e não conforma retroativamente o merge."
+evidence: "PR #20; review 5001957796; CI 32627221744; merge e36710799; post-merge CI 32627428431."
+```

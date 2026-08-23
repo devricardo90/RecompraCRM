@@ -2,16 +2,16 @@
 
 ```yaml
 schema_version: "1.1"
-run_id: RCRM-MVP01-RUN-005
+run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: TASK_13_VALIDATED_AWAITING_REVIEW
+status: ARCH_01_RESOLVED_TASK_12_SPEC_REQUIRED
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3_2
-current_task: TASK-13
-current_task_status: VALIDATED_AWAITING_REVIEW
-next_eligible_task: TASK-13
-current_branch: feat/TASK-13-stock-dashboard
-current_pr: 20 OPEN
+current_task: TASK-12
+current_task_status: SPEC_REQUIRED
+next_eligible_task: TASK-12
+current_branch: reconcile/TASK13-loop-finding
+current_pr: none
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -21,17 +21,31 @@ loop_upgrade_main_ci: Validate #125 SUCCESS
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS
-task_12_status: BLOCKED_BY_ARCH_01
-task_12_blocked_by: ARCH-01
-task_13_status: VALIDATED_AWAITING_REVIEW
+task_12_status: SPEC_REQUIRED
+task_12_blocked_by: none
+task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
+task_12_spec: docs/specs/TASK-12.md (not yet created; implementation explicitly not started)
+task_13_status: COMPLETED_MERGED
 task_13_dependencies: TASK-06, TASK-08
 task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
 task_13_spec: docs/specs/TASK-13.md
 task_13_technical_head: fc75538
 task_13_local_validation: PASS
 task_13_playwright: PASS_12_EPHEMERAL_RETRIES_0
-open_architecture_items: ARCH-01, ARCH-02
-next_action: PUSH_WAIT_CI_REQUEST_REVIEW
+task_13_reviewed_head: 143d33b0fadac6058c023acad5aa6d708f919677
+task_13_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_13_review_record: 5001957796 COMMENTED_NO_FINDINGS
+task_13_pr: 20 MERGED_SQUASH
+task_13_merge_main_head: e36710799d8423752bed8b3e8ec4edd18191ef26
+task_13_branch_ci: Validate 32627221744 SUCCESS
+task_13_main_ci: Validate 32627428431 SUCCESS
+task_13_merge_order_discrepancy: MERGE_PRECEDED_EXACT_HEAD_REVIEW_BY_55_SECONDS
+task_13_local_reconciliation_commit: 98a40e1 PRESERVED_ON_recovery/TASK13-98a40e1
+arch_01_status: RESOLVED
+arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
+arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
+open_architecture_items: ARCH-02
+next_action: CREATE_TASK_12_SPEC
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -42,14 +56,16 @@ restart_command: git switch main && git pull --ff-only && npm install
 1. Confirm `main` contains Rick Loop v1.3.2 at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a` and post-merge Validate #125 is SUCCESS.
 2. Treat TASK-12 as task-scoped blocked by ARCH-01; do not stop the roadmap because TASK-13 is independently eligible.
 3. Derive `docs/specs/TASK-13.md` from the SDD and TASK-13 roadmap contract before any product-code write.
-4. Push `fc75538` and the administrative evidence tail to PR #20, wait for CI, obtain exact-HEAD independent review, then merge only if clean.
-5. After TASK-13 completion, re-run the deterministic resolver. TASK-12 remains blocked until ARCH-01 is resolved; do not infer an owner-only gate unless the architecture decision itself proves one is required.
+4. TASK-13 is reconciled as merged with the recorded merge-before-review Loop finding; its technical status remains completed.
+5. ARCH-01 is resolved by Option A. TASK-12 is now the deterministic next task but remains at `SPEC_REQUIRED`; no TASK-12 implementation was started.
 
 ## Why TASK-13 is selected
 
-TASK-12 depends on TASK-09, TASK-11 and ARCH-01 and explicitly names ARCH-01 as its blocker. ARCH-01 is still OPEN. Rick Loop v1.3.2 therefore blocks TASK-12 only, not the roadmap.
+TASK-12 depends on TASK-09, TASK-11 and ARCH-01. ARCH-01 is resolved by the
+persisted synchronous-trigger decision in `docs/architecture/ARCH-01-decision.md`.
 
-TASK-13 depends on TASK-06 and TASK-08. Both are completed, and TASK-13 has no explicit blocker. It is therefore the first pending eligible task under the deterministic resolver.
+TASK-13 is completed and merged. The resolver now selects TASK-12, whose spec
+is still required before any implementation.
 
 ## Contracts TASK-13 inherits
 
