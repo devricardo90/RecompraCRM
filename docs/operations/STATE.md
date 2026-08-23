@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 46
+state_version: 48
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -33,12 +33,13 @@ completed_tasks:
   - TASK-09
   - TASK-10
   - TASK-11
-last_completed_task: TASK-11
-current_task: TASK-13
-current_task_status: VALIDATED_AWAITING_REVIEW
-next_eligible_task: TASK-13
-branch: feat/TASK-13-stock-dashboard
-pr_number: 20
+  - TASK-13
+last_completed_task: TASK-13
+current_task: TASK-12
+current_task_status: SPEC_REQUIRED
+next_eligible_task: TASK-12
+branch: reconcile/TASK13-loop-finding
+pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -70,7 +71,7 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-13.md
+task_spec: docs/specs/TASK-12.md
 task_11_status: COMPLETED
 task_11_technical_head: 955baeb6cbc3cbc89f43e6f948392c291cfbea77
 task_11_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -87,15 +88,32 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
-task_12_status: BLOCKED_BY_ARCH_01
-task_12_blocked_by: ARCH-01
-task_13_status: VALIDATED_AWAITING_REVIEW
+task_12_status: SPEC_REQUIRED
+task_12_blocked_by: none
+task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
+task_13_status: COMPLETED_MERGED
 task_13_dependencies: TASK-06, TASK-08
 task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
 task_13_technical_head: fc75538
 task_13_local_validation: PASS
 task_13_playwright: PASS_12_EPHEMERAL_RETRIES_0
-open_architecture_items: ARCH-01, ARCH-02
+task_13_reviewed_head: 143d33b0fadac6058c023acad5aa6d708f919677
+task_13_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+task_13_review_record: 5001957796 COMMENTED_NO_FINDINGS
+task_13_pr: 20 MERGED_SQUASH
+task_13_merge_main_head: e36710799d8423752bed8b3e8ec4edd18191ef26
+task_13_branch_ci_run: 32627221744
+task_13_branch_ci_status: SUCCESS
+task_13_main_ci_run: 32627428431
+task_13_main_ci_status: SUCCESS
+task_13_merge_order_discrepancy: MERGED_2026-08-23T08:07:49Z_BEFORE_REVIEW_2026-08-23T08:08:44Z
+task_13_local_reconciliation_commit: 98a40e1
+arch_01_status: RESOLVED
+arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
+arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
+arch_01_schema_impact: NONE
+arch_01_migration_impact: NONE
+open_architecture_items: ARCH-02
 task_10_status: COMPLETED
 task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
 task_10_branch_ci: 32291165510
@@ -126,9 +144,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: PUSH_WAIT_CI_REQUEST_REVIEW
+next_action: CREATE_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T07:58:10Z"
+updated_at: "2026-08-23T08:30:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

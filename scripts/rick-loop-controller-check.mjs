@@ -10,6 +10,14 @@ import {
   deriveCanonicalTaskState,
   selectAnchoredReview,
   selectAnchoredCleanComment,
+  hasExplicitCleanVerdict,
+  countUnresolvedFindings,
+  isCleanReviewResult,
+  filterAnchoredCleanComments,
+  buildAnchoredResults,
+  selectMergeResult,
+  collectPagedList,
+  evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
   parseRoadmapPlan,
@@ -131,6 +139,151 @@ try {
   assert(selectAnchoredCleanComment(comments, "zzz000") === null, "clean comment must not anchor to a different SHA");
   assert(selectAnchoredCleanComment([{ body: "Reviewed commit: `abc123def0`" }], "abc123def0") === null, "a comment without a clean verdict must not anchor");
 
+  assert(hasExplicitCleanVerdict("Codex Review: Didn't find any major issues."), "explicit clean verdict not recognised");
+  assert(!hasExplicitCleanVerdict("Here are some automated review suggestions for this pull request."), "a generic review header is not a clean verdict");
+  assert(!hasExplicitCleanVerdict(null), "a missing body is not a clean verdict");
+
+  const thread = (id, oid, extra = {}) => ({ isResolved: false, isOutdated: false, comments: { nodes: [{ databaseId: id, commit: { oid } }] }, ...extra });
+  assert(countUnresolvedFindings(null, "abc123") === null, "missing thread evidence must stay unknown, not zero");
+  assert(countUnresolvedFindings([], "abc123") === 0, "an empty thread list is zero findings");
+  assert(countUnresolvedFindings([thread(1, "abc123")], null) === null, "missing head must stay unknown");
+  assert(
+    countUnresolvedFindings([thread(1, "abc123"), thread(2, "abc123")], "abc123") === 2,
+    "findings from every exact-head thread must be counted, not only the last review's",
+  );
+  assert(
+    countUnresolvedFindings([thread(1, "abc123", { isResolved: true }), thread(2, "abc123")], "abc123") === 1,
+    "a resolved thread must not count as an unresolved finding",
+  );
+  assert(
+    countUnresolvedFindings([thread(1, "abc123", { isOutdated: true })], "abc123") === 0,
+    "a thread that no longer applies to the current head must not count",
+  );
+  assert(countUnresolvedFindings([thread(1, "old999")], "abc123") === 0, "a thread anchored to another head must not count");
+
+  const genericCommentedBody = "Codex Review: here are some automated review suggestions for this pull request.";
+  assert(!isCleanReviewResult({ state: "COMMENTED", body: genericCommentedBody }, 0), "COMMENTED without an explicit clean verdict must not be treated as clean");
+  assert(isCleanReviewResult({ state: "COMMENTED", body: "Didn't find any major issues." }, 0), "COMMENTED with an explicit clean verdict must be clean");
+  assert(isCleanReviewResult({ state: "APPROVED", body: "" }, 0), "APPROVED with zero findings must be clean");
+  assert(!isCleanReviewResult({ state: "APPROVED", body: "" }, 1), "APPROVED with unresolved findings must not be clean");
+  assert(!isCleanReviewResult({ state: "APPROVED", body: "" }, null), "unknown finding evidence must fail closed");
+  assert(!isCleanReviewResult({ state: "CHANGES_REQUESTED", body: "Didn't find any major issues." }, 0), "CHANGES_REQUESTED must never be clean");
+  assert(!isCleanReviewResult(null, 0), "a missing review must never be clean");
+
+  const cleanCommentAtHead = { body: "Codex Review: Didnt find any major issues. Reviewed commit: abc123def0", created_at: "2026-08-23T09:00:00Z", user: { login: "reviewer-bot" } };
+  assert(filterAnchoredCleanComments(comments, "abc123def0aaaa").length === 1, "anchored clean comments must be filtered, not just the last one");
+  assert(filterAnchoredCleanComments(null, "abc123") .length === 0, "missing comments filter to an empty list");
+
+  const authorReviewAtHead = { commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T09:01:00Z", state: "COMMENTED", body: "replying on a thread", user: { login: "pr-author" } };
+  const changesRequestedAtHead = { commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:59:00Z", state: "CHANGES_REQUESTED", body: "blocking", user: { login: "reviewer-bot" } };
+
+  // A clean verdict written by one author must never make another author's review clean.
+  const mixedResults = buildAnchoredResults({
+    reviews: [changesRequestedAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  });
+  assert(mixedResults.length === 2, "each published result at the head must be kept separately");
+  const changesResult = mixedResults.find((entry) => entry.state === "CHANGES_REQUESTED");
+  assert(changesResult.clean === false, "a CHANGES_REQUESTED review must not borrow a clean verdict from a separate comment");
+  assert(selectMergeResult(mixedResults).state === "CHANGES_REQUESTED", "a CHANGES_REQUESTED result at the head must block whatever else was published");
+
+  // The author's own review at the head must not become the selected result and stall a
+  // genuinely clean independent one.
+  const authoredResults = buildAnchoredResults({
+    reviews: [authorReviewAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  });
+  assert(authoredResults.find((entry) => entry.source === "review").independent === false, "the PR author's own review is never independent");
+  const selectedClean = selectMergeResult(authoredResults);
+  assert(selectedClean.source === "clean_comment" && selectedClean.independent && selectedClean.clean, "an independent clean result must be selected on its own evidence");
+  assert(selectedClean.submittedAt === "2026-08-23T09:00:00Z", "the selected result must keep its own timestamp");
+
+  // With unresolved findings outstanding, no result may be clean.
+  const withFindings = buildAnchoredResults({
+    reviews: [authorReviewAtHead],
+    cleanComments: [cleanCommentAtHead],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 1,
+  });
+  assert(withFindings.every((entry) => entry.clean === false), "unresolved findings must keep every result unclean");
+  assert(selectMergeResult(withFindings).clean === false, "no clean result may be selected while findings are outstanding");
+  assert(selectMergeResult([]) === null, "no anchored result selects nothing");
+
+  const pageOf = (n) => Array.from({ length: n }, (_, i) => ({ id: i }));
+  assert(collectPagedList(() => pageOf(3), { pageSize: 100 }).length === 3, "a single short page is the complete list");
+  assert(collectPagedList(() => [], { pageSize: 100 }).length === 0, "an empty first page is an empty list");
+  const twoPages = collectPagedList((page) => (page === 1 ? pageOf(100) : pageOf(7)), { pageSize: 100 });
+  assert(twoPages.length === 107, "a full page must be followed by the next page before the list is complete");
+  assert(collectPagedList(() => null) === null, "a page that does not arrive as an array is unknown, not empty");
+  assert(collectPagedList((page) => (page === 1 ? pageOf(100) : null)) === null, "a failure on a later page must never yield a partial list");
+  assert(
+    collectPagedList(() => pageOf(100), { pageSize: 100, pageLimit: 3 }) === null,
+    "a walk that cannot finish within the page limit is unknown, not the pages already seen",
+  );
+  assert(collectPagedList(null) === null, "a missing fetcher is unknown");
+
+  // The any-blocker rule only holds if every review page is seen: a CHANGES_REQUESTED
+  // review on a later page must still block a clean independent result on page one.
+  const blockerOnLaterPage = collectPagedList((page) => (page === 1
+    ? [{ commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:50:00Z", state: "COMMENTED", body: "Didnt find any major issues.", user: { login: "reviewer-bot" } }, ...pageOf(99)]
+    : [{ commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:59:00Z", state: "CHANGES_REQUESTED", body: "blocking", user: { login: "other-reviewer" } }]));
+  assert(blockerOnLaterPage.length === 101, "every review page must be collected before selection");
+  const pagedSelection = selectMergeResult(buildAnchoredResults({
+    reviews: blockerOnLaterPage.filter((entry) => entry.commit),
+    cleanComments: [],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  }));
+  assert(pagedSelection.state === "CHANGES_REQUESTED", "a blocking review on a later page must still block the merge result");
+
+  const mergeCi = { headSha: "abc123", status: "completed", conclusion: "success" };
+  const publishedCleanReview = {
+    commit: { oid: "abc123" },
+    submittedAt: "2026-08-23T08:07:00Z",
+    independent: true,
+    clean: true,
+  };
+  assert(
+    evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview, unresolvedFindings: 0 }).allowed,
+    "published clean exact-head review must satisfy the pre-merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { commit: { oid: "abc123" } } }).allowed,
+    "a review request without a published result must not satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, submittedAt: "2026-08-23T08:08:44Z" }, mergeTimestamp: "2026-08-23T08:07:49Z" }).allowed,
+    "a review published after merge must not retroactively satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, commit: { oid: "old999" } } }).allowed,
+    "a review for an older head must not satisfy the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview, unresolvedFindings: 1 }).allowed,
+    "unresolved findings must block the merge gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: publishedCleanReview }).allowed,
+    "missing finding evidence must fail closed",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, independent: false }, unresolvedFindings: 0 }).allowed,
+    "the author's own review must not satisfy the independent-review gate",
+  );
+  assert(
+    !evaluateMergeAllowed({ currentHead: "abc123", ci: mergeCi, requiredGatesGreen: true, review: { ...publishedCleanReview, clean: false }, unresolvedFindings: 0 }).allowed,
+    "a non-clean review must not satisfy the merge gate",
+  );
+
   const reg = [
     { task: "TASK-09", review_round: 3, finding: "A" },
     { task: "TASK-09", review_round: 3, finding: "A" },
@@ -236,6 +389,48 @@ try {
   );
   assert(blockedDecision.transition === "NO_ELIGIBLE_TASK", "all-blocked roadmap must expose no eligible work even when persisted task spec exists");
 
+  const reviewPr = { ...openPr, headRefOid: "abc123" };
+  const cleanDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: publishedCleanReview, unresolvedFindings: 0 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(cleanDecision.transition === "READY_TO_MERGE", "the executable controller path must expose READY_TO_MERGE only after all gates pass");
+
+  const genericCommentedReview = {
+    commit: { oid: "abc123" },
+    submittedAt: "2026-08-23T14:13:51Z",
+    independent: true,
+    state: "COMMENTED",
+    body: genericCommentedBody,
+  };
+  const genericDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: { ...genericCommentedReview, clean: isCleanReviewResult(genericCommentedReview, 0) }, unresolvedFindings: 0 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(genericDecision.transition !== "READY_TO_MERGE", "a COMMENTED review with no clean verdict must never reach READY_TO_MERGE");
+  assert(genericDecision.transition === "WAIT_FOR_CODEX", "a published review without a clean result must keep waiting for an independent clean result");
+
+  const findingDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "main", dirty: false },
+    reviewPr,
+    { anchored: { ...publishedCleanReview, clean: false }, unresolvedFindings: 1 },
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: true, effectiveTask: "TASK-13", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 1 },
+  );
+  assert(findingDecision.transition === "RECOVERABLE_FAILURE", "the executable controller path must route findings to recovery");
+
   assert(backoffSecondsForPollCount(0) === 30, "first backoff wrong");
   assert(backoffSecondsForPollCount(2) === 60, "third backoff wrong");
   assert(backoffSecondsForPollCount(100) === 600, "backoff cap wrong");
@@ -276,9 +471,9 @@ try {
     assert(!existsSync(prewritePath), "prewrite clear failed");
   } finally { rmSync(tmpDir, { recursive: true, force: true }); }
 
-  console.log("Rick Loop controller v1.3.2 tests: PASS");
+  console.log("Rick Loop controller v1.3.3 tests: PASS");
 } catch (error) {
-  console.error("Rick Loop controller v1.3.2 tests: FAIL");
+  console.error("Rick Loop controller v1.3.3 tests: FAIL");
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 }

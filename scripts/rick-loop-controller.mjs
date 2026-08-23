@@ -10,7 +10,7 @@ export { parseRoadmapPlan, resolveNextEligibleTask } from "./rick-loop-roadmap.m
 const repoRoot = process.cwd();
 const RUNTIME_STATE_PATH = ".rick/tmp/loop-runtime.json";
 const PREWRITE_STATE_PATH = ".rick/tmp/prewrite.json";
-const LOOP_VERSION = "RICK_LOOP_V1_3_2";
+const LOOP_VERSION = "RICK_LOOP_V1_3_3";
 
 export const CANONICAL_TASK_STATES = Object.freeze([
   "READY",
@@ -93,15 +93,137 @@ export function selectAnchoredReview(reviews, headOid) {
   return anchored.length ? anchored[anchored.length - 1] : null;
 }
 
-export function selectAnchoredCleanComment(comments, headOid) {
-  if (!Array.isArray(comments) || !headOid) return null;
-  const clean = comments.filter((entry) => {
+const CLEAN_VERDICT_PATTERN = /(did\s*n.?t find any major issues|no major issues)/i;
+
+export function hasExplicitCleanVerdict(body) {
+  return CLEAN_VERDICT_PATTERN.test(String(body ?? ""));
+}
+
+export function filterAnchoredCleanComments(comments, headOid) {
+  if (!Array.isArray(comments) || !headOid) return [];
+  return comments.filter((entry) => {
     const body = entry?.body ?? "";
-    if (!/(did\s*n.?t find any major issues|no major issues)/i.test(body)) return false;
+    if (!hasExplicitCleanVerdict(body)) return false;
     const named = body.match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
     return named ? headOid.startsWith(named[1]) : false;
   });
+}
+
+export function selectAnchoredCleanComment(comments, headOid) {
+  const clean = filterAnchoredCleanComments(comments, headOid);
   return clean.length ? clean[clean.length - 1] : null;
+}
+
+// Findings are counted across every review thread that still applies to the exact current
+// head, not only the threads owned by the last anchored review: a later empty review must
+// never erase an earlier still-unresolved finding. A missing thread list is unknown
+// evidence and stays unknown (null) so the merge predicate fails closed.
+export function countUnresolvedFindings(threads, headOid) {
+  if (!Array.isArray(threads) || !headOid) return null;
+  return threads.filter((thread) => {
+    if (!thread || thread.isResolved === true || thread.isOutdated === true) return false;
+    const nodes = Array.isArray(thread.comments?.nodes) ? thread.comments.nodes : thread.comments;
+    return (Array.isArray(nodes) ? nodes : []).some((entry) => entry?.commit?.oid === headOid);
+  }).length;
+}
+
+// COMMENTED names the review action only; it never proves the body is clean. Cleanliness
+// requires an explicit clean signal (APPROVED, or a stated clean verdict) together with
+// zero unresolved findings - never the mere absence of inline comments.
+export function isCleanReviewResult(review, unresolvedFindings) {
+  if (!review) return false;
+  if (!Number.isInteger(unresolvedFindings) || unresolvedFindings !== 0) return false;
+  if (review.state === "APPROVED") return true;
+  if (review.state === "COMMENTED") return hasExplicitCleanVerdict(review.body);
+  return false;
+}
+
+// Every result published against the exact head is normalised on its own terms - its own
+// author, state, body and timestamp. Evidence is never combined across results, so a clean
+// verdict written by one author can never make another author's review clean.
+export function buildAnchoredResults({ reviews = [], cleanComments = [], headOid, authorLogin = null, unresolvedFindings = null }) {
+  if (!headOid) return [];
+  const results = [];
+  for (const entry of Array.isArray(reviews) ? reviews : []) {
+    if (entry?.commit?.oid !== headOid) continue;
+    const login = entry.user?.login ?? null;
+    results.push({
+      ...entry,
+      source: "review",
+      submittedAt: entry.submittedAt ?? entry.submitted_at ?? null,
+      commit: { oid: headOid },
+      independent: Boolean(login && login !== authorLogin),
+      clean: isCleanReviewResult(entry, unresolvedFindings),
+      unresolvedFindings,
+    });
+  }
+  for (const entry of Array.isArray(cleanComments) ? cleanComments : []) {
+    const login = entry?.user?.login ?? null;
+    const result = { state: "COMMENTED", body: entry?.body ?? "" };
+    results.push({
+      ...entry,
+      source: "clean_comment",
+      state: result.state,
+      submittedAt: entry?.created_at ?? null,
+      commit: { oid: headOid },
+      independent: Boolean(login && login !== authorLogin),
+      clean: isCleanReviewResult(result, unresolvedFindings),
+      unresolvedFindings,
+    });
+  }
+  return results.sort((a, b) => (Date.parse(a.submittedAt) || 0) - (Date.parse(b.submittedAt) || 0));
+}
+
+// A CHANGES_REQUESTED result against the exact head blocks whatever else was published;
+// otherwise the gate needs a single result that is independent and clean on its own
+// evidence. Falling back to the latest result keeps an unqualified head fail-closed.
+export function selectMergeResult(results) {
+  const list = Array.isArray(results) ? results : [];
+  const blocking = list.find((entry) => entry?.state === "CHANGES_REQUESTED");
+  if (blocking) return blocking;
+  return list.find((entry) => entry?.independent === true && entry?.clean === true) ?? list.at(-1) ?? null;
+}
+
+export const REST_PAGE_SIZE = 100;
+export const REST_PAGE_LIMIT = 50;
+
+// gh fetches only the first page unless asked for more, so every list endpoint is walked
+// explicitly. A page that does not arrive as an array, or a walk that does not finish
+// within the page limit, yields null - unknown - never a partial list that a caller could
+// mistake for the complete set.
+export function collectPagedList(fetchPage, { pageSize = REST_PAGE_SIZE, pageLimit = REST_PAGE_LIMIT } = {}) {
+  if (typeof fetchPage !== "function") return null;
+  const items = [];
+  for (let page = 1; page <= pageLimit; page += 1) {
+    const raw = fetchPage(page);
+    if (!Array.isArray(raw)) return null;
+    items.push(...raw);
+    if (raw.length < pageSize) return items;
+  }
+  return null;
+}
+
+export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = null, mergeTimestamp = null }) {
+  const reviewTimestamp = review?.submittedAt ? Date.parse(review.submittedAt) : NaN;
+  const mergeTime = mergeTimestamp ? Date.parse(mergeTimestamp) : null;
+  const checks = {
+    exactHeadCiGreen: Boolean(
+      currentHead
+      && ci?.headSha === currentHead
+      && ci?.status === "completed"
+      && ci?.conclusion === "success",
+    ),
+    allRequiredGatesGreen: requiredGatesGreen === true,
+    reviewPublished: Number.isFinite(reviewTimestamp),
+    reviewExactHead: Boolean(currentHead && review?.commit?.oid === currentHead),
+    independentReview: review?.independent === true,
+    cleanReview: review?.clean === true,
+    zeroUnresolvedFindings: Number.isInteger(unresolvedFindings) && unresolvedFindings === 0,
+    reviewPublishedBeforeMerge: mergeTime === null
+      ? true
+      : Number.isFinite(reviewTimestamp) && reviewTimestamp <= mergeTime,
+  };
+  return { allowed: Object.values(checks).every(Boolean), checks };
 }
 
 export function evaluateArchitectureComplexitySignal(entries, task, threshold = 5) {
@@ -339,12 +461,12 @@ function ghAvailable() { return sh("gh", ["--version"]) !== null; }
 function parseJson(raw) { if (!raw) return null; try { return JSON.parse(raw); } catch { return null; } }
 
 function findPrForBranch(branch, repo) {
-  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title", "--limit", "1"]));
+  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title,author", "--limit", "1"]));
   return list?.[0] || null;
 }
 
 function findPrForTask(task, repo) {
-  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--state", "open", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title", "--limit", "100"]));
+  const list = parseJson(sh("gh", ["pr", "list", "--repo", repo, "--state", "open", "--json", "number,state,headRefName,headRefOid,mergeable,mergeStateStatus,title,author", "--limit", "100"]));
   if (!Array.isArray(list)) return null;
   return list.find((candidate) => taskFromBranch(candidate.headRefName) === task || candidate.title?.includes(task)) || null;
 }
@@ -364,16 +486,67 @@ function readLoopRegister() {
   }
 }
 
+const THREAD_PAGE_LIMIT = 50;
+
+// GitHub keeps a review thread anchored to the latest head while it still applies, so the
+// thread list - not the comment list of one selected review - is the authoritative record
+// of findings outstanding against the current head. Every page is walked before counting;
+// null is returned when the query fails or does not finish, so finding evidence stays
+// unknown rather than silently zero.
+function fetchReviewThreads(number, repo) {
+  const [owner, name] = String(repo ?? "").split("/");
+  if (!owner || !name) return null;
+  const query = "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{isResolved isOutdated comments(first:100){nodes{databaseId commit{oid}}}}}}}}";
+  const threads = [];
+  let cursor = null;
+  for (let page = 0; page < THREAD_PAGE_LIMIT; page += 1) {
+    const args = ["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `name=${name}`, "-F", `number=${number}`];
+    if (cursor) args.push("-F", `cursor=${cursor}`);
+    const connection = parseJson(sh("gh", args))?.data?.repository?.pullRequest?.reviewThreads;
+    if (!connection || !Array.isArray(connection.nodes)) return null;
+    threads.push(...connection.nodes);
+    if (connection.pageInfo?.hasNextPage !== true) return threads;
+    cursor = connection.pageInfo.endCursor;
+    if (!cursor) return null;
+  }
+  // More pages than we are willing to walk: the finding set is unknown, not empty.
+  return null;
+}
+
+function ghApiPagedList(repo, resource) {
+  return collectPagedList((page) => parseJson(sh("gh", ["api", `repos/${repo}/${resource}?per_page=${REST_PAGE_SIZE}&page=${page}`])));
+}
+
 function prReview(number, repo) {
-  const data = parseJson(sh("gh", ["pr", "view", String(number), "--repo", repo, "--json", "reviews,comments,headRefOid"]));
-  if (!data) return null;
-  const anchoredReview = selectAnchoredReview(data.reviews, data.headRefOid);
-  const anchoredClean = selectAnchoredCleanComment(data.comments, data.headRefOid);
+  const pull = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}`]));
+  // A review can block the merge, so an incomplete review list is unknown and fails closed.
+  const reviewsRaw = ghApiPagedList(repo, `pulls/${number}/reviews`);
+  // A clean comment can only ever permit a merge, so an incomplete comment list is
+  // conservative rather than dangerous and degrades to no clean evidence at all.
+  const issueComments = ghApiPagedList(repo, `issues/${number}/comments`) ?? [];
+  if (!pull || !Array.isArray(reviewsRaw)) return null;
+
+  const headOid = pull.head?.sha ?? null;
+  const reviews = reviewsRaw.map((entry) => ({
+    ...entry,
+    submittedAt: entry.submitted_at,
+    commit: { oid: entry.commit_id },
+  }));
+  const unresolvedFindings = countUnresolvedFindings(fetchReviewThreads(number, repo), headOid);
+  const results = buildAnchoredResults({
+    reviews,
+    cleanComments: filterAnchoredCleanComments(issueComments, headOid),
+    headOid,
+    authorLogin: pull.user?.login ?? null,
+    unresolvedFindings,
+  });
+  const anchored = selectMergeResult(results);
   return {
-    headRefOid: data.headRefOid,
-    lastReview: data.reviews?.at(-1) ?? null,
-    anchored: anchoredReview ?? anchoredClean,
-    anchoredVia: anchoredReview ? "review" : anchoredClean ? "clean_comment" : null,
+    headRefOid: headOid,
+    lastReview: reviews.at(-1) ?? null,
+    anchored,
+    anchoredVia: anchored?.source ?? null,
+    unresolvedFindings,
   };
 }
 
@@ -383,7 +556,14 @@ function ciForSha(branch, sha, repo) {
   return Array.isArray(runs) ? runs.find((r) => r.headSha === sha) || null : null;
 }
 
-export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection }) {
+export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+  drift,
+  taskSpecPresent,
+  effectiveTask,
+  taskSelection,
+  requiredGatesGreen = false,
+  unresolvedFindings = null,
+}) {
   if (!state) return { transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" };
   if (git.dirty) return { transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" };
   if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
@@ -413,7 +593,20 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, { drif
   if (ci.status !== "completed") return { transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` };
   if (ci.conclusion !== "success") return { transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` };
   if (!review || !review.anchored) return { transition: "WAIT_FOR_CODEX", reason: "no independent review anchored to the exact current PR HEAD; request @codex review and poll. A result for an older SHA is evidence only and does not satisfy this gate" };
-  return { transition: "REVIEW_LANDED", reason: "review anchored to the exact current PR HEAD; inspect inline findings and classify PASS vs RECOVERING", review: review.anchored };
+  const merge = evaluateMergeAllowed({
+    currentHead: pr.headRefOid,
+    ci,
+    requiredGatesGreen,
+    review: review.anchored,
+    unresolvedFindings,
+  });
+  if (merge.allowed) {
+    return { transition: "READY_TO_MERGE", reason: "published independent clean review and every merge invariant are satisfied for the exact current PR HEAD", review: review.anchored, merge };
+  }
+  if (Number.isInteger(unresolvedFindings) && unresolvedFindings > 0 || review.anchored.state === "CHANGES_REQUESTED") {
+    return { transition: "RECOVERABLE_FAILURE", reason: "published review has unresolved findings or requested changes; fix findings before re-review", review: review.anchored, merge };
+  }
+  return { transition: "WAIT_FOR_CODEX", reason: "review is published but is not an independent clean result with complete finding evidence for the exact current PR HEAD", review: review.anchored, merge };
 }
 
 export function resolveEffectiveTask({ pr, gitBranch, taskSelection, state, roadmapAvailable }) {
@@ -451,9 +644,16 @@ function reconcile() {
   const taskSpec = taskSpecPath(effectiveTask);
   const taskSpecPresent = taskSpec ? existsSync(taskSpec) : false;
   const canonicalTaskState = deriveCanonicalTaskState({ git, pr, review, ci });
-  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, { drift, taskSpecPresent, effectiveTask, taskSelection });
+  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+    drift,
+    taskSpecPresent,
+    effectiveTask,
+    taskSelection,
+    requiredGatesGreen: ci?.status === "completed" && ci?.conclusion === "success",
+    unresolvedFindings: review?.unresolvedFindings ?? null,
+  });
   const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), effectiveTask);
-  const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "REVIEW_LANDED", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
+  const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "READY_TO_MERGE", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
 
   return {
     generated_at: new Date().toISOString(),
@@ -482,7 +682,7 @@ function reconcile() {
     gh_available: hasGh,
     pr: pr ? { number: pr.number, state: pr.state, headRefName: pr.headRefName, headRefOid: pr.headRefOid, mergeable: pr.mergeable } : null,
     review: review?.anchored
-      ? { submittedAt: review.anchored.submittedAt ?? review.anchored.createdAt ?? null, commit: review.anchored.commit?.oid ?? pr?.headRefOid ?? null, anchored_to_head: true, via: review.anchoredVia }
+        ? { submittedAt: review.anchored.submittedAt ?? review.anchored.createdAt ?? null, commit: review.anchored.commit?.oid ?? pr?.headRefOid ?? null, anchored_to_head: true, via: review.anchoredVia, independent: review.anchored.independent === true, clean: review.anchored.clean === true, unresolved_findings: review.unresolvedFindings }
       : review?.lastReview
         ? { submittedAt: review.lastReview.submittedAt, commit: review.lastReview.commit?.oid ?? null, anchored_to_head: false, note: "evidence only; does not satisfy the review gate for the current HEAD" }
         : null,

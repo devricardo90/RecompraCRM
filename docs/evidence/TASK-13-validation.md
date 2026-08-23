@@ -9,7 +9,7 @@
 - Baseline: `2995589c88ea7ab46781b59ba273b440eb2eebdd` (`main`)
 - Spec: `docs/specs/TASK-13.md`
 - Technical commit: `fc75538` (`feat(TASK-13): add stock alert dashboard`)
-- PR: `#20` — open, currently being extended from spec-only to implementation
+- PR: `#20` — MERGED (squash) at `e36710799d8423752bed8b3e8ec4edd18191ef26`
 
 The recovered worktree contained the implementation in progress. It was
 validated in place and committed without staging the pre-existing untracked
@@ -63,6 +63,14 @@ showing the reduced stock as an alert.
 
 ## Review and handoff
 
-Local independent review of `fc75538` found no blocking issue. Remote PR #20
-still needs exact-head review, CI for the implementation commit, merge and
-post-merge validation before TASK-13 can be marked `VERIFIED_GREEN`.
+Local independent review of `fc75538` found no blocking issue. Exact PR HEAD
+`143d33b0fadac6058c023acad5aa6d708f919677` passed CI run `32627221744`;
+independent review `5001957796` was published for that exact head with no
+findings; and post-merge CI run `32627428431` passed on `main` at
+`e36710799d8423752bed8b3e8ec4edd18191ef26`.
+
+The review-order audit found a real Loop defect: GitHub recorded the merge at
+`2026-08-23T08:07:49Z`, before the review result was published at
+`2026-08-23T08:08:44Z`. The later clean review does not retroactively satisfy
+the pre-merge gate. TASK-13 remains technically completed; this is recorded as
+the Loop finding `MERGE_OCCURRED_BEFORE_REQUIRED_INDEPENDENT_REVIEW_RESULT_WAS_PUBLISHED`.
