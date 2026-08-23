@@ -306,3 +306,54 @@ fix: "MERGE_ALLOWED exige CI do HEAD exato verde, gates verdes, review publicado
 prevention: "Uma review REQUEST não satisfaz o gate; review publicada após merge é evidência posterior e não conforma retroativamente o merge."
 evidence: "PR #20; review 5001957796; CI 32627221744; merge e36710799; post-merge CI 32627428431."
 ```
+### LESSON-RCRM-0018 — Estado WAIT_* nao encerra o loop
+
+```yaml
+id: LESSON-RCRM-0018
+status: validated
+type: loop_governance
+severity: high
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: TRANSIENT_WAIT_NO_REENTRY
+symptom: "A execucao terminou em WAIT_FOR_CODEX enquanto o review limpo do HEAD exato 6047a836 ja estava publicado as 14:53:23Z; o roadmap ficou parado com trabalho executavel pendente."
+root_cause: "Nada no controller distinguia um WAIT_* de uma parada legitima, e reconcile() so procurava PR em branches feat|fix/TASK-*, entao na branch de governanca reportava pr: null."
+fix: "TERMINAL_TRANSITIONS e WAIT_TRANSITIONS explicitos; terminal em cada decisao; evaluateWaitEscalation emite BLOCKED_EXTERNAL com evidencia; describeReentry exige must_reenter e informa como persistir o wait; descoberta de PR independente do nome da branch."
+prevention: "WAIT_* e um fato de tempo externo, nunca um resultado. So ROADMAP_COMPLETE, NO_ELIGIBLE_TASK, BLOCKED_EXTERNAL, OWNER_DECISION e HUMAN_REQUIRED encerram uma execucao autonoma."
+early_detection: "Falhar o teste se qualquer WAIT_* aparecer em TERMINAL_TRANSITIONS ou se SPEC_REQUIRED for tratado como parada."
+evidence: "PR #23; review limpo 2026-08-23T14:53:23Z; merge 2b1e2f76 as 15:04:05Z; CI pos-merge 32647380522 SUCCESS."
+```
+### LESSON-RCRM-0019 — Recuperacao nao pode depender de estado local
+
+```yaml
+id: LESSON-RCRM-0019
+status: validated
+type: loop_resilience
+severity: high
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: API_CONNECTION_LOSS_NO_REENTRY
+symptom: "A conexao da API caiu logo apos a criacao do PR #24. Nenhum wait havia sido persistido, nada reentrou no controller e foi preciso uma mensagem manual do owner para retomar."
+root_cause: "A reentrada dependia da sobrevivencia do turno do agente, e a interrupcao caiu no intervalo entre criar a dependencia externa (o PR) e persistir o wait correspondente."
+fix: "reconstructWaitFromFacts deriva o wait do PR aberto e da transicao; describeReentry prefere o runtime persistido e cai para a reconstrucao; reporta trigger_required e executor_bridge."
+prevention: ".rick/tmp e cache de conveniencia, nunca fonte de verdade. Interrupcao operacional nao e bloqueio de projeto: INTERRUPTION -> RECOVER STATE -> RECONCILE -> RESUME FIRST UNPROVEN STEP."
+early_detection: "Falhar o teste se describeReentry sem runtime e com PR aberto reportar wait_state_missing."
+evidence: "PR #24; CI 32647772120 SUCCESS em 7a6dadb; reconcile recuperou PR, CI, review null, drift PR_POINTER_STALE e resolver TASK-12 sem estado local."
+```
+### LESSON-RCRM-0020 — O LOOP-REGISTER e append-only
+
+```yaml
+id: LESSON-RCRM-0020
+status: validated
+type: loop_governance
+severity: medium
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: APPEND_ONLY_REGISTER_VIOLATED_BY_REWRITING_A_PUBLISHED_ENTRY
+symptom: "Uma entrada publicada foi reescrita in loco para corrigir uma contagem errada de rodadas. O mesmo erro ja havia ocorrido em TASK-07 e esta registrado na linha 14 do proprio register."
+root_cause: "Tratou-se exatidao e imutabilidade como se fossem a mesma coisa. Uma entrada errada quando foi escrita continua sendo o registro do que se acreditava naquele momento."
+fix: "Restaurar a entrada original byte a byte e anexar uma entrada de correcao com correction_note e superseded_claim."
+prevention: "O register nunca e editado in loco. Exatidao vem do log lido por inteiro, nao de cada linha isolada. Documentos vivos como STATE, HANDOFF e as emendas sao editaveis; o register e o LESSONS nao."
+early_detection: "Qualquer diff que altere linhas existentes de docs/operations/LOOP-REGISTER.jsonl e uma violacao; so linhas novas no fim sao validas."
+evidence: "PR #24 rodada 6, finding 3838930372; precedente em LOOP-REGISTER.jsonl linha 14 (TASK-07 tentativa 7)."
+```

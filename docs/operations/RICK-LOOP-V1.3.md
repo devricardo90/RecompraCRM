@@ -241,6 +241,48 @@ changes or findings routes to recovery; a published result without independent,
 clean, or complete finding evidence remains in the review wait state. Missing
 finding evidence fails closed rather than defaulting to zero.
 
+## WAIT_* states are non-terminal
+
+A `WAIT_*` condition is an external timing fact, never an outcome. It must never
+become a normal controller exit while executable roadmap work remains. On
+reaching one the controller does exactly one of three things: keeps polling until
+the condition resolves; persists a resumable wait state and re-enters
+deterministically when execution resumes; or emits `BLOCKED_EXTERNAL` with exact
+evidence once an external hard blocker is proven.
+
+Only `ROADMAP_COMPLETE`, `NO_ELIGIBLE_TASK`, `BLOCKED_EXTERNAL`,
+`OWNER_DECISION` and `HUMAN_REQUIRED` may end an autonomous run.
+`SPEC_REQUIRED` means generate and validate the spec, not stop for approval;
+`READY_TO_MERGE`, `RECOVERABLE_FAILURE`, `POST_MERGE_VALIDATION` and
+`STATE_DRIFT_DETECTED` all continue.
+
+Every decision from `classifyLoopDecision()` carries `terminal`, and
+`reconcile()` reports a `reentry` block naming whether the loop must re-enter,
+the wait it is resuming, and - when no runtime wait is persisted - the exact
+command that persists one.
+
+This invariant was added from the Loop finding `TRANSIENT_WAIT_NO_REENTRY`,
+observed on PR #23 when the run ended in `WAIT_FOR_CODEX` while the clean
+exact-head review had already been published.
+
+## The loop register is append-only
+
+`docs/operations/LOOP-REGISTER.jsonl` is never edited in place. An entry that was
+wrong when it was written stays exactly as written: it is the record of what was
+believed at that moment. Accuracy comes from reading the log as a whole, not from
+each line in isolation.
+
+A wrong entry is corrected by appending a new entry carrying `correction_note`
+and, where it overturns an earlier assertion, `superseded_claim`. If a previous
+commit already rewrote an entry, restore it byte-for-byte and append the
+correction.
+
+Living documents - `STATE.md`, `HANDOFF.md`, the roadmap and the protocol
+amendments - are edited freely. The register and `LESSONS.md` are not.
+
+Any diff that modifies an existing line of the register is a violation; only new
+lines at the end are valid.
+
 ## Report vocabulary
 
 Final reports must keep these classes distinct rather than merging them into one

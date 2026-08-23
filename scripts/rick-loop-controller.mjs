@@ -27,6 +27,38 @@ export const CANONICAL_TASK_STATES = Object.freeze([
 ]);
 
 const START_LIKE_STATUSES = new Set(["READY", "READY_TO_START"]);
+const DEFAULT_BRANCH = "main";
+// Governance work is recorded in the loop register under this task name; it is the scope the
+// architecture signal must be scored under when the active PR is governance work.
+const GOVERNANCE_TASK = "LOOP-GOVERNANCE";
+
+// A WAIT_* condition is an external timing fact, never an outcome. Only these transitions
+// may end an autonomous run: the roadmap is finished, or a human/external decision that
+// the loop cannot make for itself is genuinely outstanding.
+export const TERMINAL_TRANSITIONS = Object.freeze([
+  "ROADMAP_COMPLETE",
+  "NO_ELIGIBLE_TASK",
+  "BLOCKED_EXTERNAL",
+  "OWNER_DECISION",
+  "HUMAN_REQUIRED",
+]);
+
+// Transitions that are waiting on something outside the repository. They resolve by
+// polling, so they must re-enter the controller rather than end the run.
+export const WAIT_TRANSITIONS = Object.freeze([
+  "WAIT_FOR_CI",
+  "WAIT_FOR_CODEX",
+  "EXTERNAL_RETRYABLE",
+]);
+
+export function isTerminalTransition(transition) {
+  return TERMINAL_TRANSITIONS.includes(transition);
+}
+
+export function isWaitTransition(transition) {
+  return WAIT_TRANSITIONS.includes(transition);
+}
+
 const DOCS_ONLY_ALLOWLIST = /^docs\/(operations\/(STATE|HANDOFF)\.md|operations\/LOOP-REGISTER\.jsonl|operations\/LESSONS\.md|roadmap\/ROADMAP\.md|evidence\/.*|specs\/TASK-\d+\.md)$/;
 
 export function parseFlatYaml(text) {
@@ -226,6 +258,13 @@ export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = fal
   return { allowed: Object.values(checks).every(Boolean), checks };
 }
 
+// The signal is scoped to the work the review rounds were actually spent on. A governance PR
+// is not the next roadmap task, so scoring it under that task would report zero rounds and
+// hide a signal that has genuinely fired.
+export function architectureSignalScope(decision, effectiveTask = null) {
+  return decision?.pr_context === "GOVERNANCE_PR" ? GOVERNANCE_TASK : effectiveTask;
+}
+
 export function evaluateArchitectureComplexitySignal(entries, task, threshold = 5) {
   const rounds = new Set();
   const classes = [];
@@ -233,7 +272,10 @@ export function evaluateArchitectureComplexitySignal(entries, task, threshold = 
     if (!entry || entry.task !== task) continue;
     if (!entry.finding && !entry.finding_2) continue;
     if (entry.review_round === undefined || entry.review_round === null) continue;
-    rounds.add(entry.review_round);
+    // Round numbers restart at 1 on each PR, so a bare round number collides across PRs and
+    // undercounts a task whose findings span more than one PR. The round identity is the PR
+    // it belongs to plus its number.
+    rounds.add(`${entry.pr ?? "none"}#${entry.review_round}`);
     for (const key of ["finding", "finding_2"]) {
       if (entry[key] && !classes.includes(entry[key])) classes.push(entry[key]);
     }
@@ -373,6 +415,148 @@ export function recordPoll(runtime, { resolved, error = null, now = new Date() }
 export function nextStagnationState(stagnantAttempt, { progressed, max = 3 }) {
   const nextAttempt = progressed ? 0 : Math.max(0, Number(stagnantAttempt) || 0) + 1;
   return { stagnant_attempt: nextAttempt, max_stagnant_attempts: max, status: nextAttempt >= max ? "HUMAN_REQUIRED" : "CONTINUE" };
+}
+
+export const MAX_WAIT_POLLS = 40;
+
+// A wait that never resolves must not be abandoned silently and must not spin forever.
+// Past the poll budget it escalates to BLOCKED_EXTERNAL carrying the exact evidence a
+// human needs, which is the only way a WAIT_* is allowed to end a run.
+export function evaluateWaitEscalation(runtime, { maxPolls = MAX_WAIT_POLLS } = {}) {
+  if (!runtime) return { status: "CONTINUE", polls: 0, max_polls: maxPolls };
+  const polls = Math.max(0, Number(runtime.poll_count) || 0);
+  if (polls < maxPolls) {
+    return { status: "CONTINUE", polls, max_polls: maxPolls, next_poll_at: runtime.next_poll_at ?? null };
+  }
+  return {
+    status: "BLOCKED_EXTERNAL",
+    polls,
+    max_polls: maxPolls,
+    evidence: {
+      wait_state: runtime.state ?? null,
+      task: runtime.task ?? null,
+      pr_number: runtime.pr_number ?? null,
+      target_head: runtime.target_head ?? null,
+      started_at: runtime.started_at ?? null,
+      last_poll_at: runtime.last_poll_at ?? null,
+      last_error: runtime.last_error ?? null,
+    },
+  };
+}
+
+// The re-entry contract the autonomous loop must honour. A non-terminal decision always
+// reports must_reenter, and a WAIT_* without a persisted runtime state reports exactly how
+// to persist one so an interrupted session resumes the same wait instead of restarting.
+// A runtime checkpoint survives transitions that never clear it, so it can easily belong to
+// an earlier wait. Applying a stale checkpoint's poll budget would let an exhausted wait for
+// one task strand a fresh wait for another, with the wrong PR and head as its evidence. A
+// checkpoint counts only when it is about the same wait.
+export function waitMatchesDecision(runtime, { transition, task = null, pr = null } = {}) {
+  if (!runtime || !transition) return false;
+  if (runtime.state !== transition) return false;
+  // Every identity component the current wait supplies must be present and equal in the
+  // checkpoint. A checkpoint started without a PR or head - the CLI arguments are optional -
+  // identifies nothing, so it must not be adopted by whatever wait happens to run next.
+  if (task && runtime.task !== task) return false;
+  if (pr?.number != null && (runtime.pr_number == null || Number(runtime.pr_number) !== Number(pr.number))) return false;
+  if (pr?.headRefOid && runtime.target_head !== pr.headRefOid) return false;
+  return true;
+}
+
+// An exhausted wait must become the controller's own decision, not a contradiction between a
+// non-terminal decision and a terminal reentry block. Promoting it here keeps one authority:
+// consumers reading either field see the same outcome.
+export function applyWaitEscalation(decision, runtime, { maxPolls = MAX_WAIT_POLLS, task = null, pr = null } = {}) {
+  if (!isWaitTransition(decision?.transition)) return decision;
+  const usable = waitMatchesDecision(runtime, { transition: decision.transition, task, pr }) ? runtime : null;
+  const escalation = evaluateWaitEscalation(usable, { maxPolls });
+  if (escalation.status !== "BLOCKED_EXTERNAL") return decision;
+  // The promoted decision keeps whatever PR identity the classified decision carried, so the
+  // one exit that ends a run is not the one exit that cannot be tied to its PR.
+  const { pr_number: prNumber, pr_context: context } = decision;
+  return {
+    ...(prNumber === undefined ? {} : { pr_number: prNumber }),
+    ...(context === undefined ? {} : { pr_context: context }),
+    transition: "BLOCKED_EXTERNAL",
+    reason: `${decision.transition} exhausted its ${escalation.max_polls}-poll budget without resolving`,
+    waited_transition: decision.transition,
+    evidence: escalation.evidence,
+    terminal: true,
+  };
+}
+
+// An interruption can land between creating an external dependency and persisting the wait
+// for it, so recovery must never depend on .rick/tmp existing. The wait a run was in is
+// always reconstructible from repository facts alone: the open PR and the transition the
+// controller derived from it.
+export function reconstructWaitFromFacts({ decision, pr = null, task = null } = {}) {
+  const transition = decision?.transition ?? null;
+  if (!isWaitTransition(transition) || !pr) return null;
+  return {
+    state: transition,
+    task: task ?? null,
+    pr_number: pr.number ?? null,
+    target_head: pr.headRefOid ?? null,
+    poll_count: 0,
+    next_poll_at: null,
+    derived_from: "repository_facts",
+  };
+}
+
+export function describeReentry({
+  decision,
+  runtime = null,
+  maxPolls = MAX_WAIT_POLLS,
+  pr = null,
+  task = null,
+  executorBridge = null,
+} = {}) {
+  const transition = decision?.transition ?? null;
+  const waiting = isWaitTransition(transition);
+  // Only a checkpoint about this same wait may contribute its poll budget.
+  const matched = waitMatchesDecision(runtime, { transition, task, pr });
+  const usableRuntime = matched ? runtime : null;
+  // Terminality is read from the decision, never re-derived here: applyWaitEscalation() is
+  // the only thing that may end a wait. This block reports the budget so a caller knows a
+  // promotion is due, but it never contradicts the decision it was given.
+  const budget = waiting ? evaluateWaitEscalation(usableRuntime, { maxPolls }) : null;
+  // The decision is the authority. Its own terminal field wins whenever it has one; the
+  // transition is classified only when a caller supplies a decision without it.
+  const terminal = typeof decision?.terminal === "boolean" ? decision.terminal : isTerminalTransition(transition);
+  const reentry = {
+    transition,
+    terminal,
+    must_reenter: !terminal,
+    waiting,
+    poll_budget: budget && { polls: budget.polls, max_polls: budget.max_polls, exhausted: budget.status === "BLOCKED_EXTERNAL" },
+    // True when the budget is spent but the decision has not been promoted yet. The caller
+    // must run applyWaitEscalation() to turn it into a BLOCKED_EXTERNAL decision.
+    escalation_required: budget?.status === "BLOCKED_EXTERNAL",
+    // A non-terminal decision needs something to bring the loop back. If the run dies before
+    // the bridge is armed, this is what a resumed session reads to know it was owed a wake-up.
+    trigger_required: !terminal,
+    executor_bridge: executorBridge,
+    resume_command: "node scripts/rick-loop-controller.mjs",
+  };
+  if (!waiting) return reentry;
+  reentry.stale_wait_ignored = Boolean(runtime) && !matched;
+  const persisted = usableRuntime
+    ? {
+        state: usableRuntime.state ?? null,
+        task: usableRuntime.task ?? null,
+        pr_number: usableRuntime.pr_number ?? null,
+        target_head: usableRuntime.target_head ?? null,
+        poll_count: usableRuntime.poll_count ?? 0,
+        next_poll_at: usableRuntime.next_poll_at ?? null,
+        derived_from: "runtime_state",
+      }
+    : null;
+  reentry.wait_state = persisted ?? reconstructWaitFromFacts({ decision, pr, task });
+  reentry.wait_state_missing = reentry.wait_state === null;
+  if (!persisted) {
+    reentry.persist_command = `node scripts/rick-loop-controller.mjs wait start ${transition} <task> [prNumber] [targetHead]`;
+  }
+  return reentry;
 }
 
 export function prewriteKey({ task, action, expectedState = null, targetHead = null }) {
@@ -556,7 +740,12 @@ function ciForSha(branch, sha, repo) {
   return Array.isArray(runs) ? runs.find((r) => r.headSha === sha) || null : null;
 }
 
-export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+export function classifyLoopDecision(...args) {
+  const decision = classifyLoopDecisionInner(...args);
+  return { ...decision, terminal: isTerminalTransition(decision.transition) };
+}
+
+function classifyLoopDecisionInner(state, roadmap, git, pr, review, ci, {
   drift,
   taskSpecPresent,
   effectiveTask,
@@ -564,10 +753,24 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
   requiredGatesGreen = false,
   unresolvedFindings = null,
 }) {
-  if (!state) return { transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" };
-  if (git.dirty) return { transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" };
-  if (drift.length > 0) return { transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift };
-  if (roadmap && roadmap.pending === 0 && roadmap.total > 0) return { transition: "ROADMAP_COMPLETE", reason: "no pending TASK entries remain in ROADMAP.md" };
+  // A PR whose branch names no task is governance work, not the next roadmap task. It keeps
+  // its own context: its gates are evaluated on its own terms, and the roadmap task's spec
+  // requirement does not apply to it. Without this, branch-agnostic PR discovery would let an
+  // unresolved governance PR be reported as SPEC_REQUIRED for the next task and advanced past.
+  const activePrTask = pr ? taskFromBranch(pr.headRefName) : null;
+  // Governance context comes from the branch naming no task, never from the PR's state: the
+  // branch lookup searches every state, so a merged governance PR must still be recognised
+  // as governance work and reach post-merge validation.
+  const governancePr = Boolean(pr && !activePrTask);
+  const prContext = governancePr ? "GOVERNANCE_PR" : "TASK_PR";
+  // Established before the first exit so that every decision taken while a PR is active names
+  // that PR and its context, including the early ones such as drift and roadmap exits.
+  const onPr = (decision) => (pr ? { ...decision, pr_number: pr.number, pr_context: prContext } : decision);
+
+  if (!state) return onPr({ transition: "HUMAN_REQUIRED", reason: "docs/operations/STATE.md missing or unreadable" });
+  if (git.dirty) return onPr({ transition: "HUMAN_REQUIRED", reason: "working tree has uncommitted changes; reconcile before continuing" });
+  if (drift.length > 0) return onPr({ transition: "STATE_DRIFT_DETECTED", reason: "repository/STATE/HANDOFF facts contradict persisted loop state; reconcile deterministic pointers before any write", drift });
+  if (roadmap && roadmap.pending === 0 && roadmap.total > 0) return onPr({ transition: "ROADMAP_COMPLETE", reason: "no pending TASK entries remain in ROADMAP.md" });
 
   if (!pr && effectiveTask && state.current_task && effectiveTask !== state.current_task) {
     return {
@@ -579,20 +782,22 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
   }
 
   if (!effectiveTask) {
-    return {
+    return onPr({
       transition: "NO_ELIGIBLE_TASK",
       reason: "pending tasks exist but every candidate is blocked by unresolved dependencies or explicit task-scoped blockers",
       skipped: taskSelection?.skipped ?? [],
-    };
+    });
   }
 
-  if (!taskSpecPresent) return { transition: "SPEC_REQUIRED", task: effectiveTask, reason: `${taskSpecPath(effectiveTask)} is required before implementation/recovery writes` };
+  // A merged PR needs its post-merge validation before any spec gate: the spec gate guards
+  // implementation writes, which are not what a merged PR is waiting on.
+  if (pr && pr.state === "MERGED") return onPr({ transition: "POST_MERGE_VALIDATION", reason: `PR #${pr.number} merged; validate main before advancing` });
+  if (!governancePr && !taskSpecPresent) return onPr({ transition: "SPEC_REQUIRED", task: effectiveTask, reason: `${taskSpecPath(effectiveTask)} is required before implementation/recovery writes` });
   if (!pr) return { transition: "PASS", task: effectiveTask, reason: `no active PR found; proceed with ${effectiveTask} from the task spec` };
-  if (pr.state === "MERGED") return { transition: "POST_MERGE_VALIDATION", reason: `PR #${pr.number} merged; validate main before advancing` };
-  if (!ci) return { transition: "EXTERNAL_RETRYABLE", reason: "no CI run found yet for current PR HEAD" };
-  if (ci.status !== "completed") return { transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` };
-  if (ci.conclusion !== "success") return { transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` };
-  if (!review || !review.anchored) return { transition: "WAIT_FOR_CODEX", reason: "no independent review anchored to the exact current PR HEAD; request @codex review and poll. A result for an older SHA is evidence only and does not satisfy this gate" };
+  if (!ci) return onPr({ transition: "EXTERNAL_RETRYABLE", reason: "no CI run found yet for current PR HEAD" });
+  if (ci.status !== "completed") return onPr({ transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` });
+  if (ci.conclusion !== "success") return onPr({ transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` });
+  if (!review || !review.anchored) return onPr({ transition: "WAIT_FOR_CODEX", reason: "no independent review anchored to the exact current PR HEAD; request @codex review and poll. A result for an older SHA is evidence only and does not satisfy this gate" });
   const merge = evaluateMergeAllowed({
     currentHead: pr.headRefOid,
     ci,
@@ -601,12 +806,12 @@ export function classifyLoopDecision(state, roadmap, git, pr, review, ci, {
     unresolvedFindings,
   });
   if (merge.allowed) {
-    return { transition: "READY_TO_MERGE", reason: "published independent clean review and every merge invariant are satisfied for the exact current PR HEAD", review: review.anchored, merge };
+    return onPr({ transition: "READY_TO_MERGE", reason: "published independent clean review and every merge invariant are satisfied for the exact current PR HEAD", review: review.anchored, merge });
   }
   if (Number.isInteger(unresolvedFindings) && unresolvedFindings > 0 || review.anchored.state === "CHANGES_REQUESTED") {
-    return { transition: "RECOVERABLE_FAILURE", reason: "published review has unresolved findings or requested changes; fix findings before re-review", review: review.anchored, merge };
+    return onPr({ transition: "RECOVERABLE_FAILURE", reason: "published review has unresolved findings or requested changes; fix findings before re-review", review: review.anchored, merge });
   }
-  return { transition: "WAIT_FOR_CODEX", reason: "review is published but is not an independent clean result with complete finding evidence for the exact current PR HEAD", review: review.anchored, merge };
+  return onPr({ transition: "WAIT_FOR_CODEX", reason: "review is published but is not an independent clean result with complete finding evidence for the exact current PR HEAD", review: review.anchored, merge });
 }
 
 export function resolveEffectiveTask({ pr, gitBranch, taskSelection, state, roadmapAvailable }) {
@@ -625,11 +830,14 @@ function reconcile() {
   const git = gitFacts();
   const repo = repoSlug();
   const hasGh = ghAvailable();
-  const isTaskBranch = /^(feat|fix)\/TASK-\d+/.test(git.branch ?? "");
+  // Any branch other than the default may carry the active PR. Restricting this to
+  // feat|fix/TASK-* left governance branches reporting pr: null while their PR was open,
+  // so the controller could not see its own CI or review state.
+  const onDefaultBranch = (git.branch ?? "") === DEFAULT_BRANCH;
   let pr = null;
 
   if (hasGh && repo) {
-    pr = isTaskBranch ? findPrForBranch(git.branch, repo) : null;
+    pr = onDefaultBranch ? null : findPrForBranch(git.branch, repo);
     if (!pr && state?.current_task) pr = findPrForTask(state.current_task, repo);
     if (!pr && taskSelection.task && taskSelection.task !== state?.current_task) pr = findPrForTask(taskSelection.task, repo);
   }
@@ -644,7 +852,8 @@ function reconcile() {
   const taskSpec = taskSpecPath(effectiveTask);
   const taskSpecPresent = taskSpec ? existsSync(taskSpec) : false;
   const canonicalTaskState = deriveCanonicalTaskState({ git, pr, review, ci });
-  const decision = classifyLoopDecision(state, roadmap, git, pr, review, ci, {
+  const runtime = loadRuntimeState();
+  const classified = classifyLoopDecision(state, roadmap, git, pr, review, ci, {
     drift,
     taskSpecPresent,
     effectiveTask,
@@ -652,7 +861,10 @@ function reconcile() {
     requiredGatesGreen: ci?.status === "completed" && ci?.conclusion === "success",
     unresolvedFindings: review?.unresolvedFindings ?? null,
   });
-  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), effectiveTask);
+  // An exhausted wait becomes the decision itself, so `decision` and `reentry` can never
+  // disagree about whether the run may end.
+  const decision = applyWaitEscalation(classified, runtime, { task: effectiveTask, pr });
+  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), architectureSignalScope(decision, effectiveTask));
   const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "READY_TO_MERGE", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
 
   return {
@@ -691,9 +903,16 @@ function reconcile() {
     task_spec: { path: taskSpec, present: taskSpecPresent },
     state_drift: drift,
     decision,
+    reentry: describeReentry({
+      decision,
+      runtime,
+      pr,
+      task: effectiveTask,
+      executorBridge: state?.executor_bridge ?? null,
+    }),
     prewrite_required_before_write: writeTransitions.has(decision.transition),
     active_prewrite: prewrite,
-    runtime_wait: loadRuntimeState(),
+    runtime_wait: runtime,
   };
 }
 
