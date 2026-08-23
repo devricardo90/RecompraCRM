@@ -184,6 +184,25 @@ export function selectMergeResult(results) {
   return list.find((entry) => entry?.independent === true && entry?.clean === true) ?? list.at(-1) ?? null;
 }
 
+export const REST_PAGE_SIZE = 100;
+export const REST_PAGE_LIMIT = 50;
+
+// gh fetches only the first page unless asked for more, so every list endpoint is walked
+// explicitly. A page that does not arrive as an array, or a walk that does not finish
+// within the page limit, yields null - unknown - never a partial list that a caller could
+// mistake for the complete set.
+export function collectPagedList(fetchPage, { pageSize = REST_PAGE_SIZE, pageLimit = REST_PAGE_LIMIT } = {}) {
+  if (typeof fetchPage !== "function") return null;
+  const items = [];
+  for (let page = 1; page <= pageLimit; page += 1) {
+    const raw = fetchPage(page);
+    if (!Array.isArray(raw)) return null;
+    items.push(...raw);
+    if (raw.length < pageSize) return items;
+  }
+  return null;
+}
+
 export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = false, review = null, unresolvedFindings = null, mergeTimestamp = null }) {
   const reviewTimestamp = review?.submittedAt ? Date.parse(review.submittedAt) : NaN;
   const mergeTime = mergeTimestamp ? Date.parse(mergeTimestamp) : null;
@@ -494,10 +513,17 @@ function fetchReviewThreads(number, repo) {
   return null;
 }
 
+function ghApiPagedList(repo, resource) {
+  return collectPagedList((page) => parseJson(sh("gh", ["api", `repos/${repo}/${resource}?per_page=${REST_PAGE_SIZE}&page=${page}`])));
+}
+
 function prReview(number, repo) {
   const pull = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}`]));
-  const reviewsRaw = parseJson(sh("gh", ["api", `repos/${repo}/pulls/${number}/reviews?per_page=100`])) ?? [];
-  const issueComments = parseJson(sh("gh", ["api", `repos/${repo}/issues/${number}/comments?per_page=100`])) ?? [];
+  // A review can block the merge, so an incomplete review list is unknown and fails closed.
+  const reviewsRaw = ghApiPagedList(repo, `pulls/${number}/reviews`);
+  // A clean comment can only ever permit a merge, so an incomplete comment list is
+  // conservative rather than dangerous and degrades to no clean evidence at all.
+  const issueComments = ghApiPagedList(repo, `issues/${number}/comments`) ?? [];
   if (!pull || !Array.isArray(reviewsRaw)) return null;
 
   const headOid = pull.head?.sha ?? null;

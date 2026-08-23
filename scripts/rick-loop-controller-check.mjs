@@ -16,6 +16,7 @@ import {
   filterAnchoredCleanComments,
   buildAnchoredResults,
   selectMergeResult,
+  collectPagedList,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
   detectStateDrift,
@@ -214,6 +215,34 @@ try {
   assert(withFindings.every((entry) => entry.clean === false), "unresolved findings must keep every result unclean");
   assert(selectMergeResult(withFindings).clean === false, "no clean result may be selected while findings are outstanding");
   assert(selectMergeResult([]) === null, "no anchored result selects nothing");
+
+  const pageOf = (n) => Array.from({ length: n }, (_, i) => ({ id: i }));
+  assert(collectPagedList(() => pageOf(3), { pageSize: 100 }).length === 3, "a single short page is the complete list");
+  assert(collectPagedList(() => [], { pageSize: 100 }).length === 0, "an empty first page is an empty list");
+  const twoPages = collectPagedList((page) => (page === 1 ? pageOf(100) : pageOf(7)), { pageSize: 100 });
+  assert(twoPages.length === 107, "a full page must be followed by the next page before the list is complete");
+  assert(collectPagedList(() => null) === null, "a page that does not arrive as an array is unknown, not empty");
+  assert(collectPagedList((page) => (page === 1 ? pageOf(100) : null)) === null, "a failure on a later page must never yield a partial list");
+  assert(
+    collectPagedList(() => pageOf(100), { pageSize: 100, pageLimit: 3 }) === null,
+    "a walk that cannot finish within the page limit is unknown, not the pages already seen",
+  );
+  assert(collectPagedList(null) === null, "a missing fetcher is unknown");
+
+  // The any-blocker rule only holds if every review page is seen: a CHANGES_REQUESTED
+  // review on a later page must still block a clean independent result on page one.
+  const blockerOnLaterPage = collectPagedList((page) => (page === 1
+    ? [{ commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:50:00Z", state: "COMMENTED", body: "Didnt find any major issues.", user: { login: "reviewer-bot" } }, ...pageOf(99)]
+    : [{ commit: { oid: "abc123def0" }, submitted_at: "2026-08-23T08:59:00Z", state: "CHANGES_REQUESTED", body: "blocking", user: { login: "other-reviewer" } }]));
+  assert(blockerOnLaterPage.length === 101, "every review page must be collected before selection");
+  const pagedSelection = selectMergeResult(buildAnchoredResults({
+    reviews: blockerOnLaterPage.filter((entry) => entry.commit),
+    cleanComments: [],
+    headOid: "abc123def0",
+    authorLogin: "pr-author",
+    unresolvedFindings: 0,
+  }));
+  assert(pagedSelection.state === "CHANGES_REQUESTED", "a blocking review on a later page must still block the merge result");
 
   const mergeCi = { headSha: "abc123", status: "completed", conclusion: "success" };
   const publishedCleanReview = {
