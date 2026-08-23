@@ -24,6 +24,8 @@ import {
   evaluateWaitEscalation,
   describeReentry,
   reconstructWaitFromFacts,
+  waitMatchesDecision,
+  applyWaitEscalation,
   MAX_WAIT_POLLS,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
@@ -439,6 +441,34 @@ try {
   );
   assert(findingDecision.transition === "RECOVERABLE_FAILURE", "the executable controller path must route findings to recovery");
 
+  // A PR whose branch names no task is governance work. Its gates must be evaluated on its
+  // own terms; it must never inherit the next roadmap task's spec requirement and be
+  // advanced past while still unresolved.
+  const governancePr = { number: 24, state: "OPEN", headRefName: "fix/loop-transient-wait-reentry", headRefOid: "abc123" };
+  const governanceDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "fix/loop-transient-wait-reentry", dirty: false },
+    governancePr,
+    null,
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: false, effectiveTask: "TASK-12", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(governanceDecision.transition === "WAIT_FOR_CODEX", "an unresolved governance PR must reach its own review gate, not SPEC_REQUIRED for the next task");
+  assert(governanceDecision.pr_context === "GOVERNANCE_PR" && governanceDecision.pr_number === 24, "a governance decision must name the PR it is about");
+
+  const taskPrDecision = classifyLoopDecision(
+    task13State,
+    { pending: 1, done: 12, total: 13 },
+    { branch: "feat/TASK-12-repurchase-dashboard", dirty: false },
+    { number: 25, state: "OPEN", headRefName: "feat/TASK-12-repurchase-dashboard", headRefOid: "abc123" },
+    null,
+    { databaseId: 99, headSha: "abc123", status: "completed", conclusion: "success" },
+    { drift: [], taskSpecPresent: false, effectiveTask: "TASK-12", taskSelection: selectedFallback, requiredGatesGreen: true, unresolvedFindings: 0 },
+  );
+  assert(taskPrDecision.transition === "SPEC_REQUIRED", "a task PR without its spec must still be SPEC_REQUIRED");
+  assert(cleanDecision.pr_context === "TASK_PR", "a task PR decision must be labelled as task work");
+
   // FINDING TRANSIENT_WAIT_NO_REENTRY: a WAIT_* state is an external timing fact, never an
   // outcome, and must never end an autonomous run while executable work remains.
   for (const waitTransition of WAIT_TRANSITIONS) {
@@ -502,7 +532,7 @@ try {
 
   const persistedWins = describeReentry({
     decision: { transition: "WAIT_FOR_CODEX" },
-    runtime: { ...freshWait, poll_count: 3 },
+    runtime: { ...freshWait, task: "LOOP-GOVERNANCE", target_head: "7a6dadb", poll_count: 3 },
     pr: openPrFacts,
     task: "LOOP-GOVERNANCE",
   });
@@ -510,6 +540,42 @@ try {
 
   const noFacts = describeReentry({ decision: { transition: "WAIT_FOR_CI" }, runtime: null, pr: null });
   assert(noFacts.wait_state_missing === true && typeof noFacts.persist_command === "string", "with neither runtime nor PR facts the wait is genuinely missing and must say how to persist one");
+
+  // A runtime checkpoint that belongs to an earlier wait must never contribute its poll
+  // budget: an exhausted checkpoint for one task would otherwise strand a fresh wait for
+  // another, carrying the wrong PR and head as its evidence.
+  const currentWait = { transition: "WAIT_FOR_CODEX", task: "LOOP-GOVERNANCE", pr: openPrFacts };
+  assert(waitMatchesDecision(null, currentWait) === false, "no checkpoint never matches");
+  assert(waitMatchesDecision({ state: "WAIT_FOR_CODEX", task: "LOOP-GOVERNANCE", pr_number: 24, target_head: "7a6dadb" }, currentWait), "a checkpoint about the same wait must match");
+  assert(!waitMatchesDecision({ state: "WAIT_FOR_CI", task: "LOOP-GOVERNANCE", pr_number: 24, target_head: "7a6dadb" }, currentWait), "a checkpoint for another transition must not match");
+  assert(!waitMatchesDecision({ state: "WAIT_FOR_CODEX", task: "TASK-11", pr_number: 24, target_head: "7a6dadb" }, currentWait), "a checkpoint for another task must not match");
+  assert(!waitMatchesDecision({ state: "WAIT_FOR_CODEX", task: "LOOP-GOVERNANCE", pr_number: 17, target_head: "7a6dadb" }, currentWait), "a checkpoint for another PR must not match");
+  assert(!waitMatchesDecision({ state: "WAIT_FOR_CODEX", task: "LOOP-GOVERNANCE", pr_number: 24, target_head: "old999" }, currentWait), "a checkpoint for another head must not match");
+
+  const staleExhausted = { state: "WAIT_FOR_CODEX", task: "TASK-11", pr_number: 17, target_head: "old999", poll_count: MAX_WAIT_POLLS };
+  const staleIgnored = describeReentry({
+    decision: { transition: "WAIT_FOR_CODEX" },
+    runtime: staleExhausted,
+    pr: openPrFacts,
+    task: "LOOP-GOVERNANCE",
+  });
+  assert(staleIgnored.terminal === false && staleIgnored.must_reenter === true, "an exhausted checkpoint for another wait must never strand the current one");
+  assert(staleIgnored.stale_wait_ignored === true, "ignoring a stale checkpoint must be reported");
+  assert(staleIgnored.wait_state.derived_from === "repository_facts" && staleIgnored.wait_state.pr_number === 24, "the current wait must be rebuilt from facts, not from the stale checkpoint");
+
+  // An exhausted wait must become the decision itself: decision and reentry can never
+  // disagree about whether the run may end.
+  const waitDecision = { transition: "WAIT_FOR_CODEX", reason: "awaiting review", terminal: false };
+  const matchedExhausted = { state: "WAIT_FOR_CODEX", task: "LOOP-GOVERNANCE", pr_number: 24, target_head: "7a6dadb", poll_count: MAX_WAIT_POLLS, started_at: "2026-08-23T15:00:00Z", last_error: null };
+  const promoted = applyWaitEscalation(waitDecision, matchedExhausted, { task: "LOOP-GOVERNANCE", pr: openPrFacts });
+  assert(promoted.transition === "BLOCKED_EXTERNAL" && promoted.terminal === true, "an exhausted wait must be promoted to a BLOCKED_EXTERNAL decision");
+  assert(promoted.waited_transition === "WAIT_FOR_CODEX" && promoted.evidence.target_head === "7a6dadb", "the promoted decision must carry the wait it replaced and its evidence");
+  const promotedReentry = describeReentry({ decision: promoted, runtime: matchedExhausted, pr: openPrFacts, task: "LOOP-GOVERNANCE" });
+  assert(promotedReentry.terminal === promoted.terminal, "decision and reentry must never disagree about terminality");
+  assert(promotedReentry.waiting === false && promotedReentry.escalation === null, "a promoted decision is no longer a wait");
+  assert(applyWaitEscalation(waitDecision, { ...matchedExhausted, poll_count: 1 }, { task: "LOOP-GOVERNANCE", pr: openPrFacts }).transition === "WAIT_FOR_CODEX", "a wait below budget must not be promoted");
+  assert(applyWaitEscalation(waitDecision, staleExhausted, { task: "LOOP-GOVERNANCE", pr: openPrFacts }).transition === "WAIT_FOR_CODEX", "a stale exhausted checkpoint must not promote the current wait");
+  assert(applyWaitEscalation({ transition: "READY_TO_MERGE" }, matchedExhausted, { task: "LOOP-GOVERNANCE", pr: openPrFacts }).transition === "READY_TO_MERGE", "a non-wait decision is never promoted");
 
   const completeReentry = describeReentry({ decision: { transition: "ROADMAP_COMPLETE" }, runtime: null });
   assert(completeReentry.terminal === true && completeReentry.waiting === false, "a finished roadmap ends the run without waiting");

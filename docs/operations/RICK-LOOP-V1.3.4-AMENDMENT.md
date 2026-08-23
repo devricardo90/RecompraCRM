@@ -83,6 +83,34 @@ Proven in live recovery: after reconnect, `reconcile()` alone recovered PR #24,
 CI `32647772120` SUCCESS, `review: null`, the `PR_POINTER_STALE` drift and
 resolver `TASK-12`, with zero local runtime state.
 
+## Review round 1 findings
+
+Three findings against the first head, all confirmed and fixed.
+
+**Stale checkpoint applied to a fresh wait (P1).** `.rick/tmp/loop-runtime.json`
+survives transitions that never clear it, so a checkpoint could belong to an
+earlier wait. An exhausted `WAIT_FOR_CODEX` for one task would make a new
+`WAIT_FOR_CI` for another report `BLOCKED_EXTERNAL`, carrying the wrong PR and
+head as its evidence. `waitMatchesDecision()` now requires the checkpoint to be
+about the same transition, task, PR and target head; a mismatch is ignored and
+reported as `stale_wait_ignored`.
+
+**Contradictory escalation payload (P2).** An exhausted wait left `decision`
+non-terminal while the nested `reentry` block said terminal, so two drivers
+reading the same output could reach opposite conclusions.
+`applyWaitEscalation()` promotes the escalation to a single authoritative
+`BLOCKED_EXTERNAL` decision carrying its evidence, and `reconcile()` applies it
+before building `reentry`.
+
+**Governance PR assigned to the next roadmap task (P1).** On a branch that names
+no task, branch-agnostic discovery found the governance PR, but
+`resolveEffectiveTask()` fell back to the roadmap task and the spec gate fired
+before any PR gate, so an unresolved governance PR was reported as
+`SPEC_REQUIRED` for TASK-12. Reproduced live on this PR. A PR whose branch names
+no task is now governance work: its gates are evaluated on its own terms, the
+roadmap spec requirement does not apply to it, and every PR decision carries
+`pr_number` and `pr_context`.
+
 ## Validation
 
 `node scripts/rick-loop-controller-check.mjs` asserts that no `WAIT_*`
