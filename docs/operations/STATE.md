@@ -2,12 +2,12 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 52
+state_version: 53
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_3
+loop_version: RICK_LOOP_V1_3_4
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
@@ -32,9 +32,21 @@ loop_upgrade_04_merge_main_head: 2b1e2f76c7b72e583fcfef84ee74b89b0ac5db44
 loop_upgrade_04_main_ci_run: 32647380522
 loop_upgrade_04_main_ci_status: SUCCESS
 loop_finding_transient_wait: TRANSIENT_WAIT_NO_REENTRY
-loop_finding_transient_wait_status: FIX_IN_PROGRESS_V1_3_4
+loop_finding_transient_wait_status: MERGED_V1_3_4
+loop_finding_api_connection_loss_status_2: MERGED_V1_3_4
+loop_upgrade_05_status: MERGED_V1_3_4
+loop_upgrade_05_pr: 24 MERGED_SQUASH
+loop_upgrade_05_reviewed_head: 804ab475e725a02068104eef7833b95765831049
+loop_upgrade_05_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
+loop_upgrade_05_review_published_at: "2026-08-23T15:59:06Z"
+loop_upgrade_05_merged_at: "2026-08-23T17:42:09Z"
+loop_upgrade_05_review_before_merge: PROVEN_IN_LIVE_EXECUTION
+loop_upgrade_05_review_rounds: 7
+loop_upgrade_05_merge_main_head: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
+loop_upgrade_05_main_ci_run: 32655684084
+loop_upgrade_05_main_ci_status: SUCCESS
 loop_finding_api_connection_loss: API_CONNECTION_LOSS_NO_REENTRY
-loop_finding_api_connection_loss_status: FIX_IN_PROGRESS_V1_3_4
+loop_finding_api_connection_loss_status: MERGED_V1_3_4
 loop_governance_v134_pr: 24
 loop_governance_v134_branch_ci: 32647772120 SUCCESS
 loop_governance_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_ACTIVE
@@ -60,8 +72,8 @@ last_completed_task: TASK-13
 current_task: TASK-12
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
-branch: fix/loop-transient-wait-reentry
-pr_number: 24
+branch: feat/TASK-12-repurchase-dashboard
+pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -94,6 +106,10 @@ task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lo
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-12.md
+task_12_spec_status: SPEC_DRAFT_AWAITING_REVIEW
+task_12_baseline: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
+task_12_schema_delta: additive_index_saleitem_expectedrepurchaseat
+task_12_inherited_limitation: L4
 task_11_status: COMPLETED
 task_11_technical_head: 955baeb6cbc3cbc89f43e6f948392c291cfbea77
 task_11_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -110,7 +126,7 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
-task_12_status: SPEC_REQUIRED
+task_12_status: SPEC_DRAFT_AWAITING_REVIEW
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
 task_13_status: COMPLETED_MERGED
@@ -166,9 +182,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: CREATE_TASK_12_SPEC
+next_action: REVIEW_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T15:52:00Z"
+updated_at: "2026-08-23T17:55:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

@@ -154,7 +154,11 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - depends_on: TASK-09, TASK-11, ARCH-01
   - blocked_by: none
   - architecture_decision: ARCH-01 RESOLVED — Option A, persisted synchronous trigger-owned forecast
-  - status: SPEC_REQUIRED
+  - status: SPEC_DRAFT_AWAITING_REVIEW
+  - spec: docs/specs/TASK-12.md
+  - branch: feat/TASK-12-repurchase-dashboard
+  - baseline: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
+  - schema_delta: índice aditivo em SaleItem.expectedRepurchaseAt (única migration da task)
   - inherited_contract: datas via lib/format/businessDate.ts; leitura via projeção, sem reimplementar escrita de venda
   - relevant_limitation: L4 — previsão por duração fixa pode cair no dia da própria venda para venda retroagida cruzando virada de horário de verão
   - done_when: classificação correta de vencidos, hoje e próximos sete dias.
