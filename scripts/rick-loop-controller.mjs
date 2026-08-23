@@ -28,6 +28,9 @@ export const CANONICAL_TASK_STATES = Object.freeze([
 
 const START_LIKE_STATUSES = new Set(["READY", "READY_TO_START"]);
 const DEFAULT_BRANCH = "main";
+// Governance work is recorded in the loop register under this task name; it is the scope the
+// architecture signal must be scored under when the active PR is governance work.
+const GOVERNANCE_TASK = "LOOP-GOVERNANCE";
 
 // A WAIT_* condition is an external timing fact, never an outcome. Only these transitions
 // may end an autonomous run: the roadmap is finished, or a human/external decision that
@@ -255,6 +258,13 @@ export function evaluateMergeAllowed({ currentHead, ci, requiredGatesGreen = fal
   return { allowed: Object.values(checks).every(Boolean), checks };
 }
 
+// The signal is scoped to the work the review rounds were actually spent on. A governance PR
+// is not the next roadmap task, so scoring it under that task would report zero rounds and
+// hide a signal that has genuinely fired.
+export function architectureSignalScope(decision, effectiveTask = null) {
+  return decision?.pr_context === "GOVERNANCE_PR" ? GOVERNANCE_TASK : effectiveTask;
+}
+
 export function evaluateArchitectureComplexitySignal(entries, task, threshold = 5) {
   const rounds = new Set();
   const classes = [];
@@ -461,7 +471,12 @@ export function applyWaitEscalation(decision, runtime, { maxPolls = MAX_WAIT_POL
   const usable = waitMatchesDecision(runtime, { transition: decision.transition, task, pr }) ? runtime : null;
   const escalation = evaluateWaitEscalation(usable, { maxPolls });
   if (escalation.status !== "BLOCKED_EXTERNAL") return decision;
+  // The promoted decision keeps whatever PR identity the classified decision carried, so the
+  // one exit that ends a run is not the one exit that cannot be tied to its PR.
+  const { pr_number: prNumber, pr_context: context } = decision;
   return {
+    ...(prNumber === undefined ? {} : { pr_number: prNumber }),
+    ...(context === undefined ? {} : { pr_context: context }),
     transition: "BLOCKED_EXTERNAL",
     reason: `${decision.transition} exhausted its ${escalation.max_polls}-poll budget without resolving`,
     waited_transition: decision.transition,
@@ -849,7 +864,7 @@ function reconcile() {
   // An exhausted wait becomes the decision itself, so `decision` and `reentry` can never
   // disagree about whether the run may end.
   const decision = applyWaitEscalation(classified, runtime, { task: effectiveTask, pr });
-  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), effectiveTask);
+  const architectureSignal = evaluateArchitectureComplexitySignal(readLoopRegister(), architectureSignalScope(decision, effectiveTask));
   const writeTransitions = new Set(["TASK_ADVANCE", "PASS", "READY_TO_MERGE", "RECOVERABLE_FAILURE", "POST_MERGE_VALIDATION"]);
 
   return {

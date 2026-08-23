@@ -29,6 +29,7 @@ import {
   MAX_WAIT_POLLS,
   evaluateMergeAllowed,
   evaluateArchitectureComplexitySignal,
+  architectureSignalScope,
   detectStateDrift,
   parseRoadmapPlan,
   resolveNextEligibleTask,
@@ -307,6 +308,10 @@ try {
   assert(acrossSignal.rounds === 5, "rounds from different PRs must not collide, got " + acrossSignal.rounds);
   assert(acrossSignal.signal === "ARCHITECTURE_COMPLEXITY_SIGNAL", "five distinct rounds across PRs must raise the signal");
   assert(acrossSignal.blocking === false, "the architecture signal must stay non-blocking");
+  assert(architectureSignalScope({ pr_context: "GOVERNANCE_PR" }, "TASK-12") === "LOOP-GOVERNANCE", "a governance PR must score the signal under governance work, not the next roadmap task");
+  assert(architectureSignalScope({ pr_context: "TASK_PR" }, "TASK-12") === "TASK-12", "a task PR must score the signal under its task");
+  assert(architectureSignalScope(null, "TASK-12") === "TASK-12", "with no PR context the effective task is the scope");
+
   const sameRoundTwice = evaluateArchitectureComplexitySignal(
     [{ task: "LOOP-GOVERNANCE", pr: 24, review_round: 1, finding: "A" }, { task: "LOOP-GOVERNANCE", pr: 24, review_round: 1, finding: "B" }],
     "LOOP-GOVERNANCE",
@@ -655,6 +660,13 @@ try {
   const promoted = applyWaitEscalation(waitDecision, matchedExhausted, { task: "LOOP-GOVERNANCE", pr: openPrFacts });
   assert(promoted.transition === "BLOCKED_EXTERNAL" && promoted.terminal === true, "an exhausted wait must be promoted to a BLOCKED_EXTERNAL decision");
   assert(promoted.waited_transition === "WAIT_FOR_CODEX" && promoted.evidence.target_head === "7a6dadb", "the promoted decision must carry the wait it replaced and its evidence");
+  const promotedWithPr = applyWaitEscalation(
+    { transition: "WAIT_FOR_CODEX", pr_number: 24, pr_context: "GOVERNANCE_PR" },
+    matchedExhausted,
+    { task: "LOOP-GOVERNANCE", pr: openPrFacts },
+  );
+  assert(promotedWithPr.pr_number === 24 && promotedWithPr.pr_context === "GOVERNANCE_PR", "the one exit that ends a run must still name its PR");
+  assert(promoted.pr_number === undefined && promoted.pr_context === undefined, "promotion must not invent PR context the decision never had");
   const promotedReentry = describeReentry({ decision: promoted, runtime: matchedExhausted, pr: openPrFacts, task: "LOOP-GOVERNANCE" });
   assert(promotedReentry.terminal === promoted.terminal, "decision and reentry must never disagree about terminality");
   assert(promotedReentry.waiting === false && promotedReentry.poll_budget === null, "a promoted decision is no longer a wait");

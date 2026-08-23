@@ -168,6 +168,23 @@ reopen this PR or any completed task. The defect classes cluster in one place -
 what counts as a published clean review result, and what counts as a live wait -
 which is the contract worth consolidating rather than the individual fixes.
 
+## Review round 4 findings
+
+Two findings, both new surface exposed by the earlier fixes rather than repeats.
+
+**Promotion dropped PR identity (P2).** `applyWaitEscalation()` built a fresh
+decision object, so `BLOCKED_EXTERNAL` - the one exit that ends a run - was the
+only active-PR decision that could not be tied to its PR at the top level. The
+promoted decision now carries whatever PR identity the classified decision had,
+and invents none when it had none.
+
+**The signal was scored under the wrong task (P2).** `reconcile()` always scored
+the register under `effectiveTask`, so on a governance PR it scored under
+TASK-12 and reported zero rounds while the recorded LOOP-GOVERNANCE signal was
+live. `architectureSignalScope()` now derives the scope from the PR context.
+Verified live on this head: the controller reports
+`ARCHITECTURE_COMPLEXITY_SIGNAL` for LOOP-GOVERNANCE at six rounds.
+
 ## Validation
 
 `node scripts/rick-loop-controller-check.mjs` asserts that no `WAIT_*`
