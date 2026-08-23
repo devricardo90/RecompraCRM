@@ -4,7 +4,7 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: TASK_12_SPEC_IN_REVIEW_OWNER_DECISION_PENDING
+status: TASK_12_SPEC_IN_REVIEW_OWNER-01_RESOLVED
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3_4
 current_task: TASK-12
@@ -38,8 +38,8 @@ task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
 task_12_spec: docs/specs/TASK-12.md (review round 1 findings fixed; implementation not started)
 task_12_owner_decision: OWNER-01 dashboard row granularity — one row per sale item (A) vs one row per customer (B)
-task_12_owner_decision_status: PENDING
-task_12_owner_decision_recommendation: A
+task_12_owner_decision_status: RESOLVED_OPTION_A
+task_12_owner_decision_resolution: A — one dashboard row per sale item; customer aggregation and representative-date rules are forbidden in this task
 task_13_status: COMPLETED_MERGED
 task_13_dependencies: TASK-06, TASK-08
 task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
@@ -60,7 +60,7 @@ arch_01_status: RESOLVED
 arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
 open_architecture_items: ARCH-02
-next_action: AWAIT_SPEC_REREVIEW_THEN_OWNER_DECISION_OWNER-01
+next_action: AWAIT_SPEC_REREVIEW_THEN_IMPLEMENT_TASK_12
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

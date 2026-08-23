@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 54
+state_version: 55
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -111,9 +111,12 @@ task_12_spec_round_1_findings: 5
 task_12_spec_round_1_fixed: 4
 task_12_spec_round_1_escalated: 1
 task_12_owner_decision: OWNER-01_DASHBOARD_ROW_GRANULARITY
-task_12_owner_decision_status: PENDING
-task_12_owner_decision_recommendation: OPTION_A_ONE_ROW_PER_SALE_ITEM
-task_12_owner_decision_blocks: IMPLEMENTATION_ONLY_NOT_SPEC_REVIEW
+task_12_owner_decision_status: RESOLVED_OPTION_A
+task_12_owner_decision_resolution: OPTION_A_ONE_ROW_PER_SALE_ITEM
+task_12_owner_decision_invariant: sale_item_to_forecast_to_forecast_date_to_bucket
+task_12_owner_decision_forbids: customer_level_aggregation, representative_date_rules
+task_12_owner_decision_decided_at: "2026-08-23"
+task_12_owner_decision_blocks: none
 task_12_pr: 25
 task_12_baseline: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
 task_12_schema_delta: additive_index_saleitem_expectedrepurchaseat
@@ -192,7 +195,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: REVIEW_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T18:05:00Z"
+updated_at: "2026-08-23T18:12:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

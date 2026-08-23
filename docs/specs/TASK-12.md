@@ -1,6 +1,6 @@
 # TASK-12 Spec — Dashboard de recompra
 
-Status: SPEC_DRAFT_AWAITING_REVIEW
+Status: SPEC_REVIEW_ROUND_1_FIXED_OWNER-01_DECIDED
 Source: Google Docs `Fonte da Verdade - Recompra CRM` + `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md` + `docs/architecture/ARCH-01-decision.md`
 Depends on: TASK-09, TASK-11, ARCH-01
 Baseline: `b72670fec890d1687a5f69e1e544ce38cd8f4d0e` (`main`)
@@ -346,6 +346,8 @@ AC20. A página renderiza o balde recebido e não reclassifica; `counts` e os gr
 
 AC21. `customer.phone` está sempre presente na resposta com tipo `string | null`, e vale `null` para cliente sem telefone.
 
+AC22. Um cliente com três previsões produz três linhas independentes, cada uma com a sua data e o seu balde; não existe agregação por cliente nem data representativa, e as contagens contam itens.
+
 ## Validação determinística
 
 Gates obrigatórios, todos verdes: `db:generate`, `db:validate`, `db:migrate`,
@@ -374,9 +376,9 @@ Contato automático, WhatsApp, mensagens, histórico de contato, marcação de
 priorização por valor, e qualquer alteração no cálculo ou na propriedade da
 previsão.
 
-## Decisão de dono pendente
+## Decisão de dono — OWNER-01 (RESOLVIDA)
 
-**OWNER-01 — granularidade das linhas do dashboard.**
+**OWNER-01 — granularidade das linhas do dashboard. Decidida: Opção A.**
 
 O SDD estabelece que previsões são geradas **por item de venda**. Ele não diz
 como o dashboard de contato apresenta isso. As duas leituras são defensáveis e
@@ -396,13 +398,27 @@ mesmo cliente podem cair em baldes diferentes, o que obrigaria B a escolher uma
 data representativa ou a repetir o cliente entre baldes — reintroduzindo A por
 outro caminho.
 
-**Recomendação: Opção A.** Preserva a semântica de "uma previsão por item" sem
-inventar regra de agregação, e a Opção B pode ser construída depois como uma
-visão sobre os mesmos dados, sem mudar o contrato de origem.
+**Decisão do dono: Opção A — uma linha de dashboard por item de venda.**
 
-Esta decisão bloqueia a implementação da TASK-12; não bloqueia a revisão desta
-spec. As demais seções estão escritas para a Opção A e mudam apenas na
-cardinalidade caso o dono escolha B.
+O invariante a preservar é:
+
+```text
+item de venda -> previsão -> data da previsão -> balde
+```
+
+Consequências vinculantes para esta task:
+
+- **proibido** introduzir agregação por cliente;
+- **proibido** introduzir regra de data representativa;
+- um cliente com três previsões produz três linhas, cada uma com a sua data e o
+  seu balde;
+- as contagens dos baldes contam itens, não clientes.
+
+Agrupamento por cliente pode ser implementado depois como camada de
+apresentação sobre este mesmo contrato de previsão por item, sem alterar o
+contrato de origem. Isso está fora do escopo da TASK-12.
+
+A decisão desbloqueia a implementação: nada mais nesta spec depende dela.
 
 ## Riscos conhecidos
 
@@ -425,4 +441,5 @@ cardinalidade caso o dono escolha B.
 - **A3**: o limite de oito dias vale apenas para a frente. Itens previstos para
   depois de `hoje + 7` não são retornados; itens vencidos são retornados sem
   limite inferior, por mais antigos que sejam.
-- **A4**: *escalado como decisão de dono* — ver "Decisão de dono pendente".
+- **A4**: uma linha por item de venda. Decidido pelo dono em OWNER-01, Opção A;
+  não é mais uma suposição de engenharia.

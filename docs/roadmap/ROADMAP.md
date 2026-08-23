@@ -154,8 +154,10 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - depends_on: TASK-09, TASK-11, ARCH-01
   - blocked_by: none
   - architecture_decision: ARCH-01 RESOLVED — Option A, persisted synchronous trigger-owned forecast
-  - status: SPEC_DRAFT_AWAITING_REVIEW
+  - status: SPEC_REVIEW_ROUND_1_FIXED_OWNER-01_DECIDED
   - spec: docs/specs/TASK-12.md
+  - owner_decision: OWNER-01 RESOLVED — Opção A, uma linha por item de venda
+  - owner_decision_invariant: item de venda -> previsão -> data da previsão -> balde
   - branch: feat/TASK-12-repurchase-dashboard
   - baseline: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
   - schema_delta: índice aditivo em SaleItem.expectedRepurchaseAt (única migration da task)
