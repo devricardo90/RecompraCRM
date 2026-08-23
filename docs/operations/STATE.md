@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 51
+state_version: 52
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -37,9 +37,10 @@ loop_finding_api_connection_loss: API_CONNECTION_LOSS_NO_REENTRY
 loop_finding_api_connection_loss_status: FIX_IN_PROGRESS_V1_3_4
 loop_governance_v134_pr: 24
 loop_governance_v134_branch_ci: 32647772120 SUCCESS
-loop_governance_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_5_ROUNDS
+loop_governance_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_ACTIVE
 loop_governance_architecture_item: ARCH-03
-loop_governance_review_rounds: 7
+loop_governance_review_rounds_at_8427dbe: 7
+loop_governance_review_rounds_source: derived from docs/operations/LOOP-REGISTER.jsonl
 loop_freeze_until: TASK-17
 executor_bridge: SCHEDULE_WAKEUP
 completed_tasks:
@@ -167,7 +168,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: CREATE_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T15:40:00Z"
+updated_at: "2026-08-23T15:52:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

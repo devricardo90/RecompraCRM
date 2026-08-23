@@ -162,8 +162,9 @@ governance findings across seven review rounds reported only four rounds,
 because `review_round` restarts at 1 on each PR and a bare round number collides
 across PRs. Round identity is now the PR plus the number.
 
-With that corrected the signal fires for LOOP-GOVERNANCE at five rounds against
-a threshold of five. It is recorded as `ARCH-03` and is non-blocking: it does not
+With that corrected the signal fires for LOOP-GOVERNANCE: it reached the
+threshold of five at the round-2 entry on PR #24 and keeps rising as rounds are
+recorded. It is recorded as `ARCH-03` and is non-blocking: it does not
 reopen this PR or any completed task. The defect classes cluster in one place -
 what counts as a published clean review result, and what counts as a live wait -
 which is the contract worth consolidating rather than the individual fixes.
@@ -182,8 +183,10 @@ and invents none when it had none.
 the register under `effectiveTask`, so on a governance PR it scored under
 TASK-12 and reported zero rounds while the recorded LOOP-GOVERNANCE signal was
 live. `architectureSignalScope()` now derives the scope from the PR context.
-Verified live on this head: the controller reports
-`ARCHITECTURE_COMPLEXITY_SIGNAL` for LOOP-GOVERNANCE at six rounds.
+Verified live: the controller reports `ARCHITECTURE_COMPLEXITY_SIGNAL` for
+LOOP-GOVERNANCE. The live count is always derived from the register; as of HEAD
+`8427dbe` it is seven distinct rounds - PR #23 rounds 2 to 4 and PR #24 rounds 1
+to 4 - against a threshold of five.
 
 ## Validation
 
