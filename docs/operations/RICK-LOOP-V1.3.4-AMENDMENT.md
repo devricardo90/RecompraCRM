@@ -111,6 +111,34 @@ no task is now governance work: its gates are evaluated on its own terms, the
 roadmap spec requirement does not apply to it, and every PR decision carries
 `pr_number` and `pr_context`.
 
+## Review round 2 findings
+
+Four findings, two of them defects in the round 1 fixes themselves.
+
+**Checkpoint identity was optional (P1).** `waitMatchesDecision()` skipped a
+comparison whenever the checkpoint's field was absent, and the CLI makes
+`prNumber` and `targetHead` optional. A checkpoint identifying nothing therefore
+matched any PR and head. Every identity component the current wait supplies must
+now be present and equal in the checkpoint.
+
+**describeReentry still escalated on its own (P2).** It re-derived terminality
+from the poll budget, so an unpromoted `WAIT_*` decision could be reported as
+terminal while the decision said otherwise - the very contradiction round 1
+claimed to remove. Terminality is now read from the decision alone.
+`describeReentry()` reports `poll_budget` and `escalation_required` for
+observability, and `applyWaitEscalation()` is genuinely the only thing that ends
+a wait.
+
+**SPEC_REQUIRED lost its PR context (P2).** The early return ran before the PR
+wrapper existed, so it violated the new invariant that every PR decision names
+its PR. It is now wrapped like the gate decisions.
+
+**Governance context depended on PR state (P1).** `findPrForBranch()` searches
+every state, so after a governance PR merged, `governancePr` became false and
+classification returned `SPEC_REQUIRED` before reaching post-merge validation.
+Governance context now comes from the branch naming no task, regardless of PR
+state, and the merged check runs before the spec gate.
+
 ## Validation
 
 `node scripts/rick-loop-controller-check.mjs` asserts that no `WAIT_*`

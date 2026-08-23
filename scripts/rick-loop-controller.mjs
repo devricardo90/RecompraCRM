@@ -441,9 +441,12 @@ export function evaluateWaitEscalation(runtime, { maxPolls = MAX_WAIT_POLLS } = 
 export function waitMatchesDecision(runtime, { transition, task = null, pr = null } = {}) {
   if (!runtime || !transition) return false;
   if (runtime.state !== transition) return false;
-  if (task && runtime.task && runtime.task !== task) return false;
-  if (pr?.number != null && runtime.pr_number != null && Number(runtime.pr_number) !== Number(pr.number)) return false;
-  if (pr?.headRefOid && runtime.target_head && runtime.target_head !== pr.headRefOid) return false;
+  // Every identity component the current wait supplies must be present and equal in the
+  // checkpoint. A checkpoint started without a PR or head - the CLI arguments are optional -
+  // identifies nothing, so it must not be adopted by whatever wait happens to run next.
+  if (task && runtime.task !== task) return false;
+  if (pr?.number != null && (runtime.pr_number == null || Number(runtime.pr_number) !== Number(pr.number))) return false;
+  if (pr?.headRefOid && runtime.target_head !== pr.headRefOid) return false;
   return true;
 }
 
@@ -495,15 +498,20 @@ export function describeReentry({
   // Only a checkpoint about this same wait may contribute its poll budget.
   const matched = waitMatchesDecision(runtime, { transition, task, pr });
   const usableRuntime = matched ? runtime : null;
-  const escalation = waiting ? evaluateWaitEscalation(usableRuntime, { maxPolls }) : null;
-  const blocked = escalation?.status === "BLOCKED_EXTERNAL";
-  const terminal = blocked || isTerminalTransition(transition);
+  // Terminality is read from the decision, never re-derived here: applyWaitEscalation() is
+  // the only thing that may end a wait. This block reports the budget so a caller knows a
+  // promotion is due, but it never contradicts the decision it was given.
+  const budget = waiting ? evaluateWaitEscalation(usableRuntime, { maxPolls }) : null;
+  const terminal = isTerminalTransition(transition);
   const reentry = {
     transition,
     terminal,
     must_reenter: !terminal,
     waiting,
-    escalation,
+    poll_budget: budget && { polls: budget.polls, max_polls: budget.max_polls, exhausted: budget.status === "BLOCKED_EXTERNAL" },
+    // True when the budget is spent but the decision has not been promoted yet. The caller
+    // must run applyWaitEscalation() to turn it into a BLOCKED_EXTERNAL decision.
+    escalation_required: budget?.status === "BLOCKED_EXTERNAL",
     // A non-terminal decision needs something to bring the loop back. If the run dies before
     // the bridge is armed, this is what a resumed session reads to know it was owed a wake-up.
     trigger_required: !terminal,
@@ -752,16 +760,20 @@ function classifyLoopDecisionInner(state, roadmap, git, pr, review, ci, {
   // does not apply to it. Without this, branch-agnostic PR discovery would let an unresolved
   // governance PR be reported as SPEC_REQUIRED for the next task and be advanced past.
   const activePrTask = pr ? taskFromBranch(pr.headRefName) : null;
-  const governancePr = Boolean(pr && pr.state !== "MERGED" && !activePrTask);
+  // Governance context comes from the branch naming no task, never from the PR's state: the
+  // branch lookup searches every state, so a merged governance PR must still be recognised
+  // as governance work and reach post-merge validation.
+  const governancePr = Boolean(pr && !activePrTask);
   const prContext = governancePr ? "GOVERNANCE_PR" : "TASK_PR";
+  // Every decision about a PR names that PR and its context, including the ones that return
+  // before the gate sequence.
+  const onPr = (decision) => (pr ? { ...decision, pr_number: pr.number, pr_context: prContext } : decision);
 
-  if (!governancePr && !taskSpecPresent) return { transition: "SPEC_REQUIRED", task: effectiveTask, reason: `${taskSpecPath(effectiveTask)} is required before implementation/recovery writes` };
+  // A merged PR needs its post-merge validation before any spec gate: the spec gate guards
+  // implementation writes, which are not what a merged PR is waiting on.
+  if (pr && pr.state === "MERGED") return onPr({ transition: "POST_MERGE_VALIDATION", reason: `PR #${pr.number} merged; validate main before advancing` });
+  if (!governancePr && !taskSpecPresent) return onPr({ transition: "SPEC_REQUIRED", task: effectiveTask, reason: `${taskSpecPath(effectiveTask)} is required before implementation/recovery writes` });
   if (!pr) return { transition: "PASS", task: effectiveTask, reason: `no active PR found; proceed with ${effectiveTask} from the task spec` };
-  // Every decision from here on is about this PR, so it carries the PR it is about and
-  // whether that PR is task work or governance work.
-  const onPr = (decision) => ({ ...decision, pr_number: pr.number, pr_context: prContext });
-
-  if (pr.state === "MERGED") return onPr({ transition: "POST_MERGE_VALIDATION", reason: `PR #${pr.number} merged; validate main before advancing` });
   if (!ci) return onPr({ transition: "EXTERNAL_RETRYABLE", reason: "no CI run found yet for current PR HEAD" });
   if (ci.status !== "completed") return onPr({ transition: "WAIT_FOR_CI", reason: `CI run ${ci.databaseId} still ${ci.status}` });
   if (ci.conclusion !== "success") return onPr({ transition: "RECOVERABLE_FAILURE", reason: `CI run ${ci.databaseId} concluded ${ci.conclusion}` });
