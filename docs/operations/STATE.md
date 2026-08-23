@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 55
+state_version: 56
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -106,7 +106,14 @@ task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lo
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-12.md
-task_12_spec_status: SPEC_REVIEW_ROUND_1_FINDINGS_FIXED
+task_12_spec_status: SPEC_REVIEW_ROUND_1_FIXED_AWAITING_REREVIEW
+task_12_spec_rereview_status: BLOCKED_EXTERNAL_REVIEWER_USAGE_LIMIT
+task_12_spec_rereview_attempts: 4
+task_12_spec_rereview_first_refusal: "2026-08-23T18:03:20Z"
+task_12_spec_rereview_last_refusal: "2026-08-23T19:24:26Z"
+task_12_branch_ci_run: 32657266070
+task_12_branch_ci_status: SUCCESS
+task_12_unresolved_findings: 0
 task_12_spec_round_1_findings: 5
 task_12_spec_round_1_fixed: 4
 task_12_spec_round_1_escalated: 1
@@ -189,13 +196,13 @@ task_09_main_ci_status: SUCCESS
 task_09_accepted_residual: RETRYABLE_40P01_ON_MULTI_ITEM_SALEITEM_STATEMENTS
 task_09_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL
 task_09_architecture_item: ARCH-01
-external_gate: none
+external_gate: CODEX_CODE_REVIEW_USAGE_LIMIT
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: REVIEW_TASK_12_SPEC
 next_action_authorized: true
-updated_at: "2026-08-23T18:12:00Z"
+updated_at: "2026-08-23T19:26:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

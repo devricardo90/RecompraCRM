@@ -4,7 +4,7 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: TASK_12_SPEC_IN_REVIEW_OWNER-01_RESOLVED
+status: TASK_12_SPEC_BLOCKED_EXTERNAL_REVIEWER_UNAVAILABLE
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_3_4
 current_task: TASK-12
@@ -12,7 +12,7 @@ current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-12
 current_branch: feat/TASK-12-repurchase-dashboard
 current_pr: 25
-external_gate: none
+external_gate: CODEX_CODE_REVIEW_USAGE_LIMIT
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
 loop_upgrade_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -60,7 +60,7 @@ arch_01_status: RESOLVED
 arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
 open_architecture_items: ARCH-02
-next_action: AWAIT_SPEC_REREVIEW_THEN_IMPLEMENT_TASK_12
+next_action: RESUME_SPEC_REREVIEW_WHEN_REVIEWER_AVAILABLE_THEN_IMPLEMENT_TASK_12
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
