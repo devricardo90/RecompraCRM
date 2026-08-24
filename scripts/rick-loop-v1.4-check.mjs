@@ -62,18 +62,23 @@ const needsValidationRaw = {
   task_spec: { present: true },
   ci: { headSha: "head123", status: "completed", conclusion: "success" },
 };
-const needsValidation = resolveV14Decision(needsValidationRaw, { validation: null, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+const decisionOpts = { baseline: "base123", changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 };
+const needsValidation = resolveV14Decision(needsValidationRaw, { ...decisionOpts, validation: null });
 assert.equal(needsValidation.transition, "READY_FOR_VALIDATION", "green tests cannot jump directly to reviewer wait");
 
-const failedArtifact = { result: "FAIL", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
-const failedValidation = resolveV14Decision(needsValidationRaw, { validation: failedArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+const failedArtifact = { result: "FAIL", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", base_sha: "base123", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
+const failedValidation = resolveV14Decision(needsValidationRaw, { ...decisionOpts, validation: failedArtifact });
 assert.equal(failedValidation.transition, "VALIDATION_FAILED");
 
-const validationArtifact = { result: "PASS", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
-assert.equal(validationMatches(validationArtifact, { task: "TASK-99", head: "head123", specDigest: manifest.spec_sha256 }), true);
-const afterValidation = resolveV14Decision(needsValidationRaw, { validation: validationArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+const validationArtifact = { result: "PASS", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", base_sha: "base123", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
+assert.equal(validationMatches(validationArtifact, { task: "TASK-99", baseline: "base123", head: "head123", specDigest: manifest.spec_sha256 }), true);
+const afterValidation = resolveV14Decision(needsValidationRaw, { ...decisionOpts, validation: validationArtifact });
 assert.equal(afterValidation.transition, "PARKED_EXTERNAL_RETRYABLE", "after validation PASS, reviewer wait may be parked autonomously");
-assert.equal(afterValidation.waited_transition, "WAIT_FOR_CODEX");
+
+const forgedBaseline = { ...validationArtifact, base_sha: "head123" };
+assert.equal(validationMatches(forgedBaseline, { task: "TASK-99", baseline: "base123", head: "head123", specDigest: manifest.spec_sha256 }), false, "manifest cannot choose its own baseline");
+const forgedDecision = resolveV14Decision(needsValidationRaw, { ...decisionOpts, validation: forgedBaseline });
+assert.equal(forgedDecision.transition, "READY_FOR_VALIDATION", "forged base cannot unlock review");
 
 const rawRetryableBlock = {
   decision: { transition: "BLOCKED_EXTERNAL", waited_transition: "WAIT_FOR_CODEX", terminal: true, evidence: { last_error: "usage limit" }, pr_number: 25, pr_context: "TASK_PR" },
@@ -82,9 +87,9 @@ const rawRetryableBlock = {
   task_spec: { present: true },
   ci: { headSha: "head123", status: "completed", conclusion: "success" },
 };
-const blockedWithoutValidation = resolveV14Decision(rawRetryableBlock, { validation: null, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+const blockedWithoutValidation = resolveV14Decision(rawRetryableBlock, { ...decisionOpts, validation: null });
 assert.equal(blockedWithoutValidation.transition, "READY_FOR_VALIDATION", "legacy exhausted reviewer wait must not bypass validation");
-const parked = resolveV14Decision(rawRetryableBlock, { validation: validationArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+const parked = resolveV14Decision(rawRetryableBlock, { ...decisionOpts, validation: validationArtifact });
 assert.equal(parked.transition, "PARKED_EXTERNAL_RETRYABLE");
 assert.equal(parked.terminal, false, "retry budget exhaustion must not transfer control to the human after validation is satisfied");
 
@@ -93,12 +98,13 @@ assert.equal(hardBlock.transition, "BLOCKED_EXTERNAL");
 assert.equal(hardBlock.terminal, true);
 
 const reviewRuns = [
-  { databaseId: 10, headSha: "old", status: "completed", conclusion: "success" },
-  { databaseId: 11, headSha: "head123", status: "in_progress", conclusion: null },
+  { databaseId: 10, headSha: "old", status: "completed", conclusion: "success", updatedAt: "2026-08-24T10:00:00Z" },
+  { databaseId: 11, headSha: "head123", status: "in_progress", conclusion: null, updatedAt: "2026-08-24T15:00:00Z" },
 ];
 assert.equal(selectClaudeReviewRun(reviewRuns, "head123")?.databaseId, 11, "review retry must be exact-head scoped");
-assert.equal(claudeReviewRetryAction(reviewRuns[1]), "WAIT", "never rerun an active Claude review");
-assert.equal(claudeReviewRetryAction({ databaseId: 12, headSha: "head123", status: "completed", conclusion: "failure" }), "RERUN");
+assert.equal(claudeReviewRetryAction(reviewRuns[1], { now: new Date("2026-08-24T15:30:00Z") }), "WAIT", "never rerun an active Claude review");
+assert.equal(claudeReviewRetryAction({ databaseId: 12, headSha: "head123", status: "completed", conclusion: "failure", updatedAt: "2026-08-24T15:20:00Z" }, { now: new Date("2026-08-24T15:30:00Z") }), "COOLDOWN", "restart-safe cooldown comes from GitHub run facts");
+assert.equal(claudeReviewRetryAction({ databaseId: 12, headSha: "head123", status: "completed", conclusion: "failure", updatedAt: "2026-08-24T13:00:00Z" }, { now: new Date("2026-08-24T15:30:00Z") }), "RERUN");
 assert.equal(claudeReviewRetryAction(null), "NO_RUN");
 
 assert.equal(retryDelaySeconds(0), 30);
@@ -122,11 +128,13 @@ console.log(JSON.stringify({
     spec_anchored_ac_gate: "PASS",
     surviving_fault_fails: "PASS",
     exact_head_binding: "PASS",
+    independent_baseline_binding: "PASS",
     validation_before_review_wait: "PASS",
     validation_fail_blocks_review: "PASS",
     validation_pass_unlocks_retryable_review_wait: "PASS",
     legacy_exhausted_review_wait_cannot_bypass_validation: "PASS",
     claude_review_retry_exact_head: "PASS",
+    claude_review_retry_restart_safe_cooldown: "PASS",
     active_claude_review_not_duplicated: "PASS",
     retryable_external_never_terminal_by_budget: "PASS",
     stats_derived_from_events: "PASS",

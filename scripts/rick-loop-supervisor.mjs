@@ -25,18 +25,19 @@ export function isDocsOnly(files) {
   return Array.isArray(files) && files.length > 0 && files.every((file) => DOCS_ONLY_ALLOWLIST.test(file));
 }
 
-export function validationMatches(validation, { task, head, specDigest }) {
+export function validationMatches(validation, { task, head, specDigest, baseline }) {
   return Boolean(
     validation
     && validation.result === "PASS"
     && validation.phase === "AUTHORITATIVE_VALIDATION"
     && validation.task === task
     && validation.head_sha === head
+    && validation.base_sha === baseline
     && validation.spec_sha256 === specDigest,
   );
 }
 
-export function resolveV14Decision(raw, { validation = null, changedFiles = [], specDigest = null } = {}) {
+export function resolveV14Decision(raw, { validation = null, changedFiles = [], specDigest = null, baseline = null } = {}) {
   const original = raw?.decision ?? { transition: "HUMAN_REQUIRED", terminal: true, reason: "raw controller produced no decision" };
   const waited = original.waited_transition ?? original.transition;
   const task = raw?.state_summary?.resolved_task ?? original.task ?? raw?.state_summary?.current_task ?? null;
@@ -45,19 +46,16 @@ export function resolveV14Decision(raw, { validation = null, changedFiles = [], 
   const taskPr = Boolean(raw?.pr && original.pr_context !== "GOVERNANCE_PR" && task && raw?.task_spec?.present && !docsOnly);
   const exactHeadCiGreen = Boolean(raw?.ci && head && raw.ci.headSha === head && raw.ci.status === "completed" && raw.ci.conclusion === "success");
 
-  // Validation owns the path to review. This check MUST run before WAIT_FOR_CODEX is parked;
-  // otherwise a green implementation with no validation could sit in the reviewer wait and
-  // silently skip the new gate. A legacy BLOCKED_EXTERNAL waiting for Codex is treated as the
-  // same review-bound state for this purpose.
   const reviewBound = original.transition === "WAIT_FOR_CODEX"
     || original.transition === "READY_TO_MERGE"
     || (original.transition === "BLOCKED_EXTERNAL" && original.waited_transition === "WAIT_FOR_CODEX");
 
-  if (taskPr && exactHeadCiGreen && reviewBound && !validationMatches(validation, { task, head, specDigest })) {
+  if (taskPr && exactHeadCiGreen && reviewBound && !validationMatches(validation, { task, head, specDigest, baseline })) {
     const matchingFailed = Boolean(
       validation
       && validation.task === task
       && validation.head_sha === head
+      && validation.base_sha === baseline
       && validation.spec_sha256 === specDigest
       && validation.result === "FAIL",
     );
@@ -68,15 +66,14 @@ export function resolveV14Decision(raw, { validation = null, changedFiles = [], 
       pr_number: raw.pr.number,
       pr_context: original.pr_context ?? "TASK_PR",
       head,
+      baseline,
       reason: matchingFailed
-        ? "authoritative validation failed for the exact current HEAD; fix gaps and validate again before review"
-        : "fast gates are green, but no authoritative VALIDATION_PASS is bound to the exact current HEAD and spec",
+        ? "authoritative validation failed for the exact current HEAD and independently derived baseline; fix gaps and validate again before review"
+        : "fast gates are green, but no authoritative VALIDATION_PASS is bound to the exact current HEAD, independently derived baseline, and spec",
       validation_required: true,
     };
   }
 
-  // Only after validation has been satisfied (or is not applicable) may a retryable wait be
-  // parked. Poll-budget exhaustion changes cadence, not terminal ownership.
   if (original.transition === "BLOCKED_EXTERNAL" && RETRYABLE_WAITS.has(original.waited_transition)) {
     return {
       transition: "PARKED_EXTERNAL_RETRYABLE",
@@ -112,13 +109,19 @@ function diffBaseRef() {
       // try next deterministic base candidate
     }
   }
-  return "main";
+  return null;
 }
 
-function changedFilesAgainstMain() {
+function currentBaseline() {
+  const baseRef = diffBaseRef();
+  if (!baseRef) return null;
+  try { return sh("git", ["merge-base", baseRef, "HEAD"]); } catch { return null; }
+}
+
+function changedFilesAgainstMain(baseline) {
+  if (!baseline) return [];
   try {
-    const base = sh("git", ["merge-base", diffBaseRef(), "HEAD"]);
-    const output = sh("git", ["diff", "--name-only", base, "HEAD"]);
+    const output = sh("git", ["diff", "--name-only", baseline, "HEAD"]);
     return output ? output.split("\n").filter(Boolean) : [];
   } catch {
     return [];
@@ -131,23 +134,26 @@ function runRawController() {
 
 function main() {
   const raw = runRawController();
-  const changedFiles = raw?.pr ? changedFilesAgainstMain() : [];
+  const baseline = raw?.pr ? currentBaseline() : null;
+  const changedFiles = raw?.pr ? changedFilesAgainstMain(baseline) : [];
   const validation = loadJson(VALIDATION_PATH);
   const task = raw?.state_summary?.resolved_task ?? raw?.decision?.task ?? raw?.state_summary?.current_task ?? null;
   const specPath = task ? `docs/specs/${task}.md` : null;
   const specDigest = specPath && existsSync(specPath) ? digest(readFileSync(specPath, "utf8")) : null;
-  const decision = resolveV14Decision(raw, { validation, changedFiles, specDigest });
+  const decision = resolveV14Decision(raw, { validation, changedFiles, specDigest, baseline });
   const terminal = decision.terminal === true;
   console.log(JSON.stringify({
     generated_at: new Date().toISOString(),
     loop_version: LOOP_VERSION,
     authority: "rick-loop-supervisor",
+    baseline,
     decision,
     validation: validation ? {
       task: validation.task ?? null,
+      base_sha: validation.base_sha ?? null,
       head_sha: validation.head_sha ?? null,
       result: validation.result ?? null,
-      matches_current: validationMatches(validation, { task, head: raw?.pr?.headRefOid ?? raw?.git?.head ?? null, specDigest }),
+      matches_current: validationMatches(validation, { task, head: raw?.pr?.headRefOid ?? raw?.git?.head ?? null, specDigest, baseline }),
       path: VALIDATION_PATH,
     } : { result: "MISSING", matches_current: false, path: VALIDATION_PATH },
     changed_files: changedFiles,

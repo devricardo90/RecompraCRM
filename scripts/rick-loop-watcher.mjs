@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
-const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
+export const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
 export const CLAUDE_REVIEW_WORKFLOW = "claude-pr-review.yml";
 
 function sh(command, args, options = {}) {
@@ -22,11 +22,14 @@ export function selectClaudeReviewRun(runs, head) {
   return runs.find((run) => run?.headSha === head) ?? null;
 }
 
-export function claudeReviewRetryAction(run) {
+export function claudeReviewRetryAction(run, { now = new Date(), cooldownMs = REVIEW_RETRY_COOLDOWN_MS } = {}) {
   if (!run) return "NO_RUN";
-  if (run.status === "queued" || run.status === "in_progress" || run.status === "waiting" || run.status === "pending") return "WAIT";
-  if (run.status === "completed") return "RERUN";
-  return "WAIT";
+  if (["queued", "in_progress", "waiting", "pending"].includes(run.status)) return "WAIT";
+  if (run.status !== "completed") return "WAIT";
+  const timestamp = Date.parse(run.updatedAt ?? run.createdAt ?? "");
+  if (!Number.isFinite(timestamp)) return "WAIT";
+  if (now.getTime() - timestamp < cooldownMs) return "COOLDOWN";
+  return "RERUN";
 }
 
 function supervisor() {
@@ -71,18 +74,24 @@ function clearWait() {
   try { sh(process.execPath, ["scripts/rick-loop-controller.mjs", "wait", "clear"]); } catch { /* no active runtime wait */ }
 }
 
-function retryClaudeReview(identity) {
+function retryClaudeReview(identity, now = new Date()) {
   if (!identity?.head || !identity?.branch) return { action: "NO_IDENTITY" };
   try {
-    const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--branch", identity.branch, "--limit", "20", "--json", "databaseId,headSha,status,conclusion"]);
+    const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--branch", identity.branch, "--limit", "20", "--json", "databaseId,headSha,status,conclusion,createdAt,updatedAt"]);
     const runs = raw ? JSON.parse(raw) : [];
     const run = selectClaudeReviewRun(runs, identity.head);
-    const action = claudeReviewRetryAction(run);
+    const action = claudeReviewRetryAction(run, { now });
     if (action === "RERUN") {
       sh("gh", ["run", "rerun", String(run.databaseId)]);
-      return { action, run_id: run.databaseId, previous_conclusion: run.conclusion ?? null };
+      return { action, run_id: run.databaseId, previous_conclusion: run.conclusion ?? null, last_run_at: run.updatedAt ?? run.createdAt ?? null };
     }
-    return { action, run_id: run?.databaseId ?? null, status: run?.status ?? null, conclusion: run?.conclusion ?? null };
+    return {
+      action,
+      run_id: run?.databaseId ?? null,
+      status: run?.status ?? null,
+      conclusion: run?.conclusion ?? null,
+      last_run_at: run?.updatedAt ?? run?.createdAt ?? null,
+    };
   } catch (error) {
     return { action: "ERROR", error: String(error?.message ?? error) };
   }
@@ -92,7 +101,6 @@ async function main() {
   const maxCyclesEnv = Number(process.env.RICK_LOOP_WATCH_MAX_CYCLES ?? 0);
   const maxCycles = Number.isInteger(maxCyclesEnv) && maxCyclesEnv > 0 ? maxCyclesEnv : Infinity;
   let cycle = 0;
-  let lastReviewRetryAt = 0;
 
   while (cycle < maxCycles) {
     const snapshot = supervisor();
@@ -106,12 +114,7 @@ async function main() {
 
     ensureRuntimeWait(snapshot);
     const identity = rawWaitIdentity(snapshot);
-    const now = Date.now();
-    let reviewRetry = null;
-    if (identity.state === "WAIT_FOR_CODEX" && identity.pr && (lastReviewRetryAt === 0 || now - lastReviewRetryAt >= REVIEW_RETRY_COOLDOWN_MS)) {
-      reviewRetry = retryClaudeReview(identity);
-      if (reviewRetry.action === "RERUN") lastReviewRetryAt = now;
-    }
+    const reviewRetry = identity.state === "WAIT_FOR_CODEX" && identity.pr ? retryClaudeReview(identity) : null;
 
     recordPending(decision.reason);
     const seconds = retryDelaySeconds(cycle);
