@@ -85,6 +85,9 @@ jobs:
       - name: Test Rick Loop controller
         run: npm run test:loop-controller
 
+      - name: Test Rick Loop v1.4 protocol
+        run: npm run test:loop-v1.4
+
       - name: Lint
         run: npm run lint
 
