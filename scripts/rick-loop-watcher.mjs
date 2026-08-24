@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
 const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
+export const CLAUDE_REVIEW_WORKFLOW = "claude-pr-review.yml";
 
 function sh(command, args, options = {}) {
   return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
@@ -14,6 +15,18 @@ function sleep(ms) {
 
 export function retryDelaySeconds(cycle) {
   return RETRY_DELAYS_SECONDS[Math.min(Math.max(Number(cycle) || 0, 0), RETRY_DELAYS_SECONDS.length - 1)];
+}
+
+export function selectClaudeReviewRun(runs, head) {
+  if (!Array.isArray(runs) || !head) return null;
+  return runs.find((run) => run?.headSha === head) ?? null;
+}
+
+export function claudeReviewRetryAction(run) {
+  if (!run) return "NO_RUN";
+  if (run.status === "queued" || run.status === "in_progress" || run.status === "waiting" || run.status === "pending") return "WAIT";
+  if (run.status === "completed") return "RERUN";
+  return "WAIT";
 }
 
 function supervisor() {
@@ -28,6 +41,7 @@ function rawWaitIdentity(snapshot) {
     task: raw?.state_summary?.resolved_task ?? raw?.state_summary?.current_task ?? null,
     pr: raw?.pr?.number ?? decision.pr_number ?? null,
     head: raw?.pr?.headRefOid ?? raw?.git?.head ?? null,
+    branch: raw?.pr?.headRefName ?? raw?.git?.branch ?? null,
   };
 }
 
@@ -57,13 +71,20 @@ function clearWait() {
   try { sh(process.execPath, ["scripts/rick-loop-controller.mjs", "wait", "clear"]); } catch { /* no active runtime wait */ }
 }
 
-function requestCodexReview(prNumber) {
-  if (!prNumber) return false;
+function retryClaudeReview(identity) {
+  if (!identity?.head || !identity?.branch) return { action: "NO_IDENTITY" };
   try {
-    sh("gh", ["pr", "comment", String(prNumber), "--body", "@codex review"]);
-    return true;
-  } catch {
-    return false;
+    const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--branch", identity.branch, "--limit", "20", "--json", "databaseId,headSha,status,conclusion"]);
+    const runs = raw ? JSON.parse(raw) : [];
+    const run = selectClaudeReviewRun(runs, identity.head);
+    const action = claudeReviewRetryAction(run);
+    if (action === "RERUN") {
+      sh("gh", ["run", "rerun", String(run.databaseId)]);
+      return { action, run_id: run.databaseId, previous_conclusion: run.conclusion ?? null };
+    }
+    return { action, run_id: run?.databaseId ?? null, status: run?.status ?? null, conclusion: run?.conclusion ?? null };
+  } catch (error) {
+    return { action: "ERROR", error: String(error?.message ?? error) };
   }
 }
 
@@ -71,7 +92,7 @@ async function main() {
   const maxCyclesEnv = Number(process.env.RICK_LOOP_WATCH_MAX_CYCLES ?? 0);
   const maxCycles = Number.isInteger(maxCyclesEnv) && maxCyclesEnv > 0 ? maxCyclesEnv : Infinity;
   let cycle = 0;
-  let lastReviewRequestAt = 0;
+  let lastReviewRetryAt = 0;
 
   while (cycle < maxCycles) {
     const snapshot = supervisor();
@@ -86,8 +107,10 @@ async function main() {
     ensureRuntimeWait(snapshot);
     const identity = rawWaitIdentity(snapshot);
     const now = Date.now();
-    if (identity.state === "WAIT_FOR_CODEX" && identity.pr && (lastReviewRequestAt === 0 || now - lastReviewRequestAt >= REVIEW_RETRY_COOLDOWN_MS)) {
-      if (requestCodexReview(identity.pr)) lastReviewRequestAt = now;
+    let reviewRetry = null;
+    if (identity.state === "WAIT_FOR_CODEX" && identity.pr && (lastReviewRetryAt === 0 || now - lastReviewRetryAt >= REVIEW_RETRY_COOLDOWN_MS)) {
+      reviewRetry = retryClaudeReview(identity);
+      if (reviewRetry.action === "RERUN") lastReviewRetryAt = now;
     }
 
     recordPending(decision.reason);
@@ -96,6 +119,9 @@ async function main() {
       parked: true,
       cycle,
       state: identity.state,
+      compatibility_state: identity.state === "WAIT_FOR_CODEX" ? "WAIT_FOR_INDEPENDENT_REVIEW" : null,
+      review_provider: identity.state === "WAIT_FOR_CODEX" ? "CLAUDE_CODE_ACTION" : null,
+      review_retry: reviewRetry,
       task: identity.task,
       pr_number: identity.pr,
       head: identity.head,

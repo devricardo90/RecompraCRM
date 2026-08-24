@@ -7,7 +7,7 @@ allowed-tools: Read Grep Glob Edit Write Bash(git *) Bash(gh *) Bash(node *) Bas
 
 # Rick Loop v1.4
 
-This skill is the canonical entrypoint for autonomous roadmap execution. Once invoked, keep the controller running until `ROADMAP_COMPLETE` or a genuinely human-required terminal state is proven. Do not return control merely because CI, Codex, a network dependency, or another retryable external condition is temporarily unavailable.
+This skill is the canonical entrypoint for autonomous roadmap execution. Once invoked, keep the controller running until `ROADMAP_COMPLETE` or a genuinely human-required terminal state is proven. Do not return control merely because CI, the independent reviewer, a network dependency, or another retryable external condition is temporarily unavailable.
 
 ## Controller cycle
 
@@ -18,11 +18,15 @@ This skill is the canonical entrypoint for autonomous roadmap execution. Once in
 5. Run fast gates. Green tests are necessary but never sufficient.
 6. `READY_FOR_VALIDATION`: invoke `rick-validator` with the exact task, baseline SHA and current HEAD. The implementer must not self-declare validation success.
 7. `VALIDATION_FAILED`: fix only the proved gaps, rerun fast gates, then invoke the independent validator again. Any missing AC proof means FAIL.
-8. Only `VALIDATION_PASS` may proceed to independent code review. Validation asks whether the implementation proves the spec; review asks whether the implementation is sound. Never merge the two gates.
-9. `WAIT_FOR_CODEX`, `WAIT_FOR_CI`, `EXTERNAL_RETRYABLE`, or legacy retryable `BLOCKED_EXTERNAL`: run `node scripts/rick-loop-watcher.mjs` as the wait bridge. Keep the wait alive with deterministic backoff. Do not ask the owner to type `resume`.
+8. Only exact-head `VALIDATION_PASS` may proceed to independent code review. The canonical review provider is the automatic `Claude PR Review` GitHub Actions workflow using `anthropics/claude-code-action@v1`. Validation asks whether the implementation proves the spec; review asks whether the implementation is sound. Never merge the two gates.
+9. The raw v1.3.x kernel may still emit the compatibility name `WAIT_FOR_CODEX`; in v1.4 interpret it as `WAIT_FOR_INDEPENDENT_REVIEW`. `WAIT_FOR_CODEX`, `WAIT_FOR_CI`, `EXTERNAL_RETRYABLE`, or legacy retryable `BLOCKED_EXTERNAL` are handled by `node scripts/rick-loop-watcher.mjs`. For reviewer waits, the watcher observes/reruns the Claude review workflow; it must not request Codex and must not ask the owner to type `resume`.
 10. When the watcher completes because repository facts changed, rerun the supervisor immediately and continue from the first unproved step.
 11. Merge only after exact-head CI, authoritative validation, independent clean review, zero unresolved findings and every existing merge invariant pass.
 12. After merge, run post-merge validation, checkpoint STATE/HANDOFF, append LOOP-REGISTER events, derive stats with `node scripts/rick-loop-stats.mjs`, and advance to the next eligible roadmap task.
+
+## Review result contract
+
+A clean Claude review is accepted only when its top-level result names the exact HEAD as `Reviewed commit: <sha>`, contains the explicit clean verdict `No major issues found.`, comes from an author independent of the PR author, and there are zero unresolved inline findings for that exact HEAD. Any HEAD change invalidates the result and automatically triggers a new Claude review through the PR `synchronize` event.
 
 ## Durable context
 

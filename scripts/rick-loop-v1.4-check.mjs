@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { analyzeAcceptanceCriteria, analyzeDodAcCoverage, evaluateValidation, sha256 } from "./rick-loop-validation.mjs";
 import { resolveV14Decision, validationMatches } from "./rick-loop-supervisor.mjs";
-import { retryDelaySeconds } from "./rick-loop-watcher.mjs";
+import { claudeReviewRetryAction, retryDelaySeconds, selectClaudeReviewRun } from "./rick-loop-watcher.mjs";
 import { deriveStats } from "./rick-loop-stats.mjs";
 
 const spec = `# TASK-99\n\n## Critérios de aceite\n\nAC1. first\nAC2. second\nAC3. third\n\n## Definition of Done\n\n- AC1 a AC3 provados por teste.\n`;
@@ -92,6 +92,15 @@ const hardBlock = resolveV14Decision({ decision: { transition: "BLOCKED_EXTERNAL
 assert.equal(hardBlock.transition, "BLOCKED_EXTERNAL");
 assert.equal(hardBlock.terminal, true);
 
+const reviewRuns = [
+  { databaseId: 10, headSha: "old", status: "completed", conclusion: "success" },
+  { databaseId: 11, headSha: "head123", status: "in_progress", conclusion: null },
+];
+assert.equal(selectClaudeReviewRun(reviewRuns, "head123")?.databaseId, 11, "review retry must be exact-head scoped");
+assert.equal(claudeReviewRetryAction(reviewRuns[1]), "WAIT", "never rerun an active Claude review");
+assert.equal(claudeReviewRetryAction({ databaseId: 12, headSha: "head123", status: "completed", conclusion: "failure" }), "RERUN");
+assert.equal(claudeReviewRetryAction(null), "NO_RUN");
+
 assert.equal(retryDelaySeconds(0), 30);
 assert.equal(retryDelaySeconds(999), 3600, "long waits slow to hourly cadence instead of becoming terminal");
 
@@ -117,6 +126,8 @@ console.log(JSON.stringify({
     validation_fail_blocks_review: "PASS",
     validation_pass_unlocks_retryable_review_wait: "PASS",
     legacy_exhausted_review_wait_cannot_bypass_validation: "PASS",
+    claude_review_retry_exact_head: "PASS",
+    active_claude_review_not_duplicated: "PASS",
     retryable_external_never_terminal_by_budget: "PASS",
     stats_derived_from_events: "PASS",
   },
