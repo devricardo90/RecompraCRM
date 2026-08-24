@@ -54,21 +54,6 @@ assert.equal(evaluateValidation(survivor, baseContext).result, "FAIL", "a surviv
 const wrongHead = { ...manifest, head_sha: "other" };
 assert.equal(evaluateValidation(wrongHead, baseContext).result, "FAIL", "validation evidence is exact-head bound");
 
-const rawRetryableBlock = {
-  decision: { transition: "BLOCKED_EXTERNAL", waited_transition: "WAIT_FOR_CODEX", terminal: true, evidence: { last_error: "usage limit" }, pr_number: 25, pr_context: "TASK_PR" },
-  pr: { number: 25, headRefOid: "head123" },
-  state_summary: { resolved_task: "TASK-99" },
-  task_spec: { present: true },
-  ci: { headSha: "head123", status: "completed", conclusion: "success" },
-};
-const parked = resolveV14Decision(rawRetryableBlock, { changedFiles: [], specDigest: manifest.spec_sha256 });
-assert.equal(parked.transition, "PARKED_EXTERNAL_RETRYABLE");
-assert.equal(parked.terminal, false, "retry budget exhaustion must not transfer control to the human");
-
-const hardBlock = resolveV14Decision({ decision: { transition: "BLOCKED_EXTERNAL", terminal: true, reason: "credential requires login" } });
-assert.equal(hardBlock.transition, "BLOCKED_EXTERNAL");
-assert.equal(hardBlock.terminal, true);
-
 const needsValidationRaw = {
   decision: { transition: "WAIT_FOR_CODEX", terminal: false, pr_context: "TASK_PR" },
   pr: { number: 26, headRefOid: "head123" },
@@ -78,12 +63,34 @@ const needsValidationRaw = {
   ci: { headSha: "head123", status: "completed", conclusion: "success" },
 };
 const needsValidation = resolveV14Decision(needsValidationRaw, { validation: null, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
-assert.equal(needsValidation.transition, "READY_FOR_VALIDATION", "green tests cannot jump directly to review");
+assert.equal(needsValidation.transition, "READY_FOR_VALIDATION", "green tests cannot jump directly to reviewer wait");
+
+const failedArtifact = { result: "FAIL", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
+const failedValidation = resolveV14Decision(needsValidationRaw, { validation: failedArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+assert.equal(failedValidation.transition, "VALIDATION_FAILED");
 
 const validationArtifact = { result: "PASS", phase: "AUTHORITATIVE_VALIDATION", task: "TASK-99", head_sha: "head123", spec_sha256: manifest.spec_sha256 };
 assert.equal(validationMatches(validationArtifact, { task: "TASK-99", head: "head123", specDigest: manifest.spec_sha256 }), true);
 const afterValidation = resolveV14Decision(needsValidationRaw, { validation: validationArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
-assert.equal(afterValidation.transition, "WAIT_FOR_CODEX", "review becomes reachable only after validation pass");
+assert.equal(afterValidation.transition, "PARKED_EXTERNAL_RETRYABLE", "after validation PASS, reviewer wait may be parked autonomously");
+assert.equal(afterValidation.waited_transition, "WAIT_FOR_CODEX");
+
+const rawRetryableBlock = {
+  decision: { transition: "BLOCKED_EXTERNAL", waited_transition: "WAIT_FOR_CODEX", terminal: true, evidence: { last_error: "usage limit" }, pr_number: 25, pr_context: "TASK_PR" },
+  pr: { number: 25, headRefOid: "head123" },
+  state_summary: { resolved_task: "TASK-99" },
+  task_spec: { present: true },
+  ci: { headSha: "head123", status: "completed", conclusion: "success" },
+};
+const blockedWithoutValidation = resolveV14Decision(rawRetryableBlock, { validation: null, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+assert.equal(blockedWithoutValidation.transition, "READY_FOR_VALIDATION", "legacy exhausted reviewer wait must not bypass validation");
+const parked = resolveV14Decision(rawRetryableBlock, { validation: validationArtifact, changedFiles: ["app/page.tsx"], specDigest: manifest.spec_sha256 });
+assert.equal(parked.transition, "PARKED_EXTERNAL_RETRYABLE");
+assert.equal(parked.terminal, false, "retry budget exhaustion must not transfer control to the human after validation is satisfied");
+
+const hardBlock = resolveV14Decision({ decision: { transition: "BLOCKED_EXTERNAL", terminal: true, reason: "credential requires login" } });
+assert.equal(hardBlock.transition, "BLOCKED_EXTERNAL");
+assert.equal(hardBlock.terminal, true);
 
 assert.equal(retryDelaySeconds(0), 30);
 assert.equal(retryDelaySeconds(999), 3600, "long waits slow to hourly cadence instead of becoming terminal");
@@ -106,7 +113,10 @@ console.log(JSON.stringify({
     spec_anchored_ac_gate: "PASS",
     surviving_fault_fails: "PASS",
     exact_head_binding: "PASS",
-    validation_before_review: "PASS",
+    validation_before_review_wait: "PASS",
+    validation_fail_blocks_review: "PASS",
+    validation_pass_unlocks_retryable_review_wait: "PASS",
+    legacy_exhausted_review_wait_cannot_bypass_validation: "PASS",
     retryable_external_never_terminal_by_budget: "PASS",
     stats_derived_from_events: "PASS",
   },

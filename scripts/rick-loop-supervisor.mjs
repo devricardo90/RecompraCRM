@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 export const LOOP_VERSION = "RICK_LOOP_V1_4";
 export const VALIDATION_PATH = ".rick/tmp/validation.json";
 const RETRYABLE_WAITS = new Set(["WAIT_FOR_CI", "WAIT_FOR_CODEX", "EXTERNAL_RETRYABLE"]);
-const VALIDATION_GATED_TRANSITIONS = new Set(["WAIT_FOR_CODEX", "READY_TO_MERGE"]);
 const DOCS_ONLY_ALLOWLIST = /^docs\/(operations\/(STATE|HANDOFF)\.md|operations\/LOOP-REGISTER\.jsonl|operations\/LESSONS\.md|operations\/RICK-LOOP-V[\d.]+(?:-AMENDMENT)?\.md|roadmap\/ROADMAP\.md|evidence\/.*|specs\/TASK-\d+\.md)$/;
 
 function sh(command, args) {
@@ -40,7 +39,44 @@ export function validationMatches(validation, { task, head, specDigest }) {
 export function resolveV14Decision(raw, { validation = null, changedFiles = [], specDigest = null } = {}) {
   const original = raw?.decision ?? { transition: "HUMAN_REQUIRED", terminal: true, reason: "raw controller produced no decision" };
   const waited = original.waited_transition ?? original.transition;
+  const task = raw?.state_summary?.resolved_task ?? original.task ?? raw?.state_summary?.current_task ?? null;
+  const head = raw?.pr?.headRefOid ?? raw?.git?.head ?? null;
+  const docsOnly = isDocsOnly(changedFiles);
+  const taskPr = Boolean(raw?.pr && original.pr_context !== "GOVERNANCE_PR" && task && raw?.task_spec?.present && !docsOnly);
+  const exactHeadCiGreen = Boolean(raw?.ci && head && raw.ci.headSha === head && raw.ci.status === "completed" && raw.ci.conclusion === "success");
 
+  // Validation owns the path to review. This check MUST run before WAIT_FOR_CODEX is parked;
+  // otherwise a green implementation with no validation could sit in the reviewer wait and
+  // silently skip the new gate. A legacy BLOCKED_EXTERNAL waiting for Codex is treated as the
+  // same review-bound state for this purpose.
+  const reviewBound = original.transition === "WAIT_FOR_CODEX"
+    || original.transition === "READY_TO_MERGE"
+    || (original.transition === "BLOCKED_EXTERNAL" && original.waited_transition === "WAIT_FOR_CODEX");
+
+  if (taskPr && exactHeadCiGreen && reviewBound && !validationMatches(validation, { task, head, specDigest })) {
+    const matchingFailed = Boolean(
+      validation
+      && validation.task === task
+      && validation.head_sha === head
+      && validation.spec_sha256 === specDigest
+      && validation.result === "FAIL",
+    );
+    return {
+      transition: matchingFailed ? "VALIDATION_FAILED" : "READY_FOR_VALIDATION",
+      terminal: false,
+      task,
+      pr_number: raw.pr.number,
+      pr_context: original.pr_context ?? "TASK_PR",
+      head,
+      reason: matchingFailed
+        ? "authoritative validation failed for the exact current HEAD; fix gaps and validate again before review"
+        : "fast gates are green, but no authoritative VALIDATION_PASS is bound to the exact current HEAD and spec",
+      validation_required: true,
+    };
+  }
+
+  // Only after validation has been satisfied (or is not applicable) may a retryable wait be
+  // parked. Poll-budget exhaustion changes cadence, not terminal ownership.
   if (original.transition === "BLOCKED_EXTERNAL" && RETRYABLE_WAITS.has(original.waited_transition)) {
     return {
       transition: "PARKED_EXTERNAL_RETRYABLE",
@@ -62,30 +98,6 @@ export function resolveV14Decision(raw, { validation = null, changedFiles = [], 
       terminal: false,
       human_required: false,
     };
-  }
-
-  const task = raw?.state_summary?.resolved_task ?? original.task ?? raw?.state_summary?.current_task ?? null;
-  const head = raw?.pr?.headRefOid ?? raw?.git?.head ?? null;
-  const docsOnly = isDocsOnly(changedFiles);
-  const taskPr = Boolean(raw?.pr && original.pr_context !== "GOVERNANCE_PR" && task && raw?.task_spec?.present && !docsOnly);
-  const exactHeadCiGreen = Boolean(raw?.ci && head && raw.ci.headSha === head && raw.ci.status === "completed" && raw.ci.conclusion === "success");
-
-  if (taskPr && exactHeadCiGreen && VALIDATION_GATED_TRANSITIONS.has(original.transition)) {
-    if (!validationMatches(validation, { task, head, specDigest })) {
-      const matchingFailed = Boolean(validation && validation.task === task && validation.head_sha === head && validation.spec_sha256 === specDigest && validation.result === "FAIL");
-      return {
-        transition: matchingFailed ? "VALIDATION_FAILED" : "READY_FOR_VALIDATION",
-        terminal: false,
-        task,
-        pr_number: raw.pr.number,
-        pr_context: original.pr_context ?? "TASK_PR",
-        head,
-        reason: matchingFailed
-          ? "authoritative validation failed for the exact current HEAD; fix gaps and validate again before review"
-          : "fast gates are green, but no authoritative VALIDATION_PASS is bound to the exact current HEAD and spec",
-        validation_required: true,
-      };
-    }
   }
 
   return original;
