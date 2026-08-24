@@ -6,7 +6,9 @@ import { pathToFileURL } from "node:url";
 export const LOOP_VERSION = "RICK_LOOP_V1_4";
 export const VALIDATION_PATH = ".rick/tmp/validation.json";
 const RETRYABLE_WAITS = new Set(["WAIT_FOR_CI", "WAIT_FOR_CODEX", "EXTERNAL_RETRYABLE"]);
-const DOCS_ONLY_ALLOWLIST = /^docs\/(operations\/(STATE|HANDOFF)\.md|operations\/LOOP-REGISTER\.jsonl|operations\/LESSONS\.md|operations\/RICK-LOOP-V[\d.]+(?:-AMENDMENT)?\.md|roadmap\/ROADMAP\.md|evidence\/.*|specs\/TASK-\d+\.md)$/;
+// Evidence artifacts are restricted to non-executable documentation/data formats. Anything
+// that can run, or that carries no recognised extension at all, must go through validation.
+const DOCS_ONLY_ALLOWLIST = /^docs\/(operations\/(STATE|HANDOFF)\.md|operations\/LOOP-REGISTER\.jsonl|operations\/LESSONS\.md|operations\/RICK-LOOP-V[\d.]+(?:-AMENDMENT)?\.md|roadmap\/ROADMAP\.md|evidence\/(?:[^/]+\/)*[^/]+\.(?:md|json)|specs\/TASK-\d+\.md)$/;
 
 function sh(command, args) {
   return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();

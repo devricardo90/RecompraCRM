@@ -4,6 +4,18 @@ import { pathToFileURL } from "node:url";
 export const REGISTER_PATH = "docs/operations/LOOP-REGISTER.jsonl";
 export const VALIDATION_PATH = ".rick/tmp/validation.json";
 
+// A register field may carry several classes in one comma-separated string, and the register
+// also uses finding_3 and finding_4, so counting fields rather than classes undercounts both
+// the totals and the distinct set.
+export function parseFindingClasses(value) {
+  if (typeof value !== "string") return [];
+  return value.split(",").map((part) => part.trim()).filter(Boolean);
+}
+
+export function findingKeys(entry) {
+  return Object.keys(entry ?? {}).filter((key) => /^finding(?:_\d+)?$/.test(key)).sort();
+}
+
 export function deriveStats(entries) {
   const list = Array.isArray(entries) ? entries : [];
   const reviewRounds = new Set();
@@ -18,11 +30,10 @@ export function deriveStats(entries) {
     byTask[task].events += 1;
 
     if (entry?.review_round != null) reviewRounds.add(`${entry?.pr ?? "none"}#${entry.review_round}`);
-    for (const key of ["finding", "finding_2"]) {
-      if (entry?.[key]) {
-        findings.push(entry[key]);
-        byTask[task].findings += 1;
-      }
+    for (const key of findingKeys(entry)) {
+      const classes = parseFindingClasses(entry[key]);
+      findings.push(...classes);
+      byTask[task].findings += classes.length;
     }
     const eventName = String(entry?.event ?? entry?.transition ?? entry?.result ?? "").toUpperCase();
     if (eventName.includes("VALIDATION")) {

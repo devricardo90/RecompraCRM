@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { analyzeAcceptanceCriteria, analyzeDodAcCoverage, evaluateValidation, sha256 } from "./rick-loop-validation.mjs";
-import { resolveV14Decision, validationMatches } from "./rick-loop-supervisor.mjs";
+import { isDocsOnly, resolveV14Decision, validationMatches } from "./rick-loop-supervisor.mjs";
 import { claudeReviewRetryAction, retryDelaySeconds, selectClaudeReviewRun } from "./rick-loop-watcher.mjs";
-import { deriveStats } from "./rick-loop-stats.mjs";
+import { deriveStats, findingKeys, parseFindingClasses } from "./rick-loop-stats.mjs";
 
 const spec = `# TASK-99\n\n## Critérios de aceite\n\nAC1. first\nAC2. second\nAC3. third\n\n## Definition of Done\n\n- AC1 a AC3 provados por teste.\n`;
 const baseContext = {
@@ -140,3 +140,79 @@ console.log(JSON.stringify({
     stats_derived_from_events: "PASS",
   },
 }, null, 2));
+
+// --- DoD coverage is the union of every declared range, not each range alone ---
+function specWithAcs(count, dodText) {
+  const acs = Array.from({ length: count }, (_, index) => `AC${index + 1}. criterio ${index + 1}`).join("\n");
+  return `## Critérios de aceite\n\n${acs}\n\n## Definition of Done\n\n${dodText}\n`;
+}
+const acs22 = analyzeAcceptanceCriteria(specWithAcs(22, "")).ids;
+assert.equal(acs22.length, 22, "fixture must expose AC1 through AC22");
+
+const contiguous = analyzeDodAcCoverage(specWithAcs(22, "AC1 a AC10 provados\nAC11 a AC22 provados"), acs22);
+assert.deepEqual(contiguous.gaps, [], "two ranges that jointly cover every AC must pass");
+
+const missingMiddle = analyzeDodAcCoverage(specWithAcs(22, "AC1 a AC10 provados\nAC12 a AC22 provados"), acs22);
+assert.deepEqual(missingMiddle.gaps, ["DOD_AC_COVERAGE_GAP_AC-11"], "an AC covered by no range must fail");
+
+const staleRange = analyzeDodAcCoverage(specWithAcs(22, "AC1 a AC17 provados"), acs22);
+assert.equal(staleRange.gaps.length, 5, "the original stale case must still fail");
+assert.equal(staleRange.gaps.includes("DOD_AC_COVERAGE_GAP_AC-18"), true);
+assert.equal(staleRange.gaps.includes("DOD_AC_COVERAGE_GAP_AC-22"), true);
+
+const beyondSpec = analyzeDodAcCoverage(specWithAcs(22, "AC1 a AC22 provados\nAC23 a AC24 provados"), acs22);
+assert.equal(beyondSpec.gaps.includes("DOD_AC_RANGE_OUT_OF_SPEC_AC-23"), true, "claiming an AC the spec does not define is a spec-precision gap");
+assert.equal(beyondSpec.gaps.includes("DOD_AC_RANGE_OUT_OF_SPEC_AC-24"), true);
+
+const overlapping = analyzeDodAcCoverage(specWithAcs(22, "AC1 a AC15 provados\nAC10 a AC22 provados"), acs22);
+assert.deepEqual(overlapping.gaps, [], "overlapping ranges are fine as long as the union is exact");
+
+const reversed = analyzeDodAcCoverage(specWithAcs(22, "AC22 a AC1 provados"), acs22);
+assert.equal(reversed.gaps.includes("DOD_AC_RANGE_INVALID_AC-22_AC-01"), true, "a reversed range proves nothing");
+assert.equal(reversed.gaps.length > 1, true, "a reversed range must also leave the ACs uncovered");
+
+assert.deepEqual(analyzeDodAcCoverage(specWithAcs(22, "todos os criterios provados"), acs22).gaps, [], "a DoD that states no range makes no coverage claim to contradict");
+
+const multiRangeSpec = specWithAcs(22, "AC1 a AC10 provados\nAC11 a AC22 provados");
+assert.equal(
+  evaluateValidation({ ...manifest }, { ...baseContext, specText: multiRangeSpec }).failures.some((entry) => entry.code === "SPEC_DOD_AC_RANGE_STALE"),
+  false,
+  "a correctly split DoD must not raise SPEC_DOD_AC_RANGE_STALE",
+);
+
+// --- docs-only classification is explicit and fails closed ---
+for (const file of ["docs/evidence/example.md", "docs/evidence/example.json", "docs/specs/TASK-12.md", "docs/operations/HANDOFF.md"]) {
+  assert.equal(isDocsOnly([file]), true, `${file} must remain docs-only`);
+}
+for (const file of ["docs/evidence/payload.mjs", "docs/evidence/script.ts", "docs/evidence/workflow.yml", "docs/evidence/no-extension", "app/page.tsx"]) {
+  assert.equal(isDocsOnly([file]), false, `${file} must not earn a docs-only bypass`);
+}
+assert.equal(isDocsOnly(["docs/evidence/example.md", "app/page.tsx"]), false, "one executable file removes the docs-only bypass for the whole set");
+assert.equal(isDocsOnly(["docs/evidence/example.md", "docs/evidence/payload.mjs"]), false, "an executable evidence file removes the bypass");
+assert.equal(isDocsOnly([]), false, "an empty change set is never docs-only");
+
+// --- finding classes are counted individually ---
+assert.deepEqual(parseFindingClasses("A"), ["A"], "a single class is preserved");
+assert.deepEqual(parseFindingClasses("A,B,C"), ["A", "B", "C"], "comma-separated classes are split");
+assert.deepEqual(parseFindingClasses("  A , B  "), ["A", "B"], "whitespace around separators is trimmed");
+assert.deepEqual(parseFindingClasses("A,,B,"), ["A", "B"], "empty fragments are ignored");
+assert.deepEqual(parseFindingClasses(""), [], "an empty field contributes nothing");
+assert.deepEqual(parseFindingClasses(null), [], "a missing field contributes nothing");
+assert.deepEqual(findingKeys({ finding: "A", finding_2: "B", finding_4: "D", other: "x" }), ["finding", "finding_2", "finding_4"], "every finding field is counted, not just the first two");
+
+const findingStats = deriveStats([
+  { task: "TASK-A", finding: "P2_SALE_ITEM_GUARD_WRITE_SKEW,P2_STALE_HANDOFF_STATE_RECORD,P2_STALE_ROADMAP_RECORD" },
+  { task: "TASK-A", finding: " P1_ONE ", finding_2: "P1_TWO,P1_THREE" },
+  { task: "TASK-B", finding: "P1_ONE" },
+]);
+assert.equal(findingStats.findings, 7, "each class counts once, so three combined plus three plus one is seven");
+assert.deepEqual(
+  findingStats.distinct_finding_classes,
+  ["P1_ONE", "P1_THREE", "P1_TWO", "P2_SALE_ITEM_GUARD_WRITE_SKEW", "P2_STALE_HANDOFF_STATE_RECORD", "P2_STALE_ROADMAP_RECORD"],
+  "distinct classes are normalized individual classes, and a duplicate across tasks collapses",
+);
+assert.equal(findingStats.findings > findingStats.distinct_finding_classes.length, true, "total findings and distinct classes differ when a class repeats");
+assert.equal(findingStats.by_task["TASK-A"].findings, 6, "per-task findings count classes, not fields");
+assert.equal(findingStats.by_task["TASK-B"].findings, 1, "a single-class field still counts once");
+
+console.log("Rick Loop v1.4 review-finding regressions: PASS");

@@ -90,21 +90,47 @@ export function analyzeAcceptanceCriteria(specText) {
   return { section_present: Boolean(section.trim()), ids, duplicates, sequence_gaps: sequenceGaps };
 }
 
+function acLabel(value) {
+  return `AC-${String(value).padStart(2, "0")}`;
+}
+
+// A Definition of Done may legitimately state its coverage as several ranges, so each range
+// is only a claim; what matters is whether their union proves exactly the spec's AC set.
+// Judging ranges one at a time flagged "AC1 a AC10 ... AC11 a AC22" as stale purely because
+// the first range did not end at the last AC.
 export function analyzeDodAcCoverage(specText, acIds) {
   const section = definitionOfDoneSection(specText);
   if (!section.trim() || !Array.isArray(acIds) || acIds.length === 0) return { section_present: Boolean(section.trim()), ranges: [], gaps: [] };
-  const numbers = acIds.map((id) => Number(id.slice(3))).sort((a, b) => a - b);
-  const expectedFirst = numbers[0];
-  const expectedLast = numbers.at(-1);
+  const required = [...new Set(acIds.map((id) => Number(id.slice(3))))].sort((a, b) => a - b);
   const ranges = [];
   const pattern = /AC[-_ ]?(\d{1,3})\s*(?:a|at[eé]|through|-)\s*(?:AC[-_ ]?)?(\d{1,3})\s+provad/gi;
   let match;
   while ((match = pattern.exec(section)) !== null) {
     ranges.push({ first: Number(match[1]), last: Number(match[2]) });
   }
-  const gaps = ranges
-    .filter((range) => range.first === expectedFirst && range.last !== expectedLast)
-    .map((range) => `DOD_AC_RANGE_AC-${String(range.first).padStart(2, "0")}_AC-${String(range.last).padStart(2, "0")}_EXPECTED_AC-${String(expectedLast).padStart(2, "0")}`);
+  // No range statement at all is not a coverage claim, so there is nothing to contradict.
+  if (ranges.length === 0) return { section_present: true, ranges, gaps: [] };
+
+  const gaps = [];
+  const covered = new Set();
+  for (const range of ranges) {
+    // A reversed or malformed range proves nothing and must never be read as coverage.
+    if (!Number.isInteger(range.first) || !Number.isInteger(range.last) || range.last < range.first) {
+      gaps.push(`DOD_AC_RANGE_INVALID_${acLabel(range.first)}_${acLabel(range.last)}`);
+      continue;
+    }
+    for (let value = range.first; value <= range.last; value += 1) covered.add(value);
+  }
+
+  // Claiming an AC the spec does not define means the DoD and the spec disagree about what
+  // exists, which is a spec-precision gap rather than proof.
+  for (const value of [...covered].sort((a, b) => a - b)) {
+    if (!required.includes(value)) gaps.push(`DOD_AC_RANGE_OUT_OF_SPEC_${acLabel(value)}`);
+  }
+  // Overlapping ranges are harmless; an uncovered AC is not.
+  for (const value of required) {
+    if (!covered.has(value)) gaps.push(`DOD_AC_COVERAGE_GAP_${acLabel(value)}`);
+  }
   return { section_present: true, ranges, gaps };
 }
 
@@ -263,6 +289,18 @@ function writeResult(result, resultPath = DEFAULT_RESULT_PATH, reportPath = DEFA
   writeFileSync(reportPath, lines.join("\n"), "utf8");
 }
 
+function deriveBaseline(currentHead) {
+  for (const ref of ["origin/main", "main"]) {
+    try {
+      execFileSync("git", ["rev-parse", "--verify", ref], { stdio: "ignore" });
+      return sh("git", ["merge-base", ref, currentHead]);
+    } catch {
+      // try the next candidate ref
+    }
+  }
+  return null;
+}
+
 function cli() {
   const inputPath = process.argv[2] ?? DEFAULT_INPUT_PATH;
   if (!existsSync(inputPath)) {
@@ -277,7 +315,11 @@ function cli() {
     process.exit(2);
   }
   const currentHead = sh("git", ["rev-parse", "HEAD"]);
-  const baseSha = manifest.base_sha;
+  // Derived from Git, never copied from the manifest. Taking base_sha from the manifest made
+  // BASE_IDENTITY_MISMATCH compare the manifest against itself, so a manifest naming HEAD as
+  // its own base produced an empty diff, disabled critical-path sensing, and could emit PASS
+  // without validating any of the PR's changes.
+  const baseSha = deriveBaseline(currentHead);
   let baseAncestor = false;
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", baseSha, currentHead], { stdio: "ignore" });
