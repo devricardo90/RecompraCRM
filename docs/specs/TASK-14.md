@@ -48,11 +48,19 @@ Levantada no baseline desta spec, não presumida:
 - as seis telas têm `<main>`, um `<h1>`, `role="status"` de carregamento,
   `role="alert"` de erro e um controle de retry;
 - `app/layout.tsx` declara `lang="pt-BR"`;
-- **`/sales` não tem empty state**: nenhum texto cobre o carrinho sem itens;
+- **`/sales` já tem empty state**, com texto "Falta um passo antes de vender"
+  e CTA para cadastrar cliente ou produto quando `customers` ou `products` está
+  vazio. A primeira versão desta spec afirmou o contrário: a auditoria procurou
+  as palavras "nenhum", "vazio" e "empty" e não encontrou esta redação. Um
+  levantamento por palavra-chave produz falso negativo, e o achado errado quase
+  virou requisito;
 - nenhuma tela declara contêiner com `overflow-x`, então não há garantia
   explícita contra rolagem horizontal do corpo em viewport estreito;
 - `/inventory`, `/repurchases` e o histórico não usam `htmlFor`, o que é
-  esperado por não terem formulário, mas precisa ser afirmado e não suposto.
+  esperado por não terem formulário, mas precisa ser afirmado e não suposto;
+- o formulário de venda **não alcança carrinho vazio**: `lines` inicia com
+  `[newLine()]` e `removeLine` é no-op quando resta uma linha. Não existe estado
+  de carrinho vazio para especificar.
 
 ## Contrato uniforme de estado
 
@@ -73,7 +81,9 @@ Regras vinculantes:
 - um conjunto vazio **nunca** é renderizado como erro, e uma falha **nunca**
   como vazio. Esta é a confusão que a TASK-13 já corrigiu uma vez e que esta
   task passa a impedir em toda tela;
-- `/sales` ganha empty state para o carrinho sem itens.
+- em `/sales` o estado vazio é a **ausência de pré-requisito** — sem clientes ou
+  sem produtos — e já existe. Carrinho vazio não é estado alcançável e não é
+  requisito.
 
 ## Piso de acessibilidade
 
@@ -101,13 +111,39 @@ O centro desta task é `scripts/ui-hardening-check.mjs`: uma guarda determiníst
 de código-fonte, no padrão de `scripts/task-12-source-check.mjs`, que lê as seis
 telas e falha se qualquer uma perder um item do piso.
 
-A guarda verifica, por tela: um `<main>`, um `<h1>`, `role="status"`,
-`role="alert"`, um controle de retry, `nav` com `aria-label` quando há `nav`,
-`min-h-11` em controles, e ausência de `toLocaleDateString` cru.
+A guarda verifica **todo item do piso que seja verificável estaticamente**, por
+tela:
 
-A lista das seis telas vive na guarda. Uma tela nova que não seja acrescentada
-ali não é coberta, então a guarda também afirma que todo `Workspace.tsx` sob
-`app/` está na lista — é isso que a impede de envelhecer em silêncio.
+| Item do piso | Verificação |
+| --- | --- |
+| landmark e título | exatamente um `<main>`, exatamente um `<h1>` |
+| carregando | `role="status"` |
+| erro | `role="alert"` |
+| retry | um controle de retry no bloco de erro |
+| empty state | um ramo de vazio distinto do ramo de erro |
+| navegação | toda `nav` com `aria-label` |
+| nome acessível | todo `<button>` e `<Link>` com texto visível ou `aria-label`; todo `<input>` e `<select>` com `htmlFor` correspondente |
+| foco visível | `focus:ring` em todo alvo interativo |
+| alvo de toque | `min-h-11` em botões, links de navegação e controles |
+| data | ausência de `toLocaleDateString` cru |
+| overflow | nenhum contêiner com largura fixa em `px` que force rolagem |
+
+`lang="pt-BR"` é verificado uma vez em `app/layout.tsx`.
+
+Fica explícito o que a guarda **não** prova: que um marcador presente é de fato
+renderizado, e que o corpo não rola horizontalmente em 320px. Ambos são
+comportamento em execução e ficam com o Playwright efêmero.
+
+### Completude da lista
+
+A lista das seis telas vive na guarda, e uma tela nova que não entre nela não é
+coberta. A guarda enumera as **rotas** — todo `page.tsx` sob `app/` fora de
+`app/api/` — e falha se alguma rota não estiver mapeada para uma tela na lista.
+
+Enumerar por `Workspace.tsx` não bastaria: uma tela futura escrita direto no
+`page.tsx`, ou delegando a um componente com outro nome, não criaria arquivo
+`Workspace.tsx` algum e a verificação continuaria passando com a rota fora do
+piso. Rota é a unidade que o Next.js realmente define.
 
 ## Fronteiras
 
@@ -124,8 +160,9 @@ ali não é coberta, então a guarda também afirma que todo `Workspace.tsx` sob
 1. Carregamento lento → `role="status"` visível, sem lista vazia enquanto carrega.
 2. Falha de rede → erro com retry; o retry bem-sucedido substitui o erro pelo conteúdo.
 3. Falha seguida de conjunto vazio → empty state, não o erro anterior.
-4. Carrinho de venda sem itens → empty state próprio.
-5. Cliente sem telefone, produto sem alerta, histórico sem vendas → cada um é vazio, não erro.
+4. `/sales` sem clientes ou sem produtos → empty state de pré-requisito, com CTA.
+5. Produto sem alerta, histórico sem vendas, nenhuma recompra na janela → cada um é vazio, não erro.
+5.1. Cliente **com** telefone ausente é **conteúdo**, não vazio: a linha é renderizada normalmente com o placeholder de telefone ausente, conforme o contrato herdado da TASK-12 (AC21). Tratar telefone nulo como vazio contradiz esse contrato e a interface atual.
 6. Viewport de 320px em todas as seis telas → sem rolagem horizontal do corpo.
 7. Navegação por teclado → foco visível em cada parada, nenhuma armadilha de foco.
 
@@ -153,7 +190,9 @@ AC4. Um conjunto vazio produz empty state próprio e nunca um erro.
 
 AC5. Uma falha produz erro e nunca um empty state.
 
-AC6. `/sales` tem empty state para o carrinho sem itens.
+AC6. `/sales` mantém o empty state de pré-requisito quando não há clientes ou não há produtos, com CTA para o cadastro que falta.
+
+AC6.1. Um cliente sem telefone aparece como conteúdo com placeholder, nunca como estado vazio.
 
 AC7. Toda `nav` tem `aria-label`.
 
@@ -167,9 +206,9 @@ AC11. O corpo não rola horizontalmente em 320px, em nenhuma das seis telas.
 
 AC12. Conteúdo largo, quando existir, rola no próprio contêiner e não empurra a página.
 
-AC13. `scripts/ui-hardening-check.mjs` falha se qualquer tela perder um item do piso.
+AC13. `scripts/ui-hardening-check.mjs` falha se qualquer tela perder qualquer item do piso verificável estaticamente, incluindo ramo de vazio, nome acessível, foco visível e alvo de toque.
 
-AC14. A guarda falha se um `Workspace.tsx` sob `app/` não estiver na sua lista.
+AC14. A guarda enumera as rotas — todo `page.tsx` sob `app/` fora de `app/api/` — e falha se alguma rota não estiver mapeada para uma tela da lista, mesmo que a tela não use um componente `Workspace.tsx`.
 
 AC15. A guarda roda em `npm test` e é um passo de `validate.yml`.
 
@@ -202,8 +241,12 @@ alteração de domínio.
 ## Riscos conhecidos
 
 - **Guarda por código-fonte**: prova estrutura, não aparência. Um `role="alert"`
-  presente mas nunca renderizado passaria. Mitigado pelo Playwright efêmero, que
-  observa os estados de verdade.
+  presente mas nunca renderizado passaria, e rolagem horizontal em 320px não é
+  detectável estaticamente. Ambos ficam com o Playwright efêmero, que observa os
+  estados de verdade. A spec lista acima exatamente o que fica de fora.
+- **Auditoria por palavra-chave**: a primeira versão desta spec concluiu que
+  `/sales` não tinha empty state porque procurou palavras específicas. A
+  auditoria da baseline agora cita o texto real de cada estado encontrado.
 - **Piso, não teto**: a guarda impede regressão abaixo do piso; não afirma que a
   interface é boa. É deliberado — o objetivo é que a qualidade pare de depender
   de quem revisa.

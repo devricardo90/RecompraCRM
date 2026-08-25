@@ -11,7 +11,7 @@ current_task: TASK-14
 current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-14
 current_branch: docs/TASK-14-spec
-current_pr: none
+current_pr: 32
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -83,7 +83,7 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 1. Confirm `main` contains TASK-12 at `6a8b12d043bae15450e4da44184c2c1d5c355597` and post-merge Validate `32882137795` is SUCCESS.
 2. TASK-12 is completed and merged: spec PR #25, implementation PR #29, clean Claude review on exact head `43bd46c`.
-3. The deterministic resolver selects TASK-14. Read its roadmap contract before any write; no TASK-14 work has been started.
+3. The deterministic resolver selects TASK-14. Its spec exists at `docs/specs/TASK-14.md` and is in review; no TASK-14 implementation has been started.
 4. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per sale item. It binds nothing in TASK-14.
 5. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
 
@@ -97,8 +97,13 @@ Four of seventeen roadmap entries remain.
 
 ## Contracts TASK-14 inherits
 
-TASK-14 has not been specified yet. Read its roadmap contract before any write;
-nothing here constrains it.
+TASK-14 is specified. `docs/specs/TASK-14.md` is the contract to read before any
+write; it is in review and no implementation has started.
+
+It inherits the TASK-12 nullable-phone contract (AC21): a customer without a
+phone is content rendered with a placeholder, never an empty state. ARCH-02 is
+resolved as Option A, so the date contract stays as it is and this task must not
+reopen it. ARCH-03 is open, non-blocking, and authorises no refactor here.
 
 The contracts TASK-13 inherited are history and live with that task, in
 `docs/specs/TASK-13.md` and `docs/evidence/TASK-13-validation.md`.

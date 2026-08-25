@@ -76,7 +76,7 @@ current_task: TASK-14
 current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-14
 branch: docs/TASK-14-spec
-pr_number: none
+pr_number: 32
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
