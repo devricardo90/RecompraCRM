@@ -4,14 +4,14 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: ARCH_02_RESOLVED_TASK_14_SPEC_REQUIRED
+status: TASK_14_SPEC_IN_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
-current_task_status: SPEC_REQUIRED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-14
-current_branch: docs/ARCH-02-decision
-current_pr: 31
+current_branch: docs/TASK-14-spec
+current_pr: none
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -70,9 +70,10 @@ open_architecture_items: ARCH-03
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
-task_14_status: SPEC_REQUIRED
+task_14_status: SPEC_IN_REVIEW
+task_14_spec: docs/specs/TASK-14.md
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
-next_action: CREATE_TASK_14_SPEC
+next_action: REVIEW_TASK_14_SPEC
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

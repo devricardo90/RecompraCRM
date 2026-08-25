@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 70
+state_version: 71
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -73,10 +73,10 @@ last_completed_task: TASK-12
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
-current_task_status: SPEC_REQUIRED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-14
-branch: docs/ARCH-02-decision
-pr_number: 31
+branch: docs/TASK-14-spec
+pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -108,13 +108,19 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: none (docs/specs/TASK-14.md not yet created)
-arch_02_status: RESOLVED
+task_spec: docs/specs/TASK-14.md
+arch_02_status: RESOLVED_MERGED
+arch_02_pr: 31 MERGED_SQUASH
+arch_02_merge_main_head: 51bfacf5e809c937de212a463f15a2c1d454ac81
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 arch_02_schema_impact: none
 arch_02_migration_impact: none
-task_14_status: SPEC_REQUIRED
+task_14_status: SPEC_IN_REVIEW
+task_14_spec: docs/specs/TASK-14.md
+task_14_baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
+task_14_spec_branch: docs/TASK-14-spec
+task_14_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
@@ -223,9 +229,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: CREATE_TASK_14_SPEC
+next_action: REVIEW_TASK_14_SPEC
 next_action_authorized: true
-updated_at: "2026-08-25T19:05:00Z"
+updated_at: "2026-08-25T19:20:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
