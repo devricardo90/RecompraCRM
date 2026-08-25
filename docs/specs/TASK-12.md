@@ -1,6 +1,6 @@
 # TASK-12 Spec — Dashboard de recompra
 
-Status: SPEC_REVIEW_ROUND_1_FIXED_OWNER-01_DECIDED
+Status: SPEC_IN_REVIEW
 Source: Google Docs `Fonte da Verdade - Recompra CRM` + `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md` + `docs/architecture/ARCH-01-decision.md`
 Depends on: TASK-09, TASK-11, ARCH-01
 Baseline: `4dbade2a88fa8bdff2c216ee4ec73006886c7872` (`main`, Rick Loop v1.4)

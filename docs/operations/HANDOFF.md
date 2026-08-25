@@ -68,11 +68,11 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains Rick Loop v1.3.2 at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a` and post-merge Validate #125 is SUCCESS.
-2. Treat TASK-12 as task-scoped blocked by ARCH-01; do not stop the roadmap because TASK-13 is independently eligible.
-3. Derive `docs/specs/TASK-13.md` from the SDD and TASK-13 roadmap contract before any product-code write.
-4. TASK-13 is reconciled as merged with the recorded merge-before-review Loop finding; its technical status remains completed.
-5. ARCH-01 is resolved by Option A. TASK-12 is now the deterministic next task but remains at `SPEC_REQUIRED`; no TASK-12 implementation was started.
+1. Confirm `main` contains Rick Loop v1.4 at `4dbade2a88fa8bdff2c216ee4ec73006886c7872` and post-merge Validate `32765370517` is SUCCESS.
+2. ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked. TASK-13 is completed and merged.
+3. TASK-12 is the deterministic next task. Its spec exists at `docs/specs/TASK-12.md` and is in review on PR #25; no TASK-12 implementation has been started.
+4. OWNER-01 is resolved as Option A: one dashboard row per sale item, preserving sale item -> forecast -> forecast date -> bucket. Customer aggregation and representative-date rules are forbidden in this task.
+5. Spec review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
 
 ## Why TASK-13 is selected
 

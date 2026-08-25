@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 60
+state_version: 61
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -204,7 +204,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
 next_action_authorized: true
-updated_at: "2026-08-25T14:10:00Z"
+updated_at: "2026-08-25T14:25:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
@@ -248,6 +248,7 @@ non-blocking and does not reopen TASK-11.
 Rick Loop v1.3.2 is merged in `main` at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a`
 and passed post-merge Validate #125. Its deterministic resolver evaluates the
 pending roadmap entries rather than trusting the persisted task pointer.
-TASK-12 remains task-scoped blocked by open ARCH-01. TASK-13 depends only on
-completed TASK-06 and TASK-08, so it is now the first eligible task and is in
-`SPEC_REQUIRED`; no owner approval is required to create its SDD-derived spec.
+ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked;
+TASK-13 is completed and merged. TASK-12 is the deterministic next task and its
+spec is in review on PR #25. Round detail lives in
+`docs/operations/LOOP-REGISTER.jsonl`, not in this narrative.

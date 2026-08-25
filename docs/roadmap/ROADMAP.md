@@ -154,7 +154,8 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - depends_on: TASK-09, TASK-11, ARCH-01
   - blocked_by: none
   - architecture_decision: ARCH-01 RESOLVED — Option A, persisted synchronous trigger-owned forecast
-  - status: SPEC_REVIEW_ROUND_1_FIXED_OWNER-01_DECIDED
+  - status: SPEC_IN_REVIEW
+  - spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
   - spec: docs/specs/TASK-12.md
   - owner_decision: OWNER-01 RESOLVED — Opção A, uma linha por item de venda
   - owner_decision_invariant: item de venda -> previsão -> data da previsão -> balde
