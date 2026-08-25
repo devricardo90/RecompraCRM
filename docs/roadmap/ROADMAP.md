@@ -167,6 +167,7 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - review_provider: CLAUDE_CODE_ACTION
   - merge_main_head: 6a8b12d043bae15450e4da44184c2c1d5c355597
   - branch_ci: 32881510184 SUCCESS
+  - main_ci: 32882137795 SUCCESS
   - impl_branch: feat/TASK-12-repurchase-dashboard-impl
   - migration: prisma/migrations/20260825140000_index_sale_item_expected_repurchase
   - evidence: docs/evidence/TASK-12-validation.md
