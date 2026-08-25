@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 58
+state_version: 59
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -203,7 +203,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
 next_action_authorized: true
-updated_at: "2026-08-25T13:40:00Z"
+updated_at: "2026-08-25T13:55:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

@@ -159,7 +159,7 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - owner_decision: OWNER-01 RESOLVED — Opção A, uma linha por item de venda
   - owner_decision_invariant: item de venda -> previsão -> data da previsão -> balde
   - branch: feat/TASK-12-repurchase-dashboard
-  - baseline: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
+  - baseline: 4dbade2a88fa8bdff2c216ee4ec73006886c7872
   - schema_delta: índice aditivo em SaleItem.expectedRepurchaseAt (única migration da task)
   - inherited_contract: datas via lib/format/businessDate.ts; leitura via projeção, sem reimplementar escrita de venda
   - relevant_limitation: L4 — previsão por duração fixa pode cair no dia da própria venda para venda retroagida cruzando virada de horário de verão
