@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 59
+state_version: 60
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -70,7 +70,7 @@ completed_tasks:
   - TASK-13
 last_completed_task: TASK-13
 current_task: TASK-12
-current_task_status: SPEC_REQUIRED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-12
 branch: feat/TASK-12-repurchase-dashboard
 pr_number: 25
@@ -106,7 +106,8 @@ task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lo
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-12.md
-task_12_spec_status: SPEC_REVIEW_ROUND_1_FIXED_AWAITING_REREVIEW
+task_12_spec_status: SPEC_IN_REVIEW
+task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
 task_12_spec_rereview_provider: CLAUDE_CODE_ACTION
 task_12_spec_rereview_attempts: 4
@@ -145,7 +146,7 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
-task_12_status: SPEC_DRAFT_AWAITING_REVIEW
+task_12_status: SPEC_IN_REVIEW
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
 task_13_status: COMPLETED_MERGED
@@ -203,7 +204,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
 next_action_authorized: true
-updated_at: "2026-08-25T13:55:00Z"
+updated_at: "2026-08-25T14:10:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

@@ -8,7 +8,7 @@ status: TASK_12_SPEC_IN_REVIEW_CLAUDE_PR_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-12
-current_task_status: SPEC_REQUIRED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-12
 current_branch: feat/TASK-12-repurchase-dashboard
 current_pr: 25
@@ -32,7 +32,8 @@ loop_governance_v134_main_ci: Validate 32655684084 SUCCESS
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS
-task_12_status: SPEC_REVIEW_ROUND_1_FINDINGS_FIXED
+task_12_status: SPEC_IN_REVIEW
+task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
 task_12_spec: docs/specs/TASK-12.md (review round 1 findings fixed; implementation not started)
