@@ -29,7 +29,6 @@ loop_finding_closed_2: API_CONNECTION_LOSS_NO_REENTRY
 loop_governance_v134_pr: 24 MERGED_SQUASH
 loop_governance_v134_merge_main_head: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
 loop_governance_v134_main_ci: Validate 32655684084 SUCCESS
-open_architecture_items: ARCH-02, ARCH-03
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS
@@ -59,7 +58,7 @@ task_13_local_reconciliation_commit: 98a40e1 PRESERVED_ON_recovery/TASK13-98a40e
 arch_01_status: RESOLVED
 arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
-open_architecture_items: ARCH-02
+open_architecture_items: ARCH-02, ARCH-03
 next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25_THEN_IMPLEMENT_TASK_12
 next_action_authorized: true
 human_intermediate_approval_required: false

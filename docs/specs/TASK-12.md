@@ -3,7 +3,7 @@
 Status: SPEC_REVIEW_ROUND_1_FIXED_OWNER-01_DECIDED
 Source: Google Docs `Fonte da Verdade - Recompra CRM` + `docs/product/PROJECT-SDD.md` + `docs/roadmap/ROADMAP.md` + `docs/architecture/ARCH-01-decision.md`
 Depends on: TASK-09, TASK-11, ARCH-01
-Baseline: `b72670fec890d1687a5f69e1e544ce38cd8f4d0e` (`main`)
+Baseline: `4dbade2a88fa8bdff2c216ee4ec73006886c7872` (`main`, Rick Loop v1.4)
 Branch: `feat/TASK-12-repurchase-dashboard`
 
 ## Gate de fonte da verdade
@@ -361,7 +361,7 @@ Playwright efêmero com `retries 0`, artefatos removidos após a execução conf
 
 ## Definition of Done
 
-- AC1 a AC17 provados por teste, não por inspeção;
+- AC1 a AC22 provados por teste, não por inspeção;
 - todos os gates determinísticos verdes no HEAD exato do PR;
 - revisão independente publicada para esse HEAD exato, sem findings em aberto;
 - revisão publicada antes do merge;
