@@ -4,14 +4,14 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: TASK_12_COMPLETED_MERGED
+status: TASK_12_COMPLETED_TASK_14_READY
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-12
 current_task_status: COMPLETED
-next_eligible_task: TASK-12
-current_branch: feat/TASK-12-repurchase-dashboard-impl
-current_pr: none
+next_eligible_task: TASK-14
+current_branch: docs/TASK-12-close
+current_pr: 30
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -36,13 +36,14 @@ task_12_status: COMPLETED
 task_12_reviewed_head: 43bd46c6c2dd6f567817dbfb59e37aada4cc98ad
 task_12_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
 task_12_merge_main_head: 6a8b12d043bae15450e4da44184c2c1d5c355597
+task_12_main_ci: Validate 32882137795 SUCCESS
 task_12_spec_pr: 25 MERGED_SQUASH
 task_12_impl_pr: 29
 task_12_spec_merge_main_head: 27b3959c7394b030e9f5639abd368a1c12f55516
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
-task_12_spec: docs/specs/TASK-12.md (merged; implementation in review)
+task_12_spec: docs/specs/TASK-12.md (merged; implementation merged)
 task_12_owner_decision: OWNER-01 dashboard row granularity — one row per sale item (A) vs one row per customer (B)
 task_12_owner_decision_status: RESOLVED_OPTION_A
 task_12_owner_decision_resolution: A — one dashboard row per sale item; customer aggregation and representative-date rules are forbidden in this task
@@ -74,19 +75,19 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains Rick Loop v1.4 at `4dbade2a88fa8bdff2c216ee4ec73006886c7872` and post-merge Validate `32765370517` is SUCCESS.
-2. ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked. TASK-13 is completed and merged.
-3. TASK-12 is the deterministic next task. Its spec exists at `docs/specs/TASK-12.md` and is in review on PR #25; no TASK-12 implementation has been started.
-4. OWNER-01 is resolved as Option A: one dashboard row per sale item, preserving sale item -> forecast -> forecast date -> bucket. Customer aggregation and representative-date rules are forbidden in this task.
-5. Spec review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
+1. Confirm `main` contains TASK-12 at `6a8b12d043bae15450e4da44184c2c1d5c355597` and post-merge Validate `32882137795` is SUCCESS.
+2. TASK-12 is completed and merged: spec PR #25, implementation PR #29, clean Claude review on exact head `43bd46c`.
+3. The deterministic resolver selects TASK-14. Read its roadmap contract before any write; no TASK-14 work has been started.
+4. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per sale item. It binds nothing in TASK-14.
+5. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
 
-## Why TASK-13 is selected
+## Why TASK-14 is selected
 
-TASK-12 depends on TASK-09, TASK-11 and ARCH-01. ARCH-01 is resolved by the
-persisted synchronous-trigger decision in `docs/architecture/ARCH-01-decision.md`.
+TASK-12 is completed and merged, and TASK-13 before it. With both closed in the
+roadmap the deterministic resolver reports TASK-14 as the first pending entry
+whose dependencies are satisfied.
 
-TASK-13 is completed and merged. The resolver now selects TASK-12, whose spec
-is still required before any implementation.
+Four of seventeen roadmap entries remain.
 
 ## Contracts TASK-13 inherits
 
