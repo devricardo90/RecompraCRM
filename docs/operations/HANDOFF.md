@@ -4,14 +4,14 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-007
 loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: LOOP_V1_3_3_MERGED_TASK_12_SPEC_REQUIRED
+status: TASK_12_SPEC_IN_REVIEW_CLAUDE_PR_REVIEW
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_3
+loop_version: RICK_LOOP_V1_4
 current_task: TASK-12
-current_task_status: SPEC_REQUIRED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-12
-current_branch: fix/loop-transient-wait-reentry
-current_pr: 24
+current_branch: feat/TASK-12-repurchase-dashboard
+current_pr: 25
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -24,15 +24,22 @@ loop_governance_review: CODEX_REVIEW_CLEAN_ON_EXACT_HEAD
 loop_governance_review_before_merge: PROVEN_IN_LIVE_EXECUTION
 loop_governance_merge_main_head: 2b1e2f76c7b72e583fcfef84ee74b89b0ac5db44
 loop_governance_main_ci: Validate 32647380522 SUCCESS
-loop_finding_open: TRANSIENT_WAIT_NO_REENTRY
-loop_finding_open_2: API_CONNECTION_LOSS_NO_REENTRY
+loop_finding_closed: TRANSIENT_WAIT_NO_REENTRY
+loop_finding_closed_2: API_CONNECTION_LOSS_NO_REENTRY
+loop_governance_v134_pr: 24 MERGED_SQUASH
+loop_governance_v134_merge_main_head: b72670fec890d1687a5f69e1e544ce38cd8f4d0e
+loop_governance_v134_main_ci: Validate 32655684084 SUCCESS
 task_11_status: COMPLETED
 task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS
-task_12_status: SPEC_REQUIRED
+task_12_status: SPEC_IN_REVIEW
+task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
-task_12_spec: docs/specs/TASK-12.md (not yet created; implementation explicitly not started)
+task_12_spec: docs/specs/TASK-12.md (implementation not started)
+task_12_owner_decision: OWNER-01 dashboard row granularity — one row per sale item (A) vs one row per customer (B)
+task_12_owner_decision_status: RESOLVED_OPTION_A
+task_12_owner_decision_resolution: A — one dashboard row per sale item; customer aggregation and representative-date rules are forbidden in this task
 task_13_status: COMPLETED_MERGED
 task_13_dependencies: TASK-06, TASK-08
 task_13_selection_reason: FIRST_PENDING_ELIGIBLE_AFTER_TASK_12_BLOCKED_BY_ARCH_01
@@ -52,8 +59,8 @@ task_13_local_reconciliation_commit: 98a40e1 PRESERVED_ON_recovery/TASK13-98a40e
 arch_01_status: RESOLVED
 arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
-open_architecture_items: ARCH-02
-next_action: CREATE_TASK_12_SPEC
+open_architecture_items: ARCH-02, ARCH-03
+next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25_THEN_IMPLEMENT_TASK_12
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -61,11 +68,11 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains Rick Loop v1.3.2 at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a` and post-merge Validate #125 is SUCCESS.
-2. Treat TASK-12 as task-scoped blocked by ARCH-01; do not stop the roadmap because TASK-13 is independently eligible.
-3. Derive `docs/specs/TASK-13.md` from the SDD and TASK-13 roadmap contract before any product-code write.
-4. TASK-13 is reconciled as merged with the recorded merge-before-review Loop finding; its technical status remains completed.
-5. ARCH-01 is resolved by Option A. TASK-12 is now the deterministic next task but remains at `SPEC_REQUIRED`; no TASK-12 implementation was started.
+1. Confirm `main` contains Rick Loop v1.4 at `4dbade2a88fa8bdff2c216ee4ec73006886c7872` and post-merge Validate `32765370517` is SUCCESS.
+2. ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked. TASK-13 is completed and merged.
+3. TASK-12 is the deterministic next task. Its spec exists at `docs/specs/TASK-12.md` and is in review on PR #25; no TASK-12 implementation has been started.
+4. OWNER-01 is resolved as Option A: one dashboard row per sale item, preserving sale item -> forecast -> forecast date -> bucket. Customer aggregation and representative-date rules are forbidden in this task.
+5. Spec review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
 
 ## Why TASK-13 is selected
 
