@@ -79,6 +79,21 @@ jobs:
       - name: Test repurchase dashboard
         run: npm run test:repurchase-dashboard
 
+      - name: Test repurchase classification
+        run: npm run test:repurchase-projection
+
+      - name: Test TASK-12 source boundary
+        run: npm run test:task-12-source
+
+      - name: Test stock alert projection
+        run: npm run test:stock-alerts
+
+      - name: Test TASK-13 source boundary
+        run: npm run test:task-13-source
+
+      - name: Test TASK-13 schema scope
+        run: npm run test:task-13-schema
+
       - name: Test Product API integration
         run: npm run test:product-api
 

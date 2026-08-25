@@ -159,7 +159,7 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - spec: docs/specs/TASK-12.md
   - owner_decision: OWNER-01 RESOLVED — Opção A, uma linha por item de venda
   - owner_decision_invariant: item de venda -> previsão -> data da previsão -> balde
-  - branch: feat/TASK-12-repurchase-dashboard
+  - spec_branch: feat/TASK-12-repurchase-dashboard
   - spec_pr: 25 MERGED_SQUASH
   - impl_branch: feat/TASK-12-repurchase-dashboard-impl
   - migration: prisma/migrations/20260825140000_index_sale_item_expected_repurchase

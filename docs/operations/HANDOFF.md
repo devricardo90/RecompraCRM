@@ -11,7 +11,7 @@ current_task: TASK-12
 current_task_status: IMPLEMENTING
 next_eligible_task: TASK-12
 current_branch: feat/TASK-12-repurchase-dashboard-impl
-current_pr: none
+current_pr: 29
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3

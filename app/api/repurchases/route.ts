@@ -71,7 +71,8 @@ export async function GET() {
   } catch {
     return NextResponse.json(
       { error: "Não foi possível carregar as recompras agora." },
-      { status: 503 },
+      // The TASK-12 contract specifies 500 for an unavailable database.
+      { status: 500 },
     );
   }
 }

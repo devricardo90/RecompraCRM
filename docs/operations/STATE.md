@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 63
+state_version: 64
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -73,7 +73,7 @@ current_task: TASK-12
 current_task_status: IMPLEMENTING
 next_eligible_task: TASK-12
 branch: feat/TASK-12-repurchase-dashboard-impl
-pr_number: none
+pr_number: 29
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
