@@ -53,6 +53,7 @@ esvaziaria exatamente o balde de vencidas.
 | `npm test` (14 suítes) | PASS |
 | `test:repurchase-projection` | PASS |
 | `test:repurchase-dashboard` (PostgreSQL) | PASS |
+| `test:repurchase-api` (rota real via HTTP) | PASS |
 | `test:task-12-source` | PASS |
 | `test:task-13-source` / `test:task-13-schema` | PASS |
 | `lint` / `typecheck` / `build` | PASS |
@@ -62,7 +63,9 @@ esvaziaria exatamente o balde de vencidas.
 AC1–AC4, AC6–AC8, AC15, AC18, AC19 e AC22 em
 `scripts/repurchase-forecast-check.mjs`; AC1, AC2, AC4, AC5, AC7, AC9, AC10,
 AC17 e AC21 contra PostgreSQL em `scripts/repurchase-dashboard-check.mjs`;
-AC11, AC12, AC16, AC20 e AC15 em `scripts/task-12-source-check.mjs`; AC13 pelos
+AC1, AC2, AC4, AC7, AC8, AC16 e AC21 contra a rota real em
+`scripts/repurchase-api-integration-check.mjs`; AC11, AC12, AC20 e AC15 em
+`scripts/task-12-source-check.mjs`; AC13 pelos
 quatro links de navegação; AC14 pelos estados de carregamento, erro e vazio da
 página.
 
@@ -79,6 +82,16 @@ aditivo aprovado da TASK-12 em vez de guardar a TASK-13. A verificação passou 
 ser fixada no intervalo já mergeado da TASK-13
 (`2995589c..e36710799`), preservando exatamente a propriedade que ela existe
 para provar.
+
+## Cobertura de CI
+
+Toda suíte declarada em `package.json` roda em `validate.yml`. Uma auditoria de
+cada script `test:*` contra o workflow encontrou cinco não referenciados —
+incluindo `test:task-13-source` e `test:task-13-schema`, sem execução em CI
+desde a TASK-13. Uma guarda que não roda é uma afirmação, não um controle.
+
+O checkout passou a usar `fetch-depth: 0`: a guarda de escopo de schema compara
+um intervalo histórico de commits, que um clone raso não contém.
 
 ## Limitação herdada
 

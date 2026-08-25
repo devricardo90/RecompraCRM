@@ -42,7 +42,8 @@
     "test:customer-history": "node scripts/customer-history-check.mjs",
     "test:repurchase-projection": "node --experimental-strip-types scripts/repurchase-forecast-check.mjs",
     "test:task-12-source": "node scripts/task-12-source-check.mjs",
-    "test:repurchase-dashboard": "node --experimental-strip-types scripts/repurchase-dashboard-check.mjs"
+    "test:repurchase-dashboard": "node --experimental-strip-types scripts/repurchase-dashboard-check.mjs",
+    "test:repurchase-api": "node --experimental-strip-types scripts/repurchase-api-integration-check.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

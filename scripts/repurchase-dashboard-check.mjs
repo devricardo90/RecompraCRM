@@ -8,6 +8,11 @@ import { spawnSync } from "node:child_process";
  * The point of this harness is the part a unit test cannot prove: that the
  * forecast the dashboard shows is the one the TASK-09 triggers persisted, and
  * that it moves when a base field moves, without this task computing anything.
+ *
+ * It drives the projection directly and deliberately, to isolate the database
+ * behaviour. The route handler itself is exercised over HTTP by
+ * scripts/repurchase-api-integration-check.mjs -- neither harness stands in for
+ * the other.
  */
 const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor < 22) {
