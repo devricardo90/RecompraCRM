@@ -150,18 +150,23 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - limitations: L1 nome atual do produto; L2 sem preço; L3 linhas pré-regra à meia-noite UTC; L4 previsão por duração fixa
   - architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL (9 rodadas com findings confirmados) -> ARCH-02
   - done_when: histórico correto, ordenado e com previsões.
-- [ ] TASK-12 — Dashboard de recompra
+- [x] TASK-12 — Dashboard de recompra
   - depends_on: TASK-09, TASK-11, ARCH-01
   - blocked_by: none
   - architecture_decision: ARCH-01 RESOLVED — Option A, persisted synchronous trigger-owned forecast
-  - status: IMPLEMENTING
+  - status: COMPLETED
   - spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
   - spec: docs/specs/TASK-12.md
   - owner_decision: OWNER-01 RESOLVED — Opção A, uma linha por item de venda
   - owner_decision_invariant: item de venda -> previsão -> data da previsão -> balde
   - spec_branch: feat/TASK-12-repurchase-dashboard
   - spec_pr: 25 MERGED_SQUASH
-  - impl_pr: 29
+  - impl_pr: 29 MERGED_SQUASH
+  - reviewed_head: 43bd46c6c2dd6f567817dbfb59e37aada4cc98ad
+  - review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+  - review_provider: CLAUDE_CODE_ACTION
+  - merge_main_head: 6a8b12d043bae15450e4da44184c2c1d5c355597
+  - branch_ci: 32881510184 SUCCESS
   - impl_branch: feat/TASK-12-repurchase-dashboard-impl
   - migration: prisma/migrations/20260825140000_index_sale_item_expected_repurchase
   - evidence: docs/evidence/TASK-12-validation.md
