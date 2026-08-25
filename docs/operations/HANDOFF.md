@@ -89,9 +89,10 @@ whose dependencies are satisfied.
 
 Four of seventeen roadmap entries remain.
 
-## Contracts TASK-13 inherits
+## Contracts TASK-14 inherits
 
-- Stock changes caused by a sale remain owned by the existing atomic sale/stock transaction path from TASK-08; the dashboard is a reader and must not invent a second stock mutation path.
-- Product and stock UI behavior from TASK-06 is the baseline for stock semantics, including current stock and minimum stock.
-- The dashboard must update after completed sales using repository/database truth; no duplicated client-side source of truth.
-- No ARCH-01/ARCH-02 refactor belongs to TASK-13. Both architecture items remain separate and non-blocking for this task.
+TASK-14 has not been specified yet. Read its roadmap contract before any write;
+nothing here constrains it.
+
+The contracts TASK-13 inherited are history and live with that task, in
+`docs/specs/TASK-13.md` and `docs/evidence/TASK-13-validation.md`.
