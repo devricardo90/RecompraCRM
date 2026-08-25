@@ -34,6 +34,7 @@ task_11_pr: 17 MERGED_SQUASH
 task_11_main_ci: Validate 32370638624 SUCCESS
 task_12_status: IMPLEMENTING
 task_12_spec_pr: 25 MERGED_SQUASH
+task_12_impl_pr: 29
 task_12_spec_merge_main_head: 27b3959c7394b030e9f5639abd368a1c12f55516
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_blocked_by: none

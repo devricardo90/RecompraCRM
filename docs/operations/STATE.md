@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 64
+state_version: 65
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -123,7 +123,6 @@ task_12_owner_decision_invariant: sale_item_to_forecast_to_forecast_date_to_buck
 task_12_owner_decision_forbids: customer_level_aggregation, representative_date_rules
 task_12_owner_decision_decided_at: "2026-08-23"
 task_12_owner_decision_blocks: none
-task_12_pr: 25
 task_12_baseline: 27b3959c7394b030e9f5639abd368a1c12f55516
 task_12_schema_delta: additive_index_saleitem_expectedrepurchaseat
 task_12_inherited_limitation: L4
@@ -145,6 +144,7 @@ task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
 task_12_status: IMPLEMENTING
 task_12_spec_pr: 25 MERGED_SQUASH
+task_12_impl_pr: 29
 task_12_spec_merge_main_head: 27b3959c7394b030e9f5639abd368a1c12f55516
 task_12_impl_branch: feat/TASK-12-repurchase-dashboard-impl
 task_12_impl_baseline: 27b3959c7394b030e9f5639abd368a1c12f55516
@@ -207,7 +207,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: AWAIT_CLAUDE_IMPLEMENTATION_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-25T15:10:00Z"
+updated_at: "2026-08-25T16:05:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
