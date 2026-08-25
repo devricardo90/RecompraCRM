@@ -65,4 +65,7 @@ model SaleItem {
 
   @@index([saleId])
   @@index([productId])
+  // TASK-12 filters and orders every sale item on the stored forecast; without
+  // this the repurchase dashboard scans the whole sales history on every read.
+  @@index([expectedRepurchaseAt])
 }

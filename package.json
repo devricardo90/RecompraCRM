@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:customer && npm run test:product && npm run test:stock-alerts && npm run test:task-13-source && npm run test:task-13-schema && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration && npm run test:customer-history",
+    "test": "npm run test:customer && npm run test:product && npm run test:stock-alerts && npm run test:task-12-source && npm run test:repurchase-projection && npm run test:task-13-source && npm run test:task-13-schema && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration && npm run test:customer-history",
     "test:customer": "node scripts/customer-model-check.mjs",
     "test:product": "node scripts/product-model-check.mjs",
     "test:stock-alerts": "node --experimental-strip-types scripts/stock-alerts-check.mjs",
@@ -39,7 +39,10 @@
     "db:health": "node scripts/db-healthcheck.mjs",
     "db:setup": "npm run db:up && npm run db:generate && npm run db:migrate && npm run db:health",
     "test:sale-registration": "node scripts/sale-registration-concurrency-check.mjs",
-    "test:customer-history": "node scripts/customer-history-check.mjs"
+    "test:customer-history": "node scripts/customer-history-check.mjs",
+    "test:repurchase-projection": "node --experimental-strip-types scripts/repurchase-forecast-check.mjs",
+    "test:task-12-source": "node scripts/task-12-source-check.mjs",
+    "test:repurchase-dashboard": "node --experimental-strip-types scripts/repurchase-dashboard-check.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

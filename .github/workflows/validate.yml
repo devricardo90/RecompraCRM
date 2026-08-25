@@ -76,6 +76,9 @@ jobs:
       - name: Test customer history
         run: npm run test:customer-history
 
+      - name: Test repurchase dashboard
+        run: npm run test:repurchase-dashboard
+
       - name: Test Product API integration
         run: npm run test:product-api
 
