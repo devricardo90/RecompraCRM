@@ -2,12 +2,12 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 56
+state_version: 57
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_3_4
+loop_version: RICK_LOOP_V1_4
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
@@ -107,7 +107,8 @@ task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-12.md
 task_12_spec_status: SPEC_REVIEW_ROUND_1_FIXED_AWAITING_REREVIEW
-task_12_spec_rereview_status: BLOCKED_EXTERNAL_REVIEWER_USAGE_LIMIT
+task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
+task_12_spec_rereview_provider: CLAUDE_CODE_ACTION
 task_12_spec_rereview_attempts: 4
 task_12_spec_rereview_first_refusal: "2026-08-23T18:03:20Z"
 task_12_spec_rereview_last_refusal: "2026-08-23T19:24:26Z"
@@ -196,13 +197,13 @@ task_09_main_ci_status: SUCCESS
 task_09_accepted_residual: RETRYABLE_40P01_ON_MULTI_ITEM_SALEITEM_STATEMENTS
 task_09_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL
 task_09_architecture_item: ARCH-01
-external_gate: CODEX_CODE_REVIEW_USAGE_LIMIT
+external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_TASK_12_SPEC
+next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
 next_action_authorized: true
-updated_at: "2026-08-23T19:26:00Z"
+updated_at: "2026-08-25T00:00:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

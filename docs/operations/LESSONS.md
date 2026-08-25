@@ -357,3 +357,21 @@ prevention: "O register nunca e editado in loco. Exatidao vem do log lido por in
 early_detection: "Qualquer diff que altere linhas existentes de docs/operations/LOOP-REGISTER.jsonl e uma violacao; so linhas novas no fim sao validas."
 evidence: "PR #24 rodada 6, finding 3838930372; precedente em LOOP-REGISTER.jsonl linha 14 (TASK-07 tentativa 7)."
 ```
+### LESSON-RCRM-0021 — Checkpoint de sessao nao e verdade do repositorio
+
+```yaml
+id: LESSON-RCRM-0021
+status: validated
+type: loop_resilience
+severity: high
+source_task: LOOP-GOVERNANCE
+class: LOOP_FINDING
+finding: REMOTE_STATE_STALE_NO_RECONCILE
+symptom: "O agente parou em READY_TO_MERGE no PR #26. O PR foi mergeado externamente em 2026-08-24T18:57:36Z como 4dbade2, mas a sessao continuou apresentando o checkpoint READY_TO_MERGE em vez de reconciliar os fatos remotos e avancar."
+root_cause: "O checkpoint da sessao foi tratado como verdade. Sem um fetch remoto na reentrada, um merge feito fora da sessao fica invisivel e o loop repete um estado que ja nao existe."
+fix: "Toda reentrada do loop comeca por git fetch origin --prune e reconstroi PR, HEAD exato, CI, revisao, STATE e HANDOFF a partir do remoto antes de qualquer decisao."
+prevention: "Um checkpoint de sessao e cache, nunca fonte da verdade, exatamente como .rick/tmp. Se o PR alvo esta MERGED, o checkpoint anterior e invalidado e o proximo trabalho e recomputado."
+early_detection: "Falhar se a reentrada emitir READY_TO_MERGE para um PR cujo estado remoto seja MERGED."
+evidence: "PR #26 merge 4dbade2 as 18:57:36Z; sessao continuou em READY_TO_MERGE ate a reentrada com fetch; CI pos-merge 32765370517 SUCCESS."
+pending_regression: "REMOTE_MERGE_WHILE_PARKED: merge externo com o agente parado -> reentrada faz fetch -> detecta MERGED -> invalida checkpoint -> reconstroi verdade -> avanca para NEXT WORK."
+```
