@@ -193,6 +193,8 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - done_when: alertas atualizam após vendas.
 - [ ] TASK-14 — Hardening do MVP
   - depends_on: TASK-01..TASK-13
+  - architecture_decision: ARCH-02 RESOLVED — Opção A, instante + fuso declarado com A3 isolada
+  - status: SPEC_REQUIRED
   - done_when: erros, loading, empty states, acessibilidade e responsividade sem bloqueios.
 - [ ] TASK-15 — Validação final do roadmap
   - depends_on: TASK-14
@@ -209,11 +211,11 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 Itens levantados por evidência de execução. Não reabrem tasks concluídas e não
 autorizam refatoração imediata.
 
-- [ ] ARCH-02 — Consolidar o contrato de data e hora do domínio
+- [x] ARCH-02 — Consolidar o contrato de data e hora do domínio
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-11 (9 rodadas, 15 classes de defeito distintas)
   - subsystem: interpretação, armazenamento e exibição de `Sale.soldAt` e das previsões derivadas
   - blocking: false
-  - status: OPEN
+  - status: RESOLVED
   - decide_before: TASK-14 (hardening) — antes que mais telas dependam do comportamento atual
   - evidence: das 20 correções da TASK-11, a maioria esmagadora foi neste contrato: entrada só-data deslocando um dia, formas de offset, horário de verão (lacuna e sobreposição), corte da última virada, deriva de milissegundos e validação de calendário no caminho com offset
   - question: o domínio deveria tratar `soldAt` como **data de calendário** em vez de instante?
@@ -223,6 +225,12 @@ autorizam refatoração imediata.
       - C. adotar uma biblioteca de datas com suporte a fuso (por exemplo Temporal) em vez da conversão manual via Intl
   - criteria: número de casos de borda que deixam de existir; risco de migração sobre `Sale.soldAt`; efeito na fórmula canônica de previsão; compatibilidade com L3 e L4; legibilidade
   - non_goal: não refatorar a TASK-11 agora; A3 continua válida até que isto seja decidido
+  - decision: A — manter instante + fuso declarado, com A3 isolada em lib/format/businessDate.ts
+  - decision_doc: docs/architecture/ARCH-02-decision.md
+  - decision_evidence: TASK-11 teve 5 classes de defeito de data antes do isolamento; a TASK-12 consumiu o contrato em 18 findings de spec e implementação e não produziu nenhum em lib/format/businessDate.ts
+  - schema_impact: none
+  - migration_impact: none
+  - consequence: TASK-14 pode prosseguir; L3 e L4 seguem residuais aceitos e A3 segue explícita
 
 - [x] ARCH-01 — Avaliar previsão de recompra persistida vs calculada
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-09 (9 rodadas de revisão com defeitos distintos e confirmados)
