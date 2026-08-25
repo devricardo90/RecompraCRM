@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 69
+state_version: 70
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -76,7 +76,7 @@ current_task: TASK-14
 current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-14
 branch: docs/ARCH-02-decision
-pr_number: none
+pr_number: 31
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -108,7 +108,7 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-14.md
+task_spec: none (docs/specs/TASK-14.md not yet created)
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
@@ -225,7 +225,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: CREATE_TASK_14_SPEC
 next_action_authorized: true
-updated_at: "2026-08-25T18:50:00Z"
+updated_at: "2026-08-25T19:05:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

@@ -36,11 +36,17 @@ asking for. It consumes the contract heavily: business-day bucketing, a
 day-boundary window translated to UTC instants for SQL, date rendering, and the
 inherited L4 fixed-duration/DST limitation.
 
-Across TASK-12's seven spec review rounds and three implementation review
-rounds — thirty-one distinct finding classes — **exactly one was date-related**,
-`RESPONSE_NOT_DERIVED_FROM_ONE_REFERENCE_INSTANT`, and it was a defect in the
-route reading the clock more than once, not in the date contract. It was caught
-at the spec gate, before any code existed.
+Across TASK-12's six finding-bearing spec review rounds and its three
+implementation review rounds, the register records **18 findings** — 12 and 6
+respectively. **Exactly one was date-related**:
+`RESPONSE_NOT_DERIVED_FROM_ONE_REFERENCE_INSTANT`, a defect in the route reading
+the clock more than once rather than in the date contract, caught at the spec
+gate before any code existed.
+
+The eight later closure findings are excluded deliberately: they concern
+governance documents written after the implementation was merged, so counting
+them would inflate the denominator with material that says nothing about
+`Sale.soldAt`.
 
 **Zero defects were found in `lib/format/businessDate.ts` itself.**
 
