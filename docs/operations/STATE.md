@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 65
+state_version: 68
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -67,13 +67,14 @@ completed_tasks:
   - TASK-09
   - TASK-10
   - TASK-11
+  - TASK-12
   - TASK-13
-last_completed_task: TASK-13
+last_completed_task: TASK-12
 current_task: TASK-12
-current_task_status: IMPLEMENTING
-next_eligible_task: TASK-12
-branch: feat/TASK-12-repurchase-dashboard-impl
-pr_number: 29
+current_task_status: COMPLETED
+next_eligible_task: TASK-14
+branch: docs/TASK-12-close
+pr_number: 30
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -142,7 +143,15 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
-task_12_status: IMPLEMENTING
+task_12_status: COMPLETED
+task_12_reviewed_head: 43bd46c6c2dd6f567817dbfb59e37aada4cc98ad
+task_12_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+task_12_review_provider: CLAUDE_CODE_ACTION
+task_12_impl_review_rounds: 3
+task_12_branch_ci: 32881510184 SUCCESS
+task_12_merge_main_head: 6a8b12d043bae15450e4da44184c2c1d5c355597
+task_12_main_ci_run: 32882137795
+task_12_main_ci_status: SUCCESS
 task_12_spec_pr: 25 MERGED_SQUASH
 task_12_impl_pr: 29
 task_12_spec_merge_main_head: 27b3959c7394b030e9f5639abd368a1c12f55516
@@ -205,9 +214,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: AWAIT_CLAUDE_IMPLEMENTATION_REVIEW
+next_action: RUN_RESOLVER_FOR_NEXT_TASK
 next_action_authorized: true
-updated_at: "2026-08-25T16:05:00Z"
+updated_at: "2026-08-25T18:35:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
