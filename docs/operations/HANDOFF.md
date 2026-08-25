@@ -36,7 +36,7 @@ task_12_status: SPEC_IN_REVIEW
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
-task_12_spec: docs/specs/TASK-12.md (review round 1 findings fixed; implementation not started)
+task_12_spec: docs/specs/TASK-12.md (implementation not started)
 task_12_owner_decision: OWNER-01 dashboard row granularity — one row per sale item (A) vs one row per customer (B)
 task_12_owner_decision_status: RESOLVED_OPTION_A
 task_12_owner_decision_resolution: A — one dashboard row per sale item; customer aggregation and representative-date rules are forbidden in this task

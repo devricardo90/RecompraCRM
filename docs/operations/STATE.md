@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 61
+state_version: 62
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -116,9 +116,6 @@ task_12_spec_rereview_last_refusal: "2026-08-23T19:24:26Z"
 task_12_branch_ci_run: 32657266070
 task_12_branch_ci_status: SUCCESS
 task_12_unresolved_findings: 0
-task_12_spec_round_1_findings: 5
-task_12_spec_round_1_fixed: 4
-task_12_spec_round_1_escalated: 1
 task_12_owner_decision: OWNER-01_DASHBOARD_ROW_GRANULARITY
 task_12_owner_decision_status: RESOLVED_OPTION_A
 task_12_owner_decision_resolution: OPTION_A_ONE_ROW_PER_SALE_ITEM
@@ -204,7 +201,7 @@ stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
 next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
 next_action_authorized: true
-updated_at: "2026-08-25T14:25:00Z"
+updated_at: "2026-08-25T14:40:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
