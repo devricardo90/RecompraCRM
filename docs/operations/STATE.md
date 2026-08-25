@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 62
+state_version: 65
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -70,10 +70,10 @@ completed_tasks:
   - TASK-13
 last_completed_task: TASK-13
 current_task: TASK-12
-current_task_status: SPEC_IN_REVIEW
+current_task_status: IMPLEMENTING
 next_eligible_task: TASK-12
-branch: feat/TASK-12-repurchase-dashboard
-pr_number: 25
+branch: feat/TASK-12-repurchase-dashboard-impl
+pr_number: 29
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -106,7 +106,7 @@ task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lo
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-12.md
-task_12_spec_status: SPEC_IN_REVIEW
+task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
 task_12_spec_rereview_provider: CLAUDE_CODE_ACTION
@@ -123,8 +123,7 @@ task_12_owner_decision_invariant: sale_item_to_forecast_to_forecast_date_to_buck
 task_12_owner_decision_forbids: customer_level_aggregation, representative_date_rules
 task_12_owner_decision_decided_at: "2026-08-23"
 task_12_owner_decision_blocks: none
-task_12_pr: 25
-task_12_baseline: 4dbade2a88fa8bdff2c216ee4ec73006886c7872
+task_12_baseline: 27b3959c7394b030e9f5639abd368a1c12f55516
 task_12_schema_delta: additive_index_saleitem_expectedrepurchaseat
 task_12_inherited_limitation: L4
 task_11_status: COMPLETED
@@ -143,7 +142,14 @@ task_11_limitations: L1_CURRENT_PRODUCT_NAME, L2_NO_PRICE, L3_PRE_RULE_MIDNIGHT_
 business_timezone_assumption: A3_AMERICA_SAO_PAULO_IN_LIB_FORMAT_BUSINESSDATE
 task_11_architecture_signal: ARCHITECTURE_COMPLEXITY_SIGNAL_9_ROUNDS
 task_11_architecture_item: ARCH-02
-task_12_status: SPEC_IN_REVIEW
+task_12_status: IMPLEMENTING
+task_12_spec_pr: 25 MERGED_SQUASH
+task_12_impl_pr: 29
+task_12_spec_merge_main_head: 27b3959c7394b030e9f5639abd368a1c12f55516
+task_12_impl_branch: feat/TASK-12-repurchase-dashboard-impl
+task_12_impl_baseline: 27b3959c7394b030e9f5639abd368a1c12f55516
+task_12_migration: prisma/migrations/20260825140000_index_sale_item_expected_repurchase
+task_12_evidence: docs/evidence/TASK-12-validation.md
 task_12_blocked_by: none
 task_12_decision_dependency: ARCH-01_RESOLVED_OPTION_A
 task_13_status: COMPLETED_MERGED
@@ -199,9 +205,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: AWAIT_CLAUDE_SPEC_REVIEW_PR_25
+next_action: AWAIT_CLAUDE_IMPLEMENTATION_REVIEW
 next_action_authorized: true
-updated_at: "2026-08-25T14:40:00Z"
+updated_at: "2026-08-25T16:05:00Z"
 updated_by: ChatGPT Control Plane
 ```
 

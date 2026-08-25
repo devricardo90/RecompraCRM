@@ -76,6 +76,45 @@ export function businessWallClockToUtc(wallClockAsUtcMs: number): number {
   return Math.max(firstCandidate, secondCandidate); // gap: move forward
 }
 
+/**
+ * The business calendar date of an instant, as a day count.
+ *
+ * Classification in TASK-12 is over business days, not instants: two forecasts
+ * on the same business day belong to the same bucket no matter how many hours
+ * apart they are, and no matter what zone the reader is in. Comparing day
+ * numbers is what makes that true; comparing instants would put 00:01 and 23:59
+ * of one day on either side of a boundary drawn 24 hours apart.
+ */
+export function businessDayNumber(value: Date | string | number): number {
+  const instant = value instanceof Date ? value : new Date(value);
+  const wallClockMs = instant.getTime() + zoneOffsetMinutes(instant.getTime()) * 60_000;
+  return Math.floor(wallClockMs / 86_400_000);
+}
+
+/**
+ * The last instant of the business day that falls `offsetDays` after the
+ * reference's own business day.
+ *
+ * Used for the one SQL bound TASK-12 applies. The bound has to be an instant
+ * because that is what the column stores, but it has to be *derived* from a
+ * business day, or a query run near midnight would cut the window a day short.
+ */
+export function businessDayEndUtc(reference: Date | string | number, offsetDays = 0): Date {
+  const instant = reference instanceof Date ? reference : new Date(reference);
+  const wallClockMs = instant.getTime() + zoneOffsetMinutes(instant.getTime()) * 60_000;
+  const day = new Date(wallClockMs);
+  const endOfDayWallClock = Date.UTC(
+    day.getUTCFullYear(),
+    day.getUTCMonth(),
+    day.getUTCDate() + offsetDays,
+    23,
+    59,
+    59,
+    999,
+  );
+  return new Date(businessWallClockToUtc(endOfDayWallClock));
+}
+
 export class BusinessDateError extends Error {
   constructor(message: string) {
     super(message);
