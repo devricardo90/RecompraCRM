@@ -227,7 +227,7 @@ autorizam refatoração imediata.
   - non_goal: não refatorar a TASK-11 agora; A3 continua válida até que isto seja decidido
   - decision: A — manter instante + fuso declarado, com A3 isolada em lib/format/businessDate.ts
   - decision_doc: docs/architecture/ARCH-02-decision.md
-  - decision_evidence: TASK-11 teve 5 classes de defeito de data antes do isolamento; a TASK-12 consumiu o contrato em 31 classes de finding e não produziu nenhuma em lib/format/businessDate.ts
+  - decision_evidence: TASK-11 teve 5 classes de defeito de data antes do isolamento; a TASK-12 consumiu o contrato em 18 findings de spec e implementação e não produziu nenhum em lib/format/businessDate.ts
   - schema_impact: none
   - migration_impact: none
   - consequence: TASK-14 pode prosseguir; L3 e L4 seguem residuais aceitos e A3 segue explícita
