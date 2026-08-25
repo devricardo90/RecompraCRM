@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 68
+state_version: 69
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -70,11 +70,13 @@ completed_tasks:
   - TASK-12
   - TASK-13
 last_completed_task: TASK-12
-current_task: TASK-12
-current_task_status: COMPLETED
+task_12_closure_pr: 30 MERGED_SQUASH
+task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
+current_task: TASK-14
+current_task_status: SPEC_REQUIRED
 next_eligible_task: TASK-14
-branch: docs/TASK-12-close
-pr_number: 30
+branch: docs/ARCH-02-decision
+pr_number: none
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -106,7 +108,14 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-12.md
+task_spec: docs/specs/TASK-14.md
+arch_02_status: RESOLVED
+arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
+arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
+arch_02_schema_impact: none
+arch_02_migration_impact: none
+task_14_status: SPEC_REQUIRED
+task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
@@ -183,7 +192,7 @@ arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
 arch_01_schema_impact: NONE
 arch_01_migration_impact: NONE
-open_architecture_items: ARCH-02, ARCH-03
+open_architecture_items: ARCH-03
 task_10_status: COMPLETED
 task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
 task_10_branch_ci: 32291165510
@@ -214,9 +223,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: RUN_RESOLVER_FOR_NEXT_TASK
+next_action: CREATE_TASK_14_SPEC
 next_action_authorized: true
-updated_at: "2026-08-25T18:35:00Z"
+updated_at: "2026-08-25T18:50:00Z"
 updated_by: ChatGPT Control Plane
 ```
 
