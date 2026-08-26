@@ -194,7 +194,9 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 - [ ] TASK-14 — Hardening do MVP
   - depends_on: TASK-01..TASK-13
   - architecture_decision: ARCH-02 RESOLVED — Opção A, instante + fuso declarado com A3 isolada
-  - status: SPEC_REQUIRED
+  - status: SPEC_IN_REVIEW
+  - spec: docs/specs/TASK-14.md
+  - baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
   - done_when: erros, loading, empty states, acessibilidade e responsividade sem bloqueios.
 - [ ] TASK-15 — Validação final do roadmap
   - depends_on: TASK-14
