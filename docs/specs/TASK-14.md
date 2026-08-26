@@ -64,6 +64,13 @@ Levantada no baseline desta spec, não presumida:
   explícita contra rolagem horizontal do corpo em viewport estreito;
 - `/inventory`, `/repurchases` e o histórico não usam `htmlFor`, o que é
   esperado por não terem formulário, mas precisa ser afirmado e não suposto;
+- **um id malformado não cai em página coberta pelo piso**:
+  `app/customers/[id]/history/page.tsx:11-13` chama `notFound()` do
+  `next/navigation` para id não inteiro, zero ou negativo, e **não existe
+  `app/not-found.tsx`**. Esse caminho cai no 404 padrão do Next: sem `<main>`,
+  sem `<h1>` do projeto, sem navegação, sem `lang` de conteúdo e em inglês.
+  A rota tem, portanto, **dois** caminhos de não encontrado, e só um deles é a
+  ramificação estilizada do workspace;
 - o formulário de venda **não alcança carrinho vazio**: `lines` inicia com
   `[newLine()]` e `removeLine` é no-op quando resta uma linha. Não existe estado
   de carrinho vazio para especificar.
@@ -82,9 +89,18 @@ conteúdo     -> a lista
 
 **Não encontrado** só existe em telas cuja rota nomeia um recurso — hoje apenas
 `/customers/[id]/history`. É um estado terminal com saída por navegação, não por
-retry: repetir a leitura de um id inexistente não muda o resultado. Ele já existe
-no histórico (`data-testid="history-not-found"`, com link de volta para `/`), mas
-não estava nomeado nesta spec.
+retry: repetir a leitura de um id inexistente não muda o resultado.
+
+A rota tem **dois** caminhos até ele, e ambos precisam ficar dentro do piso:
+
+| Caminho | Hoje | Requisito |
+| --- | --- | --- |
+| id válido, cliente inexistente | ramo `notFound` do workspace, estilizado, pt-BR, com link para `/` | manter e anunciar |
+| id malformado (não inteiro, zero, negativo) | `notFound()` do Next sem `app/not-found.tsx`, caindo no 404 padrão | criar `app/not-found.tsx` dentro do piso |
+
+O 404 padrão do Next não é uma tela do projeto: está em inglês, sem `<main>`
+nem `<h1>` do padrão, sem navegação. Uma tela de hardening que deixa um caminho
+de rota real fora do piso não terminou o trabalho.
 
 Regras vinculantes:
 
@@ -136,6 +152,7 @@ tela:
 | erro | `role="alert"` **no ramo de erro principal**, não em outro ramo qualquer do arquivo |
 | retry | um controle de retry no bloco de erro |
 | não encontrado | quando a rota nomeia um recurso: ramo próprio, distinto de erro e de vazio, com saída por navegação |
+| fronteira 404 | `app/not-found.tsx` existe e cumpre o piso, para que `notFound()` não caia no 404 padrão do Next |
 | empty state | um ramo de vazio distinto do ramo de erro |
 | navegação | toda `nav` com `aria-label` |
 | nome acessível | todo `<button>` e `<Link>` com texto visível ou `aria-label`; todo `<input>` e `<select>` com `htmlFor` correspondente |
@@ -181,7 +198,8 @@ piso. Rota é a unidade que o Next.js realmente define.
 5.1. Cliente **com** telefone ausente é **conteúdo**, não vazio: a linha é renderizada normalmente com o placeholder de telefone ausente, conforme o contrato herdado da TASK-12 (AC21). Tratar telefone nulo como vazio contradiz esse contrato e a interface atual.
 6. Viewport de 320px em todas as seis telas → sem rolagem horizontal do corpo.
 7. Navegação por teclado → foco visível em cada parada, nenhuma armadilha de foco.
-8. `/customers/[id]/history` com id inexistente → estado "não encontrado" com link de volta, anunciado, sem retry e sem ser confundido com erro ou vazio.
+8. `/customers/[id]/history` com id válido e cliente inexistente → ramo "não encontrado" do workspace, anunciado, com link de volta, sem retry e sem ser confundido com erro ou vazio.
+9. `/customers/[id]/history/abc`, `/0` ou `/-1` → `app/not-found.tsx` do projeto, dentro do piso, em pt-BR e com navegação de volta; nunca o 404 padrão do Next.
 
 ## Estratégia de testes
 
@@ -190,8 +208,14 @@ o piso por tela, mais a asserção de que nenhuma tela ficou fora da lista.
 Roda em `npm test` e em `validate.yml`.
 
 **Playwright efêmero**, conforme `docs/operations/PLAYWRIGHT-EPHEMERAL.md`:
-os quatro estados por tela onde forem alcançáveis, navegação por teclado com
-foco visível, e ausência de rolagem horizontal em 320px, 768px e 1280px.
+**todos** os estados por tela onde forem alcançáveis — carregando, não
+encontrado, erro, vazio e conteúdo — navegação por teclado com foco visível, e
+ausência de rolagem horizontal em 320px, 768px e 1280px.
+
+O escopo do Playwright é enumerado aqui de propósito: a guarda determinística
+declara que **não** prova renderização, então qualquer estado ausente desta
+lista fica sem prova de que aparece de verdade. Isso inclui os dois caminhos de
+não encontrado da rota de histórico.
 `retries 0`; qualquer retry necessário é FLAKY e bloqueia. Artefatos removidos
 após PASS; em `docs/evidence/` fica apenas o resumo.
 
@@ -215,6 +239,8 @@ AC6.1. Um cliente sem telefone aparece como conteúdo com placeholder, nunca com
 
 AC6.2. Em tela cuja rota nomeia um recurso, "não encontrado" é um ramo próprio, distinto de erro e de vazio, anunciado por `role="status"` ou `role="alert"`, com saída por navegação e sem retry.
 
+AC6.3. Um id malformado — não inteiro, zero ou negativo — renderiza `app/not-found.tsx` do projeto, que cumpre o piso: um `<main>`, um `<h1>`, texto em pt-BR e link de navegação de volta. O 404 padrão do Next não satisfaz este critério.
+
 AC7. Toda `nav` tem `aria-label`.
 
 AC8. Todo controle interativo tem nome acessível: `htmlFor`, texto visível ou `aria-label`.
@@ -233,7 +259,9 @@ AC14. A guarda enumera as rotas — todo `page.tsx` sob `app/` fora de `app/api/
 
 AC15. A guarda roda em `npm test` e é um passo de `validate.yml`.
 
-AC16. Nenhuma funcionalidade, rota, endpoint, regra de domínio, schema ou migration é alterada.
+AC16. Nenhuma funcionalidade, rota, endpoint, regra de domínio, schema ou migration é alterada. `app/not-found.tsx` é fronteira de erro, não rota nova: cobre um caminho que `page.tsx` já produz hoje.
+
+AC17. O Playwright efêmero cobre todos os estados alcançáveis de cada tela, incluindo os dois caminhos de não encontrado da rota de histórico.
 
 ## Validação determinística
 
