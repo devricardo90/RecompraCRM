@@ -64,6 +64,12 @@ Levantada no baseline desta spec, não presumida:
   explícita contra rolagem horizontal do corpo em viewport estreito;
 - `/inventory`, `/repurchases` e o histórico não usam `htmlFor`, o que é
   esperado por não terem formulário, mas precisa ser afirmado e não suposto;
+- **o ramo `notFound` do histórico não é anunciado**:
+  `CustomerHistoryWorkspace.tsx:169-184` renderiza o ramo com `className` e
+  `data-testid` apenas, sem atributo `role`. A baseline portanto **falha** o
+  AC6.2 desta spec. A versão anterior deste documento descreveu o ramo como
+  "estilizado, pt-BR, com link para `/`" e pediu "manter e anunciar", o que
+  sugeria que ele já anunciava; ele não anuncia;
 - **um id malformado não cai em página coberta pelo piso**:
   `app/customers/[id]/history/page.tsx:11-13` chama `notFound()` do
   `next/navigation` para id não inteiro, zero ou negativo, e **não existe
@@ -95,7 +101,7 @@ A rota tem **dois** caminhos até ele, e ambos precisam ficar dentro do piso:
 
 | Caminho | Hoje | Requisito |
 | --- | --- | --- |
-| id válido, cliente inexistente | ramo `notFound` do workspace, estilizado, pt-BR, com link para `/` | manter e anunciar |
+| id válido, cliente inexistente | ramo `notFound` do workspace, estilizado, pt-BR, com link para `/`, **sem `role`** | acrescentar `role="status"`; manter o resto |
 | id malformado (não inteiro, zero, negativo) | `notFound()` do Next sem `app/not-found.tsx`, caindo no 404 padrão | criar `app/not-found.tsx` dentro do piso |
 
 O 404 padrão do Next não é uma tela do projeto: está em inglês, sem `<main>`
@@ -104,7 +110,10 @@ de rota real fora do piso não terminou o trabalho.
 
 Regras vinculantes:
 
-- carregando usa `role="status"`; erro usa `role="alert"`;
+- carregando usa `role="status"`; erro usa `role="alert"`; não encontrado usa
+  `role="status"` — é uma condição terminal informativa, não uma falha a repetir,
+  e `alert` reservaria urgência para algo que o usuário não pode corrigir com
+  retry;
 - o retry refaz a leitura sem recarregar a página;
 - um conjunto vazio **nunca** é renderizado como erro, e uma falha **nunca**
   como vazio. Esta é a confusão que a TASK-13 já corrigiu uma vez e que esta
@@ -151,7 +160,7 @@ tela:
 | carregando | `role="status"` |
 | erro | `role="alert"` **no ramo de erro principal**, não em outro ramo qualquer do arquivo |
 | retry | um controle de retry no bloco de erro |
-| não encontrado | quando a rota nomeia um recurso: ramo próprio, distinto de erro e de vazio, com saída por navegação |
+| não encontrado | quando a rota nomeia um recurso: ramo próprio, distinto de erro e de vazio, **com `role="status"`** e com saída por navegação |
 | fronteira 404 | `app/not-found.tsx` existe e cumpre o piso, para que `notFound()` não caia no 404 padrão do Next |
 | empty state | um ramo de vazio distinto do ramo de erro |
 | navegação | toda `nav` com `aria-label` |
@@ -229,6 +238,8 @@ AC3. Cada tela que carrega dados expõe erro com `role="alert"` **no ramo de err
 
 AC3.1. `/customers/[id]/history` ganha `role="alert"` no ramo de erro principal, que hoje não tem.
 
+AC3.2. `/customers/[id]/history` ganha `role="status"` no ramo `notFound`, que hoje não tem nenhum `role`.
+
 AC4. Um conjunto vazio produz empty state próprio e nunca um erro.
 
 AC5. Uma falha produz erro e nunca um empty state.
@@ -237,7 +248,7 @@ AC6. `/sales` mantém o empty state de pré-requisito quando não há clientes o
 
 AC6.1. Um cliente sem telefone aparece como conteúdo com placeholder, nunca como estado vazio.
 
-AC6.2. Em tela cuja rota nomeia um recurso, "não encontrado" é um ramo próprio, distinto de erro e de vazio, anunciado por `role="status"` ou `role="alert"`, com saída por navegação e sem retry.
+AC6.2. Em tela cuja rota nomeia um recurso, "não encontrado" é um ramo próprio, distinto de erro e de vazio, anunciado por `role="status"`, com saída por navegação e sem retry. A baseline falha este critério hoje.
 
 AC6.3. Um id malformado — não inteiro, zero ou negativo — renderiza `app/not-found.tsx` do projeto, que cumpre o piso: um `<main>`, um `<h1>`, texto em pt-BR e link de navegação de volta. O 404 padrão do Next não satisfaz este critério.
 
