@@ -45,8 +45,14 @@ TASK-13, um link de navegação faltando porque a contagem era implícita.
 
 Levantada no baseline desta spec, não presumida:
 
-- as seis telas têm `<main>`, um `<h1>`, `role="status"` de carregamento,
-  `role="alert"` de erro e um controle de retry;
+- as seis telas têm `<main>`, um `<h1>`, `role="status"` de carregamento e um
+  controle de retry;
+- **o histórico não tem `role="alert"` no ramo de erro principal**
+  (`CustomerHistoryWorkspace.tsx:186`), que carrega apenas `data-testid`. O único
+  `role="alert"` do arquivo está na linha 265, no erro de *carregar mais* — outro
+  estado. A primeira versão desta spec contou ocorrências de `role="alert"` no
+  arquivo, achou uma, e declarou o piso satisfeito. Contar ocorrência não é
+  verificar o ramo certo;
 - `app/layout.tsx` declara `lang="pt-BR"`;
 - **`/sales` já tem empty state**, com texto "Falta um passo antes de vender"
   e CTA para cadastrar cliente ou produto quando `customers` ou `products` está
@@ -64,15 +70,21 @@ Levantada no baseline desta spec, não presumida:
 
 ## Contrato uniforme de estado
 
-Cada tela que carrega dados tem exatamente quatro estados observáveis, e eles
-são mutuamente exclusivos:
+Cada tela que carrega dados tem estados observáveis mutuamente exclusivos:
 
 ```text
-carregando -> status observável, nunca um vazio falso
-erro       -> mensagem + retry, nunca apresentado como vazio
-vazio      -> mensagem própria, nunca apresentada como erro
-conteúdo   -> a lista
+carregando   -> status observável, nunca um vazio falso
+não encontrado -> quando a rota nomeia um recurso que não existe
+erro         -> mensagem + retry, nunca apresentado como vazio
+vazio        -> mensagem própria, nunca apresentada como erro
+conteúdo     -> a lista
 ```
+
+**Não encontrado** só existe em telas cuja rota nomeia um recurso — hoje apenas
+`/customers/[id]/history`. É um estado terminal com saída por navegação, não por
+retry: repetir a leitura de um id inexistente não muda o resultado. Ele já existe
+no histórico (`data-testid="history-not-found"`, com link de volta para `/`), mas
+não estava nomeado nesta spec.
 
 Regras vinculantes:
 
@@ -83,7 +95,10 @@ Regras vinculantes:
   task passa a impedir em toda tela;
 - em `/sales` o estado vazio é a **ausência de pré-requisito** — sem clientes ou
   sem produtos — e já existe. Carrinho vazio não é estado alcançável e não é
-  requisito.
+  requisito;
+- não encontrado é distinto de erro e de vazio: não oferece retry, oferece
+  navegação. Apresentá-lo como erro convidaria a repetir uma leitura que nunca
+  vai suceder.
 
 ## Piso de acessibilidade
 
@@ -118,8 +133,9 @@ tela:
 | --- | --- |
 | landmark e título | exatamente um `<main>`, exatamente um `<h1>` |
 | carregando | `role="status"` |
-| erro | `role="alert"` |
+| erro | `role="alert"` **no ramo de erro principal**, não em outro ramo qualquer do arquivo |
 | retry | um controle de retry no bloco de erro |
+| não encontrado | quando a rota nomeia um recurso: ramo próprio, distinto de erro e de vazio, com saída por navegação |
 | empty state | um ramo de vazio distinto do ramo de erro |
 | navegação | toda `nav` com `aria-label` |
 | nome acessível | todo `<button>` e `<Link>` com texto visível ou `aria-label`; todo `<input>` e `<select>` com `htmlFor` correspondente |
@@ -165,6 +181,7 @@ piso. Rota é a unidade que o Next.js realmente define.
 5.1. Cliente **com** telefone ausente é **conteúdo**, não vazio: a linha é renderizada normalmente com o placeholder de telefone ausente, conforme o contrato herdado da TASK-12 (AC21). Tratar telefone nulo como vazio contradiz esse contrato e a interface atual.
 6. Viewport de 320px em todas as seis telas → sem rolagem horizontal do corpo.
 7. Navegação por teclado → foco visível em cada parada, nenhuma armadilha de foco.
+8. `/customers/[id]/history` com id inexistente → estado "não encontrado" com link de volta, anunciado, sem retry e sem ser confundido com erro ou vazio.
 
 ## Estratégia de testes
 
@@ -184,7 +201,9 @@ AC1. Cada uma das seis telas tem exatamente um `<main>` e exatamente um `<h1>`.
 
 AC2. Cada tela que carrega dados expõe carregando com `role="status"`.
 
-AC3. Cada tela que carrega dados expõe erro com `role="alert"` e um retry que refaz a leitura sem recarregar a página.
+AC3. Cada tela que carrega dados expõe erro com `role="alert"` **no ramo de erro principal** e um retry que refaz a leitura sem recarregar a página. Um `role="alert"` em outro ramo do mesmo arquivo não satisfaz este critério.
+
+AC3.1. `/customers/[id]/history` ganha `role="alert"` no ramo de erro principal, que hoje não tem.
 
 AC4. Um conjunto vazio produz empty state próprio e nunca um erro.
 
@@ -193,6 +212,8 @@ AC5. Uma falha produz erro e nunca um empty state.
 AC6. `/sales` mantém o empty state de pré-requisito quando não há clientes ou não há produtos, com CTA para o cadastro que falta.
 
 AC6.1. Um cliente sem telefone aparece como conteúdo com placeholder, nunca como estado vazio.
+
+AC6.2. Em tela cuja rota nomeia um recurso, "não encontrado" é um ramo próprio, distinto de erro e de vazio, anunciado por `role="status"` ou `role="alert"`, com saída por navegação e sem retry.
 
 AC7. Toda `nav` tem `aria-label`.
 
@@ -244,9 +265,13 @@ alteração de domínio.
   presente mas nunca renderizado passaria, e rolagem horizontal em 320px não é
   detectável estaticamente. Ambos ficam com o Playwright efêmero, que observa os
   estados de verdade. A spec lista acima exatamente o que fica de fora.
-- **Auditoria por palavra-chave**: a primeira versão desta spec concluiu que
-  `/sales` não tinha empty state porque procurou palavras específicas. A
-  auditoria da baseline agora cita o texto real de cada estado encontrado.
+- **Auditoria por palavra-chave e por contagem**: a primeira versão desta spec
+  concluiu que `/sales` não tinha empty state porque procurou palavras
+  específicas, e que o histórico tinha `role="alert"` de erro porque contou uma
+  ocorrência no arquivo — que estava em outro ramo. Ambos os métodos produzem
+  falso resultado. A auditoria da baseline agora cita arquivo, linha e texto do
+  ramo verificado, e é isso que a guarda passa a exigir: o marcador no ramo
+  certo, não em qualquer lugar do arquivo.
 - **Piso, não teto**: a guarda impede regressão abaixo do piso; não afirma que a
   interface é boa. É deliberado — o objetivo é que a qualidade pare de depender
   de quem revisa.
