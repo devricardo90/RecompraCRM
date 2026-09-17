@@ -168,8 +168,8 @@ Dado um número de PR:
    execução que acabou de ser disparada por outro ciclo, esta checagem
    evita a maioria dos disparos redundantes mas **não** é, sozinha,
    suficiente para garantir exatamente uma execução — quem garante isso é
-   o grupo de concorrência do workflow, inalterado desde hoje
-   (`claude-pr-review-<pr_number>`, `cancel-in-progress: true`): se dois
+   o grupo de concorrência do workflow, mesma granularidade por PR de hoje
+   (ver "Grupo de concorrência", `cancel-in-progress: true`): se dois
    disparos para o mesmo HEAD passarem por esta checagem antes de qualquer
    um aparecer em `gh run list`, os dois são enfileirados no mesmo grupo
    (mesma PR), mas apenas o último chega a **completar** — o anterior é
@@ -229,10 +229,22 @@ O restante do job (checkout, prompt, `claude_args` incluindo
 `github.event.pull_request.*` diretamente, para que o prompt continue
 citando `PR NUMBER`/`EXACT HEAD` corretos nos dois casos.
 
-**Grupo de concorrência.** `concurrency.group` **não muda**:
-`claude-pr-review-<pr_number>`, só o número do PR, exatamente como hoje —
-só é preciso garantir que `pr_number` resolve certo nos dois tipos de
-evento (mesmo valor do passo de resolução, acima). A primeira versão desta
+**Grupo de concorrência.** A granularidade **não muda** — continua por PR,
+não por HEAD — mas a expressão precisa mudar, e não pode ser resolvida no
+passo de resolução dentro do job: o bloco `concurrency:` de nível de
+workflow é avaliado pelo GitHub no momento do disparo, antes de qualquer
+job/step rodar, e só enxerga os contextos `github`, `inputs` e `vars` —
+nunca uma saída calculada dentro de um step. A expressão atual,
+`claude-pr-review-${{ github.event.pull_request.number }}`, resolve para o
+mesmo grupo (sufixo vazio) em **toda** execução disparada por
+`workflow_dispatch`, de qualquer PR, porque `github.event.pull_request` não
+existe nesse payload — depois da PR 2, quando todo disparo é
+`workflow_dispatch`, isso juntaria revisões de PRs diferentes no mesmo
+grupo e uma cancelaria a outra, o oposto de "por PR". A correção é trocar a
+expressão para `claude-pr-review-${{ github.event.pull_request.number ||
+inputs.pr_number }}` — `inputs` é um dos contextos disponíveis num
+`concurrency:` de nível de workflow, então isso resolve certo nos dois
+tipos de evento sem depender de nenhum step. A primeira versão desta
 seção propunha estreitar o grupo para incluir o HEAD
 (`claude-pr-review-<pr_number>-<head>`), o que resolveria a corrida do
 passo 4 do dispatcher, mas tem um efeito colateral que a revisão da spec
@@ -404,14 +416,19 @@ AC5. Nenhuma função do gate de merge
 (`evaluateMergeAllowed`/`isCleanReviewResult`/`countUnresolvedFindings`/
 `selectMergeResult`/`buildAnchoredResults`) é alterada.
 
-AC6. Nunca duas execuções completam para o mesmo HEAD: a checagem barata do
-dispatcher evita a maioria dos disparos redundantes, e o grupo de
-concorrência do workflow — inalterado, por PR (`claude-pr-review-<pr_number>`,
-`cancel-in-progress: true`) — garante que, mesmo que duas sejam
+AC6. Nunca duas execuções completam para o mesmo HEAD, e nunca duas PRs
+diferentes competem pelo mesmo grupo: a checagem barata do dispatcher
+evita a maioria dos disparos redundantes, e o grupo de concorrência do
+workflow — mesma granularidade por PR de hoje, mas com a expressão
+`claude-pr-review-${{ github.event.pull_request.number || inputs.pr_number
+}}` (o bloco `concurrency:` de nível de workflow só enxerga `github`,
+`inputs` e `vars`, nunca um valor calculado num step, então o fallback
+precisa estar na própria expressão) — garante que, mesmo que duas sejam
 enfileiradas por uma corrida, só a última a entrar no grupo chega a
 completar; o mesmo grupo por PR também garante que a revisão de um HEAD
 anterior é cancelada assim que uma revisão de um HEAD mais novo é
-enfileirada, em vez de rodar até o fim depois de já estar superada.
+enfileirada, em vez de rodar até o fim depois de já estar superada — e que
+a revisão de uma PR nunca cancela a de outra.
 
 AC7. `--max-turns 50` e o contrato de texto do comentário de revisão
 permanecem exatamente como estão.
@@ -492,9 +509,8 @@ explícita de continuar TASK-15/16/17 depois que ARCH-04 fechar.
   disparo "pegou". Isso é exatamente por que a checagem de idempotência do
   passo 4 do dispatcher é só uma otimização barata, não a garantia: quem
   garante que no máximo uma execução *completa* por HEAD é o grupo de
-  concorrência do workflow, inalterado por PR
-  (`claude-pr-review-<pr_number>`, `cancel-in-progress: true`), que não
-  depende de nenhuma leitura
+  concorrência do workflow (ver "Grupo de concorrência",
+  `cancel-in-progress: true`), que não depende de nenhuma leitura
   assíncrona para funcionar.
 
 ## Assumptions explícitas
@@ -508,3 +524,9 @@ explícita de continuar TASK-15/16/17 depois que ARCH-04 fechar.
   usado em todo o resto do loop) tem permissão de `actions: write` para
   disparar `workflow_dispatch` — se não tiver, isso aparece como uma falha
   de disparo nomeada, não como um disparo silenciosamente ignorado.
+- **A3**: um bloco `concurrency:` de nível de workflow só enxerga os
+  contextos `github`, `inputs` e `vars` no momento em que o GitHub avalia o
+  disparo — nunca uma saída calculada num job/step, porque nenhum ainda
+  rodou. É por isso que o fallback `inputs.pr_number` precisa estar na
+  própria expressão de `concurrency.group` (AC6), não resolvido num passo
+  dentro do job como a primeira versão desta seção propunha.
