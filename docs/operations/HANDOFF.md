@@ -131,6 +131,18 @@ next and the owner-authorized review-trigger change would never get done.
 `ARCH-03` remains exactly the untracked, resolver-invisible reference this
 paragraph is warning against — it is not fixed by this closure.
 
+`NO_ELIGIBLE_TASK` is one of `rick-loop-controller.mjs`'s
+`TERMINAL_TRANSITIONS`: a fresh, unattended run of the controller stops
+here rather than inventing work — `scripts/rick-loop-controller-check.mjs`
+asserts this ("all-blocked roadmap must not invent a task") as a
+deliberate safety invariant, not a gap. Resuming past it requires a human
+or an agent reading this handoff to start the ARCH-04 spec by hand, the
+same way OWNER-01 and OWNER-02 themselves required an explicit owner
+decision the loop could not make on its own. Giving the controller a
+mechanical way to select and execute an open `ARCH-*` item is itself one
+of the items `ARCH-04`'s own scope already lists (`decide_before resolver
+gate`) — it is not bundled into this closure.
+
 ## Contracts TASK-14 leaves behind
 
 TASK-14 added `scripts/ui-hardening-check.mjs` as a permanent regression
