@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
+import { hasVerdictForHead } from "./rick-loop-review-dispatch.mjs";
+
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
 export const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
 export const CLAUDE_REVIEW_WORKFLOW = "claude-pr-review.yml";
@@ -30,6 +32,40 @@ export function claudeReviewRetryAction(run, { now = new Date(), cooldownMs = RE
   if (!Number.isFinite(timestamp)) return "WAIT";
   if (now.getTime() - timestamp < cooldownMs) return "COOLDOWN";
   return "RERUN";
+}
+
+/**
+ * ARCH-04: matching a run by headSha alone is not enough to decide what to do
+ * with it. `gh workflow run --ref <branch>` resolves the branch tip at
+ * dispatch time, so a push landing mid-dispatch produces a run associated with
+ * the NEW head while carrying the OLD one as expected_head_sha. That run skips
+ * (correctly - it must not review a stale commit) but still matches the new
+ * head forever after. Deciding on headSha alone would then loop
+ * WAIT -> COOLDOWN -> RERUN indefinitely, and because rerunning replays the
+ * same baked-in stale input, the new head could never receive a review.
+ *
+ * So the decision also consults whether a verdict was ever published for this
+ * exact head, and prefers re-dispatching (which resolves a fresh expected head)
+ * over rerunning (which cannot).
+ */
+export function claudeReviewAction({
+  run,
+  verdictPublished = false,
+  now = new Date(),
+  cooldownMs = REVIEW_RETRY_COOLDOWN_MS,
+} = {}) {
+  if (!run) return "DISPATCH";
+  if (["queued", "in_progress", "waiting", "pending"].includes(run.status)) return "WAIT";
+  if (run.status !== "completed") return "WAIT";
+  if (verdictPublished) return "REVIEWED";
+  const timestamp = Date.parse(run.updatedAt ?? run.createdAt ?? "");
+  // Unknown age waits rather than acting on evidence it cannot date.
+  if (!Number.isFinite(timestamp)) return "WAIT";
+  if (now.getTime() - timestamp < cooldownMs) return "COOLDOWN";
+  // Completed, nothing published, cooldown elapsed: either a stale dispatch or
+  // an infrastructure failure. Re-dispatching fixes both, because it resolves
+  // the expected head fresh; rerunning only fixes the second.
+  return "REDISPATCH";
 }
 
 function supervisor() {
@@ -94,27 +130,51 @@ function dispatchClaudeReview(identity) {
   }
 }
 
+function fetchVerdictPublished(identity) {
+  if (!identity?.pr || !identity?.head) return false;
+  try {
+    const raw = sh("gh", ["api", `repos/{owner}/{repo}/issues/${identity.pr}/comments?per_page=100`]);
+    return hasVerdictForHead(raw ? JSON.parse(raw) : null, identity.head);
+  } catch {
+    // Unknown verdict evidence: treat as "not published" so the loop keeps
+    // trying to obtain a review rather than assuming one exists.
+    return false;
+  }
+}
+
 function retryClaudeReview(identity, now = new Date()) {
   if (!identity?.head || !identity?.branch) return { action: "NO_IDENTITY" };
   try {
     const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--branch", identity.branch, "--limit", "20", "--json", "databaseId,headSha,status,conclusion,createdAt,updatedAt"]);
     const runs = raw ? JSON.parse(raw) : [];
     const run = selectClaudeReviewRun(runs, identity.head);
-    const action = claudeReviewRetryAction(run, { now });
-    if (action === "RERUN") {
-      sh("gh", ["run", "rerun", String(run.databaseId)]);
-      return { action, run_id: run.databaseId, previous_conclusion: run.conclusion ?? null, last_run_at: run.updatedAt ?? run.createdAt ?? null };
-    }
-    if (action === "NO_RUN") {
-      return { action, run_id: null, status: null, conclusion: null, last_run_at: null, dispatch: dispatchClaudeReview(identity) };
-    }
-    return {
+    const verdictPublished = fetchVerdictPublished(identity);
+    const action = claudeReviewAction({ run, verdictPublished, now });
+    const base = {
       action,
       run_id: run?.databaseId ?? null,
       status: run?.status ?? null,
       conclusion: run?.conclusion ?? null,
       last_run_at: run?.updatedAt ?? run?.createdAt ?? null,
+      verdict_published: verdictPublished,
     };
+
+    if (action === "DISPATCH") return { ...base, dispatch: dispatchClaudeReview(identity) };
+
+    if (action === "REDISPATCH") {
+      const dispatch = dispatchClaudeReview(identity);
+      if (dispatch.dispatched) return { ...base, dispatch };
+      // Until the cutover lands, claude-pr-review.yml has no workflow_dispatch
+      // trigger, so dispatch cannot succeed. Fall back to the pre-ARCH-04
+      // behaviour rather than losing retry capability during the bootstrap.
+      if (run) {
+        sh("gh", ["run", "rerun", String(run.databaseId)]);
+        return { ...base, action: "RERUN_FALLBACK", dispatch };
+      }
+      return { ...base, dispatch };
+    }
+
+    return base;
   } catch (error) {
     return { action: "ERROR", error: String(error?.message ?? error) };
   }

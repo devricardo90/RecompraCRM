@@ -9,6 +9,7 @@ import {
   hasVerdictForHead,
   REDISPATCH_COOLDOWN_MS,
 } from "./rick-loop-review-dispatch.mjs";
+import { claudeReviewAction, claudeReviewRetryAction } from "./rick-loop-watcher.mjs";
 
 /**
  * ARCH-04 deterministic gate. No network: every case is synthetic, so this
@@ -294,6 +295,60 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
   assert.throws(() => buildDispatchArgs({ prNumber: 42, headSha: HEAD }), /--ref/, "a dispatch without a branch must throw");
   assert.throws(() => buildDispatchArgs({ branch: "b", headSha: HEAD }), /PR number/, "a dispatch without a PR number must throw");
   assert.throws(() => buildDispatchArgs({ branch: "b", prNumber: 42 }), /head sha/, "a dispatch without a head sha must throw");
+}
+
+// --- watcher-level decision ------------------------------------------
+//
+// The same deadlock, at the level that the running loop actually executes.
+// Fixing evaluateDispatch alone was not enough: retryClaudeReview never
+// reached it once a stale run existed, because claudeReviewRetryAction keys on
+// headSha only and cycles WAIT -> COOLDOWN -> RERUN forever, and rerunning
+// replays the stale expected_head_sha.
+
+{
+  const staleRun = { databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "2026-09-17T12:00:00Z" };
+  const afterCooldown = new Date("2026-09-17T14:00:00Z");
+  const withinCooldown = new Date("2026-09-17T12:30:00Z");
+
+  assert.equal(claudeReviewAction({ run: null }), "DISPATCH", "no run at all means dispatch");
+  assert.equal(
+    claudeReviewAction({ run: { ...staleRun, status: "in_progress" } }),
+    "WAIT",
+    "a review still running is never disturbed",
+  );
+  assert.equal(
+    claudeReviewAction({ run: staleRun, verdictPublished: true, now: afterCooldown }),
+    "REVIEWED",
+    "a head with a published verdict needs nothing further",
+  );
+  assert.equal(
+    claudeReviewAction({ run: staleRun, verdictPublished: false, now: withinCooldown }),
+    "COOLDOWN",
+    "a recently completed run without a verdict waits out the cooldown",
+  );
+  assert.equal(
+    claudeReviewAction({ run: staleRun, verdictPublished: false, now: afterCooldown }),
+    "REDISPATCH",
+    "completed, no verdict, cooldown elapsed: re-dispatch with a freshly resolved head rather than rerunning a stale input",
+  );
+  assert.equal(
+    claudeReviewAction({ run: { ...staleRun, updatedAt: "not-a-date" }, verdictPublished: false, now: afterCooldown }),
+    "WAIT",
+    "an undateable run waits rather than acting on evidence it cannot age",
+  );
+
+  // The regression itself: the old headSha-only decision said RERUN, which is
+  // precisely the action that cannot break the deadlock.
+  assert.equal(
+    claudeReviewRetryAction(staleRun, { now: afterCooldown }),
+    "RERUN",
+    "the legacy decision still returns RERUN for this shape - retained for the v1.4 suite, but no longer what the watcher acts on",
+  );
+  assert.notEqual(
+    claudeReviewAction({ run: staleRun, verdictPublished: false, now: afterCooldown }),
+    "RERUN",
+    "the verdict-aware decision must not choose RERUN for a run that published nothing",
+  );
 }
 
 console.log("ARCH-04 review dispatch checks: PASS");
