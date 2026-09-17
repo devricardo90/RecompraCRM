@@ -86,7 +86,7 @@ arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
-open_architecture_items: ARCH-03, ARCH-04
+open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
 next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
 next_action_authorized: true
 human_intermediate_approval_required: false
@@ -120,14 +120,16 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 TASK-12, TASK-13 and TASK-14 are completed and merged. Three of the
 seventeen `TASK-*` entries remain (TASK-15/16/17) — the "17" in TASK-17's
-`17/17 tasks verificadas` closure criterion counts tasks only. Two
-non-task architecture/governance items are also open, ARCH-03 and ARCH-04,
-outside that denominator. ARCH-04 is deliberately wired as a
-mechanical `depends_on` blocker on TASK-15 — not just a `decide_before` note
-in prose — because a bare STATE/HANDOFF mention is invisible to the
-deterministic resolver, which only models `TASK-*`/`ARCH-*` roadmap
-entries. Without that wiring the loop would silently select TASK-15 next
-and the owner-authorized review-trigger change would never get done.
+`17/17 tasks verificadas` closure criterion counts tasks only. `ARCH-04` is
+also open, and unlike `ARCH-03` it exists as a real `ROADMAP.md` entry with
+`depends_on` wired onto TASK-15: it is deliberately a mechanical blocker,
+not just a `decide_before` note in prose, because a bare STATE/HANDOFF
+mention (which is all `ARCH-03` has — it has no `ROADMAP.md` entry) is
+invisible to the deterministic resolver, which only models `TASK-*`/`ARCH-*`
+roadmap entries. Without that wiring the loop would silently select TASK-15
+next and the owner-authorized review-trigger change would never get done.
+`ARCH-03` remains exactly the untracked, resolver-invisible reference this
+paragraph is warning against — it is not fixed by this closure.
 
 ## Contracts TASK-14 leaves behind
 
