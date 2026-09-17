@@ -69,14 +69,16 @@ completed_tasks:
   - TASK-11
   - TASK-12
   - TASK-13
-last_completed_task: TASK-12
+  - TASK-14
+last_completed_task: TASK-14
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
-current_task_status: IMPLEMENTED_AWAITING_REVIEW
-next_eligible_task: TASK-14
-branch: feat/TASK-14-hardening
-pr_number: 34
+current_task_status: COMPLETED
+next_eligible_task: none
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is AUTHORIZED_NOT_YET_IMPLEMENTED; verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
+branch: main
+pr_number: none
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -118,7 +120,7 @@ arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 arch_02_schema_impact: none
 arch_02_migration_impact: none
-task_14_status: IMPLEMENTED_AWAITING_REVIEW
+task_14_status: COMPLETED
 task_14_spec: docs/specs/TASK-14.md
 task_14_baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
 task_14_spec_branch: docs/TASK-14-spec
@@ -126,10 +128,17 @@ task_14_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_14_implementation_branch: feat/TASK-14-hardening
 task_14_implementation_baseline: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
-task_14_implementation_pr: 34
+task_14_implementation_pr: 34 MERGED_SQUASH
+task_14_reviewed_head: b17c5b5a70ebf4a7965f670eef426ec17ef5c26b
+task_14_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+task_14_review_rounds: 2
+task_14_merge_main_head: c990654d32e2acda56faead8b28b1b8da33ce644
+task_14_main_ci_run: 35231964035
+task_14_main_ci_status: SUCCESS
 task_14_evidence: docs/evidence/TASK-14-validation.md
 task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
 task_14_guard: scripts/ui-hardening-check.mjs
+task_14_blocks_next: ARCH-04 must resolve before TASK-15 (mechanically enforced via ROADMAP.md depends_on)
 owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
@@ -249,9 +258,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: OPEN_PR_AND_AWAIT_CLAUDE_REVIEW
+next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
 next_action_authorized: true
-updated_at: "2026-09-17T01:00:00Z"
+updated_at: "2026-09-17T02:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)
 ```
 
@@ -297,14 +306,21 @@ and passed post-merge Validate #125. Its deterministic resolver evaluates the
 pending roadmap entries rather than trusting the persisted task pointer.
 ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked.
 TASK-12 and TASK-13 are both completed and merged. ARCH-02 is resolved by
-Option A. TASK-14's spec merged on PR #32; implementation is in progress on
-`feat/TASK-14-hardening`, with no implementation PR opened yet. Round detail
-lives in `docs/operations/LOOP-REGISTER.jsonl`, not in this narrative.
+Option A. TASK-14 is completed and merged: spec PR #32, implementation PR
+#34 (2 review rounds — round 1 caught embedded NUL bytes in the new guard
+script that made it undiffable, plus a dead assertion), clean Claude review
+on exact head `b17c5b5`, merged at `c990654` with post-merge Validate
+`35231964035` SUCCESS. Round detail lives in
+`docs/operations/LOOP-REGISTER.jsonl`, not in this narrative.
 
 OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`) was authorized by the owner on
-2026-09-17: after TASK-14 closes, the automatic per-push Claude review
-trigger is replaced with a controller-dispatched trigger fired once
-`READY_FOR_INDEPENDENT_REVIEW` is reached. The mandatory clean-exact-HEAD
+2026-09-17: now that TASK-14 has closed, the automatic per-push Claude
+review trigger is to be replaced with a controller-dispatched trigger fired
+once `READY_FOR_INDEPENDENT_REVIEW` is reached. The mandatory clean-exact-HEAD
 independent review before merge is unchanged and is not weakened by this
-decision. No prior record of this decision existed in this repository before
-this entry.
+decision. It is tracked as `ARCH-04` in `docs/roadmap/ROADMAP.md`, and
+TASK-15's `depends_on` names it, so the deterministic resolver reports
+`NO_ELIGIBLE_TASK` rather than silently selecting TASK-15 until it resolves —
+verified live against `scripts/rick-loop-roadmap.mjs` after TASK-14 was
+checked off. No prior record of this decision existed in this repository
+before this entry.

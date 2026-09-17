@@ -191,15 +191,20 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - local_validation: PASS
   - playwright: PASS_12_EPHEMERAL_RETRIES_0
   - done_when: alertas atualizam após vendas.
-- [ ] TASK-14 — Hardening do MVP
+- [x] TASK-14 — Hardening do MVP
   - depends_on: TASK-01..TASK-13
   - architecture_decision: ARCH-02 RESOLVED — Opção A, instante + fuso declarado com A3 isolada
-  - status: IMPLEMENTED_AWAITING_REVIEW
+  - status: COMPLETED
   - spec: docs/specs/TASK-14.md
   - spec_pr: 32 MERGED_SQUASH
   - spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
   - baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
   - implementation_branch: feat/TASK-14-hardening
+  - implementation_pr: 34 MERGED_SQUASH
+  - reviewed_head: b17c5b5a70ebf4a7965f670eef426ec17ef5c26b
+  - review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD (2 rounds; round 1 found embedded NUL bytes making the guard script undiffable, plus a dead assertion — both fixed)
+  - merge_main_head: c990654d32e2acda56faead8b28b1b8da33ce644
+  - main_ci: Validate 35231964035 SUCCESS
   - evidence: docs/evidence/TASK-14-validation.md
   - playwright: PASS_8_EPHEMERAL_RETRIES_0
   - done_when: erros, loading, empty states, acessibilidade e responsividade sem bloqueios.
