@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { hasVerdictForHead } from "./rick-loop-review-dispatch.mjs";
+import { fetchIssueComments, hasVerdictForHead } from "./rick-loop-review-dispatch.mjs";
 
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
 export const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
@@ -122,22 +122,33 @@ function dispatchClaudeReview(identity) {
     return { dispatched: true, report: raw ? JSON.parse(raw) : null };
   } catch (error) {
     // A blocked dispatch exits non-zero with its named blockers on stdout;
-    // that is a normal not-yet-ready state, not a watcher failure.
+    // that is a normal not-yet-ready state, not a watcher failure. A report
+    // whose own decision was to dispatch means the pre-checks passed and the
+    // `gh workflow run` call itself failed - a genuine dispatch error, which
+    // during the bootstrap window is the expected shape while
+    // claude-pr-review.yml still has no workflow_dispatch trigger. Labelling
+    // both the same would make rollout triage guess.
     const stdout = error?.stdout ? String(error.stdout).trim() : null;
     let report = null;
     try { report = stdout ? JSON.parse(stdout) : null; } catch { report = null; }
-    return { dispatched: false, reason: report ? "BLOCKED" : "ERROR", report, error: report ? null : String(error?.message ?? error) };
+    if (!report) return { dispatched: false, reason: "ERROR", report: null, error: String(error?.message ?? error) };
+    return { dispatched: false, reason: report.dispatch === true ? "DISPATCH_FAILED" : "BLOCKED", report, error: null };
   }
 }
 
 function fetchVerdictPublished(identity) {
   if (!identity?.pr || !identity?.head) return false;
   try {
-    const raw = sh("gh", ["api", `repos/{owner}/{repo}/issues/${identity.pr}/comments?per_page=100`]);
-    return hasVerdictForHead(raw ? JSON.parse(raw) : null, identity.head);
+    // Paged deliberately: issue comments come back oldest-first, so a single
+    // page would drop the newest ones - exactly where a verdict for the
+    // current HEAD lives on a long-running PR - and report "no verdict" for a
+    // HEAD that was actually reviewed.
+    return hasVerdictForHead(fetchIssueComments(identity.pr), identity.head);
   } catch {
     // Unknown verdict evidence: treat as "not published" so the loop keeps
-    // trying to obtain a review rather than assuming one exists.
+    // trying to obtain a review rather than assuming one exists. Bounded by
+    // the retry cooldown, so an API outage costs at most one extra review per
+    // window rather than stalling the head forever.
     return false;
   }
 }

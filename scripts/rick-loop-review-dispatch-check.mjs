@@ -351,4 +351,43 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
   );
 }
 
+// --- verdict evidence must be paged ------------------------------------
+//
+// GitHub returns issue comments oldest-first. A single unpaginated page drops
+// the newest ones on a long-lived PR - exactly where the verdict for the
+// current HEAD lives - so hasVerdictForHead would report "no verdict" for a
+// HEAD that was reviewed, and the loop would re-dispatch for nothing.
+
+{
+  const olderComments = Array.from({ length: 100 }, (_, i) => ({ body: `chatter ${i}` }));
+  const verdictOnPageTwo = [{ body: `Reviewed commit: ${HEAD}\nNo major issues found.` }];
+
+  assert.equal(
+    hasVerdictForHead(olderComments, HEAD),
+    false,
+    "page one alone carries no verdict in this shape - this is what the unpaginated fetch used to see",
+  );
+  assert.equal(
+    hasVerdictForHead([...olderComments, ...verdictOnPageTwo], HEAD),
+    true,
+    "the verdict is only visible once every page is walked",
+  );
+
+  // And the dispatch decision must flip accordingly: truncated evidence would
+  // re-dispatch a HEAD that already has a verdict.
+  const completedRun = [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "2026-09-17T12:00:00Z" }];
+  const afterCooldown = new Date(Date.parse("2026-09-17T12:00:00Z") + REDISPATCH_COOLDOWN_MS + 1000);
+
+  assert.equal(
+    evaluateDispatch({ pr: okPr(), ci: okCi(), preflight: passingPreflight, existingRuns: completedRun, comments: olderComments, now: afterCooldown }).dispatch,
+    true,
+    "with the verdict truncated away, the decision wrongly re-dispatches",
+  );
+  assert.equal(
+    evaluateDispatch({ pr: okPr(), ci: okCi(), preflight: passingPreflight, existingRuns: completedRun, comments: [...olderComments, ...verdictOnPageTwo], now: afterCooldown }).dispatch,
+    false,
+    "with the full comment list, the already-reviewed HEAD is left alone",
+  );
+}
+
 console.log("ARCH-04 review dispatch checks: PASS");

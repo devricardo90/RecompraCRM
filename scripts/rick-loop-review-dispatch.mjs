@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
+import { collectPagedList, REST_PAGE_SIZE } from "./rick-loop-controller.mjs";
 import { collectPreflightInputs, evaluatePreflight } from "./rick-loop-preflight.mjs";
 
 /**
@@ -214,6 +215,22 @@ function fetchReviewRuns(branch, repo) {
   );
 }
 
+/**
+ * GitHub returns issue comments oldest-first, so a single unpaginated page
+ * silently drops the newest ones - exactly where a verdict for the current
+ * HEAD lives on a long-running PR. Missing it would report "no verdict" for a
+ * HEAD that was in fact reviewed and re-dispatch for nothing, which is the
+ * wasted invocation this task exists to remove. collectPagedList is the same
+ * primitive the merge gate already uses for this endpoint, and it returns null
+ * rather than a partial list when a walk cannot be completed.
+ */
+export function fetchIssueComments(prNumber, { repo = null } = {}) {
+  const repoPath = repo ?? "{owner}/{repo}";
+  return collectPagedList((page) =>
+    parseJson(sh("gh", ["api", `repos/${repoPath}/issues/${prNumber}/comments?per_page=${REST_PAGE_SIZE}&page=${page}`])),
+  );
+}
+
 function main() {
   const [, , prNumberRaw, ...rest] = process.argv;
   if (!prNumberRaw) {
@@ -228,7 +245,7 @@ function main() {
   const pr = inputs.pr;
   const ci = pr ? fetchCiForHead(pr.headRefName, pr.headRefOid, null) : null;
   const existingRuns = pr ? fetchReviewRuns(pr.headRefName, null) : null;
-  const comments = parseJson(sh("gh", ["api", `repos/{owner}/{repo}/issues/${prNumber}/comments?per_page=100`]));
+  const comments = fetchIssueComments(prNumber);
 
   const decision = evaluateDispatch({ pr, ci, preflight, existingRuns, comments });
   const report = {
