@@ -9,7 +9,7 @@ import {
   hasVerdictForHead,
   REDISPATCH_COOLDOWN_MS,
 } from "./rick-loop-review-dispatch.mjs";
-import { claudeReviewAction, claudeReviewRetryAction } from "./rick-loop-watcher.mjs";
+import { claudeReviewAction, claudeReviewRetryAction, classifyDispatchOutcome } from "./rick-loop-watcher.mjs";
 
 /**
  * ARCH-04 deterministic gate. No network: every case is synthetic, so this
@@ -388,6 +388,26 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
     false,
     "with the full comment list, the already-reviewed HEAD is left alone",
   );
+}
+
+// --- dispatch outcome diagnostics ---------------------------------------
+//
+// BLOCKED and DISPATCH_FAILED exit the same way but mean opposite things
+// during rollout, and inverting them would send triage the wrong direction
+// with nothing in CI to notice.
+
+{
+  assert.equal(
+    classifyDispatchOutcome({ dispatch: false, blockers: ["ci_not_green"] }),
+    "BLOCKED",
+    "the dispatcher's own pre-checks refusing is a normal not-yet-ready state",
+  );
+  assert.equal(
+    classifyDispatchOutcome({ dispatch: true, dispatched: false }),
+    "DISPATCH_FAILED",
+    "pre-checks passed and the gh workflow run call itself failed - the expected bootstrap-window shape, not a block",
+  );
+  assert.equal(classifyDispatchOutcome(null), "ERROR", "unparseable output is neither blocked nor failed-to-dispatch");
 }
 
 console.log("ARCH-04 review dispatch checks: PASS");

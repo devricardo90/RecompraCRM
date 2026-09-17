@@ -110,6 +110,20 @@ function clearWait() {
   try { sh(process.execPath, ["scripts/rick-loop-controller.mjs", "wait", "clear"]); } catch { /* no active runtime wait */ }
 }
 
+/**
+ * A blocked dispatch and a failed one exit non-zero alike, but they mean
+ * opposite things during rollout: BLOCKED is the dispatcher's own pre-checks
+ * refusing (normal, not yet ready), while DISPATCH_FAILED means the
+ * pre-checks passed and the `gh workflow run` call itself failed - the
+ * expected shape while claude-pr-review.yml still has no workflow_dispatch
+ * trigger. Exported so the distinction is pinned by a test rather than only
+ * by the code that happens to read it.
+ */
+export function classifyDispatchOutcome(report) {
+  if (!report) return "ERROR";
+  return report.dispatch === true ? "DISPATCH_FAILED" : "BLOCKED";
+}
+
 // ARCH-04: no run exists for this HEAD because a push no longer triggers one.
 // The controller owns dispatch now, so NO_RUN is the watcher's cue to act
 // rather than to keep observing. The dispatcher re-verifies CI and preflight
@@ -122,17 +136,13 @@ function dispatchClaudeReview(identity) {
     return { dispatched: true, report: raw ? JSON.parse(raw) : null };
   } catch (error) {
     // A blocked dispatch exits non-zero with its named blockers on stdout;
-    // that is a normal not-yet-ready state, not a watcher failure. A report
-    // whose own decision was to dispatch means the pre-checks passed and the
-    // `gh workflow run` call itself failed - a genuine dispatch error, which
-    // during the bootstrap window is the expected shape while
-    // claude-pr-review.yml still has no workflow_dispatch trigger. Labelling
-    // both the same would make rollout triage guess.
+    // that is a normal not-yet-ready state, not a watcher failure.
     const stdout = error?.stdout ? String(error.stdout).trim() : null;
     let report = null;
     try { report = stdout ? JSON.parse(stdout) : null; } catch { report = null; }
-    if (!report) return { dispatched: false, reason: "ERROR", report: null, error: String(error?.message ?? error) };
-    return { dispatched: false, reason: report.dispatch === true ? "DISPATCH_FAILED" : "BLOCKED", report, error: null };
+    const reason = classifyDispatchOutcome(report);
+    if (reason === "ERROR") return { dispatched: false, reason, report: null, error: String(error?.message ?? error) };
+    return { dispatched: false, reason, report, error: null };
   }
 }
 
