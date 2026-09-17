@@ -75,10 +75,10 @@ Fora do escopo:
 - Reescrever o prompt de revisão do Claude além do necessário para resolver
   PR/HEAD pelo trigger correto.
 - `STATE_POINTER_CONSISTENCY`, `BASELINE_POINTER_CONSISTENCY`, integridade do
-  LOOP-REGISTER e as métricas de uso de revisão citadas no
-  `owner_decision_02_includes` fora do que o preflight determinístico já
-  cobre mecanicamente (ver "Riscos conhecidos" — o restante fica para um
-  item de acompanhamento, não bloqueia este).
+  LOOP-REGISTER, semântica `current_task`/`next_eligible_task`,
+  reconciliação remote-first e métricas de uso de revisão além do que o
+  preflight determinístico cobre mecanicamente — rastreados como `ARCH-05`,
+  não bloqueante (ver "Não escopo").
 
 ## Auditoria da baseline
 
@@ -154,17 +154,38 @@ nunca como passagem silenciosa — mesmo padrão *fail-closed* que
 
 Dado um número de PR:
 
-1. Resolve `headRefOid` exato via `gh pr view <n> --json headRefOid,baseRefName,isDraft,mergeable,state`.
+1. Resolve `headRefOid`/`headRefName` exatos via `gh pr view <n> --json
+   headRefOid,headRefName,baseRefName,isDraft,mergeable,state`.
 2. Exige CI (`Validate`) `completed`/`success` para esse HEAD exato
    (mesma consulta que `ciForSha` já faz).
 3. Exige `rick-loop-preflight.mjs` `pass: true`.
-4. Verifica idempotência: `gh run list --workflow claude-pr-review.yml
-   --branch <branch> --json databaseId,headSha,status,conclusion` — se já
+4. Checagem barata de idempotência (não é a garantia de corretude — ver
+   abaixo): `gh run list --workflow claude-pr-review.yml --branch
+   <headRefName> --json databaseId,headSha,status,conclusion` — se já
    existe **qualquer** execução para esse HEAD exato (`status` for o que
-   for), não dispara de novo. Retry de uma execução existente continua
-   sendo `retryClaudeReview` (inalterado), não este script.
-5. Se todas as condições passarem, dispara
-   `gh workflow run claude-pr-review.yml -f pr_number=<n> -f expected_head_sha=<sha>`.
+   for), não dispara de novo. Como `gh workflow run` é assíncrono (não
+   retorna o id da execução criada) e essa leitura pode não enxergar uma
+   execução que acabou de ser disparada por outro ciclo, esta checagem
+   evita a maioria dos disparos redundantes mas **não** é, sozinha,
+   suficiente para garantir exatamente uma execução — quem garante isso é
+   o grupo de concorrência do workflow (`claude-pr-review-<pr>-<head>`,
+   `cancel-in-progress: true`): se dois disparos para o mesmo HEAD
+   passarem por esta checagem antes de qualquer um aparecer em `gh run
+   list`, os dois são enfileirados, mas apenas o último a entrar no mesmo
+   grupo chega a **completar** — o anterior é cancelado pelo próprio
+   GitHub. AC6 é sobre isso: nunca duas execuções *completam* para o mesmo
+   HEAD, não que uma segunda nunca chegue a ser enfileirada.
+5. Se as condições 1–4 passarem, dispara `gh workflow run
+   claude-pr-review.yml --ref <headRefName> -f pr_number=<n> -f
+   expected_head_sha=<sha>`. `--ref` é obrigatório: sem ele, `gh workflow
+   run` executa contra o branch padrão do repositório (confirmado via `gh
+   workflow run --help`), a execução resultante fica gravada com
+   `head_branch=main`, e nem a checagem de idempotência do passo 4 nem o
+   `retryClaudeReview`/`selectClaudeReviewRun` existente (que filtra por
+   `--branch <branch>` e casa `headSha`) jamais a encontram — o watcher
+   dispara de novo a cada ciclo, sem fim. Retry de uma execução existente
+   que falhou continua sendo `retryClaudeReview` (inalterado), não este
+   script.
 
 Cada condição não satisfeita é reportada por nome (`ci_not_green`,
 `preflight_failed`, `already_dispatched`, `pr_not_open`, `draft`,
@@ -174,26 +195,72 @@ o log precisam saber qual passo bloqueou sem adivinhar.
 ### `.github/workflows/claude-pr-review.yml`
 
 `on:` ganha `workflow_dispatch` com `inputs.pr_number` e
-`inputs.expected_head_sha`, ambos `required: true`. O job resolve três
-valores no topo (`pr_number`, `head_sha`, `head_repo_full_name`) a partir de
-`github.event_name`: de `github.event.pull_request.*` quando disparado por
-`pull_request`, de `inputs.*` mais um `gh pr view` para o repositório do
-HEAD quando disparado por `workflow_dispatch`. O restante do job (checkout,
-prompt, `claude_args` incluindo `--max-turns 50`) usa esses valores
-resolvidos em vez de `github.event.pull_request.*` diretamente, para que o
-prompt continue citando `PR NUMBER`/`EXACT HEAD` corretos nos dois casos.
+`inputs.expected_head_sha`, ambos `required: true`.
+
+**Guarda do job.** O `if:` atual do job (`github.event.pull_request.draft ==
+false && github.event.pull_request.head.repo.full_name == github.repository`)
+depende de campos que não existem no payload de um evento
+`workflow_dispatch`, então precisa virar um `if:` que ramifica por
+`github.event_name`: para `pull_request`, a checagem de draft/fork
+permanece igual; para `workflow_dispatch`, o job roda incondicionalmente e a
+checagem de draft/fork/estado é feita **dentro** do job (próximo item),
+porque só aí existe um `gh pr view` para consultar.
+
+**Resolução e revalidação do HEAD.** Um passo novo, antes do checkout,
+resolve `pr_number`/`expected_head` de `github.event.pull_request.*` (evento
+`pull_request`) ou de `inputs.*` (evento `workflow_dispatch`), e então roda
+`gh pr view <pr_number>` para conferir, contra o estado **atual** do PR no
+GitHub — não contra o que foi resolvido no passo anterior — que: o PR está
+`OPEN`, não é draft, não é de um fork (repositório do HEAD igual ao do
+destino), e `headRefOid` ainda é exatamente o HEAD esperado. Isso cobre dois
+casos que o design original não cobria: o guard de job re-implementado para
+`workflow_dispatch`, e a corrida em que um push novo chega entre o
+dispatcher resolver o HEAD e o job realmente começar a rodar (o
+`workflow_dispatch` é enfileirado, não instantâneo). Se qualquer checagem
+falhar, o job termina sem fazer checkout nem publicar comentário nenhum —
+um HEAD que já mudou não deve gerar um veredito sobre o commit errado, e o
+watcher vai disparar de novo para o HEAD novo no próximo ciclo. Os passos de
+checkout e revisão usam o HEAD revalidado, não o valor bruto do evento ou
+do input.
+
+O restante do job (checkout, prompt, `claude_args` incluindo
+`--max-turns 50`) usa os valores resolvidos/revalidados em vez de
+`github.event.pull_request.*` diretamente, para que o prompt continue
+citando `PR NUMBER`/`EXACT HEAD` corretos nos dois casos.
+
+**Grupo de concorrência.** `concurrency.group` passa de
+`claude-pr-review-${{ github.event.pull_request.number }}` (só o número do
+PR) para `claude-pr-review-<pr_number>-<head>` (PR **e** HEAD). Isso é o
+que de fato impede duas execuções para o **mesmo** HEAD de completarem as
+duas — `cancel-in-progress: true` cancela a que estava enfileirada/rodando
+assim que uma segunda é enfileirada no mesmo grupo — sem impedir que uma
+revisão de um HEAD anterior (grupo diferente) continue quando o HEAD muda,
+que é o comportamento que já existe hoje e não deve mudar.
 
 O gatilho `pull_request` **permanece presente** durante a PR 1 (ver
 sequência de bootstrap) e só é removido na PR 2, depois que o caminho novo
 estiver provado.
 
+**Por que isso preserva `retryClaudeReview` inalterado.** Uma vez que o
+disparo usa `-r/--ref <branch-do-PR>` (ver dispatcher, abaixo), GitHub
+grava a execução com `head_branch = <branch-do-PR>` e `head_sha` = a ponta
+dessa branch no momento do disparo — os mesmos dois campos que
+`gh run list --branch <branch>` e `selectClaudeReviewRun` (`headSha ===
+head`) já usam hoje para casar uma execução com o PR/HEAD certos
+(`rick-loop-watcher.mjs:20-23`). Sem `--ref`, a execução ficaria gravada
+contra o branch padrão (`main`) e nunca seria encontrada por essa consulta
+— era esse o defeito na primeira versão deste spec.
+
 ### `rick-loop-watcher.mjs`
 
 `retryClaudeReview` (ou uma função irmã) passa a tratar
 `action === "NO_RUN"`: em vez de devolver o resultado sem agir, chama
-`rick-loop-review-dispatch.mjs` para a PR/HEAD identificados. O dispatcher é
-idempotente por construção (passo 4 acima), então chamá-lo em todo ciclo do
-watcher enquanto não houver execução é seguro — não duplica disparo.
+`rick-loop-review-dispatch.mjs` para a PR/HEAD identificados. Chamá-lo em
+todo ciclo do watcher enquanto não houver execução visível é seguro — a
+checagem barata do dispatcher evita a maioria dos disparos repetidos, e o
+grupo de concorrência do workflow garante que mesmo uma corrida entre
+ciclos nunca resulta em duas execuções completas para o mesmo HEAD (ver
+"Grupo de concorrência" acima).
 
 ### Sequência de bootstrap (Requisito 9 do owner)
 
@@ -253,8 +320,12 @@ vivo exigido pelo owner (AC10).
    duplica, e o caminho de retry existente (`RERUN`, cooldown de uma hora)
    continua responsável por tentar de novo.
 5. Dois ciclos do watcher rodam perto um do outro para o mesmo HEAD → o
-   segundo vê a execução que o primeiro acabou de criar e não dispara de
-   novo (idempotência é uma leitura do GitHub, não um lock local).
+   caso comum é o segundo ver a execução que o primeiro acabou de criar e
+   não disparar de novo; no caso raro em que os dois disparam antes de
+   qualquer um aparecer em `gh run list`, o grupo de concorrência do
+   workflow cancela o que entrou primeiro e só o último completa — em
+   nenhum dos dois casos duas execuções chegam a completar para o mesmo
+   HEAD.
 6. Preflight falha (por exemplo `LOOP-REGISTER.jsonl` com uma linha
    inválida) → nenhum disparo; a falha é reportada por nome e o loop trata
    como `RECOVERABLE_FAILURE`, igual a uma falha de CI.
@@ -280,27 +351,40 @@ claude-pr-review.yml` antes e depois do push.
 ## Critérios de aceite
 
 AC1. `.github/workflows/claude-pr-review.yml` ganha `workflow_dispatch` com
-`pr_number` e `expected_head_sha` obrigatórios, resolvendo PR/HEAD/repo do
-evento correto (`pull_request` ou `workflow_dispatch`) sem duplicar lógica.
+`pr_number` e `expected_head_sha` obrigatórios; o `if:` do job roda
+incondicionalmente para `workflow_dispatch` (os campos de draft/fork não
+existem nesse evento) e mantém a checagem original para `pull_request`; um
+passo dentro do job revalida — contra o estado atual do PR no GitHub, não
+contra o valor resolvido do evento — que o PR está aberto, não é draft, não
+é de um fork, e que `headRefOid` ainda é exatamente o HEAD esperado antes
+de fazer checkout ou invocar o Claude.
 
 AC2. `scripts/rick-loop-preflight.mjs` existe e falha fechado: qualquer
 checagem não avaliável conta como reprovação, nunca como aprovação
 silenciosa.
 
 AC3. `scripts/rick-loop-review-dispatch.mjs` só dispara quando CI está
-verde no HEAD exato, o preflight passa, e nenhuma execução já existe para
-esse HEAD; cada bloqueio é nomeado.
+verde no HEAD exato, o preflight passa, e a checagem barata de
+idempotência não encontra execução para esse HEAD; cada bloqueio é
+nomeado; o disparo usa `--ref <branch-do-PR>` (sem isso a execução fica
+gravada contra o branch padrão e nunca é encontrada por essa mesma
+checagem nem pelo `retryClaudeReview` existente).
 
 AC4. `rick-loop-watcher.mjs` chama o dispatcher quando observa
 `WAIT_FOR_CODEX`/`WAIT_FOR_INDEPENDENT_REVIEW` sem execução existente
-(`NO_RUN`), preservando o caminho de retry existente (`RERUN`) inalterado.
+(`NO_RUN`), preservando o caminho de retry existente (`RERUN`,
+`selectClaudeReviewRun` casando por `branch`+`headSha`) inalterado — o que
+só continua funcionando porque AC3 exige `--ref`.
 
 AC5. Nenhuma função do gate de merge
 (`evaluateMergeAllowed`/`isCleanReviewResult`/`countUnresolvedFindings`/
 `selectMergeResult`/`buildAnchoredResults`) é alterada.
 
-AC6. O disparo é idempotente: chamadas repetidas para o mesmo HEAD nunca
-criam uma segunda execução.
+AC6. Nunca duas execuções completam para o mesmo HEAD: a checagem barata do
+dispatcher evita a maioria dos disparos redundantes, e o grupo de
+concorrência do workflow (`claude-pr-review-<pr>-<head>`,
+`cancel-in-progress: true`) garante que, mesmo que duas sejam enfileiradas
+por uma corrida, só a última a entrar no grupo chega a completar.
 
 AC7. `--max-turns 50` e o contrato de texto do comentário de revisão
 permanecem exatamente como estão.
@@ -346,13 +430,27 @@ no HEAD exato de cada PR. `db:*` não se aplica (nenhuma mudança de schema).
 
 ## Não escopo
 
-`STATE_POINTER_CONSISTENCY`/`BASELINE_POINTER_CONSISTENCY` além do que o
-preflight cobre mecanicamente, métricas de uso de revisão como painel ou
-relatório, `current_task` vs `next_eligible_task` além da semântica que já
-existe em `resolveEffectiveTask`, remote-first reconciliation como
-mecanismo novo (o controller já lê tudo do GitHub a cada ciclo). Cada um
-fica como item de acompanhamento se surgir evidência de que é necessário —
-não é assumido aqui.
+`owner_decision_02_includes` lista oito itens; este spec implementa os dois
+que o mecanismo de disparo em si exige (`decide_before resolver gate`, já
+fechado nas PRs #33/#35 via `depends_on`; `checagens mecânicas antes da
+revisão por LLM`, aqui via `rick-loop-preflight.mjs`). Os outros seis —
+`STATE_POINTER_CONSISTENCY` e `BASELINE_POINTER_CONSISTENCY` além do que o
+preflight cobre, integridade completa do LOOP-REGISTER, semântica de
+`current_task` vs `next_eligible_task` além do que `resolveEffectiveTask`
+já faz, reconciliação remote-first como mecanismo novo, e métricas de uso
+de revisão — ficam **fora** deste spec, mas não caem silenciosamente: a
+revisão da primeira versão deste documento apontou corretamente que excluí-
+los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 fechando só uma
+fração do que foi autorizado. `ARCH-04` continua cobrindo somente o
+mecanismo de disparo — é só essa fração que bloqueia `TASK-15` via
+`depends_on`, porque é só essa fração que o owner descreveu com uma
+arquitetura exata e uma sequência obrigatória. Os seis itens restantes
+passam a ter uma entrada própria, `ARCH-05`, adicionada a
+`docs/roadmap/ROADMAP.md` nesta mesma spec — rastreada, com escopo listado,
+mas **não bloqueante** (`blocking: false`, sem `depends_on` de nenhuma
+task), porque o owner não forneceu uma arquitetura exata para eles e
+bloquear TASK-15 com um item ainda não especificado contradiria a instrução
+explícita de continuar TASK-15/16/17 depois que ARCH-04 fechar.
 
 ## Riscos conhecidos
 
@@ -364,16 +462,20 @@ não é assumido aqui.
   (Requisito 9), não um defeito a esconder.
 - **`gh workflow run` é assíncrono**: não retorna o `databaseId` da
   execução criada; o dispatcher não pode confirmar imediatamente que o
-  disparo "pegou". A idempotência do próximo ciclo do watcher (que relê
-  `gh run list`) é o que evita um disparo duplicado se a execução ainda não
-  aparecer na primeira checagem — não uma resposta síncrona do comando de
-  disparo.
+  disparo "pegou". Isso é exatamente por que a checagem de idempotência do
+  passo 4 do dispatcher é só uma otimização barata, não a garantia: quem
+  garante que no máximo uma execução *completa* por HEAD é o grupo de
+  concorrência do workflow (`claude-pr-review-<pr>-<head>`,
+  `cancel-in-progress: true`), que não depende de nenhuma leitura
+  assíncrona para funcionar.
 
 ## Assumptions explícitas
 
-- **A1**: `gh workflow run` com `-f` preenche `inputs.*` corretamente para
-  um workflow no branch padrão do repositório (comportamento padrão da
-  CLI, não configuração adicional).
+- **A1**: `gh workflow run` com `--ref <branch-do-PR> -f ...` preenche
+  `inputs.*` corretamente e grava a execução com `head_branch`/`head_sha`
+  da ponta dessa branch (comportamento padrão da CLI, não configuração
+  adicional) — sem `--ref` cairia no branch padrão, que é exatamente o
+  defeito corrigido nesta versão do spec.
 - **A2**: o token usado pelo controller/watcher (o mesmo `gh` já autenticado
   usado em todo o resto do loop) tem permissão de `actions: write` para
   disparar `workflow_dispatch` — se não tiver, isso aparece como uma falha
