@@ -118,9 +118,11 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Why the loop is stopped here, not at TASK-15
 
-TASK-12, TASK-13 and TASK-14 are completed and merged. Five of seventeen
-roadmap entries remain (TASK-15/16/17, plus ARCH-03 and ARCH-04, both
-non-task architecture/governance items). ARCH-04 is deliberately wired as a
+TASK-12, TASK-13 and TASK-14 are completed and merged. Three of the
+seventeen `TASK-*` entries remain (TASK-15/16/17) — the "17" in TASK-17's
+`17/17 tasks verificadas` closure criterion counts tasks only. Two
+non-task architecture/governance items are also open, ARCH-03 and ARCH-04,
+outside that denominator. ARCH-04 is deliberately wired as a
 mechanical `depends_on` blocker on TASK-15 — not just a `decide_before` note
 in prose — because a bare STATE/HANDOFF mention is invisible to the
 deterministic resolver, which only models `TASK-*`/`ARCH-*` roadmap
