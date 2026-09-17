@@ -12,7 +12,7 @@ current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_IN_REVIEW (not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
 current_branch: feat/ARCH-04-review-dispatch
-current_pr: pending_open
+current_pr: 37
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
