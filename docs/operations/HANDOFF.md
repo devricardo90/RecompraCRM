@@ -2,16 +2,23 @@
 
 ```yaml
 schema_version: "1.1"
-run_id: RCRM-MVP01-RUN-007
-loop_id: RCRM-V132-POST-MERGE-RECONCILIATION
-status: TASK_14_SPEC_IN_REVIEW
+run_id: RCRM-MVP01-RUN-013
+loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
+status: TASK_14_IMPLEMENTING
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
-current_task_status: SPEC_IN_REVIEW
+current_task_status: IMPLEMENTING
 next_eligible_task: TASK-14
-current_branch: docs/TASK-14-spec
-current_pr: 32
+current_branch: feat/TASK-14-hardening
+current_pr: none
+task_14_spec_pr: 32 MERGED_SQUASH
+task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
+owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
+owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
+owner_decision_02_decided_at: "2026-09-17"
+owner_decision_02_scope: remove the automatic per-push Claude review dispatch; controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW; the mandatory clean-exact-HEAD review before merge is unchanged
+owner_decision_02_next_action: SPEC_AFTER_TASK_14_CLOSES
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
 loop_upgrade_reviewed_head: 9ad5e1c855672de55604484e113d98872474d7a3
@@ -70,10 +77,11 @@ open_architecture_items: ARCH-03
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
-task_14_status: SPEC_IN_REVIEW
+task_14_status: SPEC_MERGED_IMPLEMENTING
 task_14_spec: docs/specs/TASK-14.md
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
-next_action: REVIEW_TASK_14_SPEC
+task_14_implementation_branch: feat/TASK-14-hardening
+next_action: IMPLEMENT_TASK_14
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -83,7 +91,9 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 1. Confirm `main` contains TASK-12 at `6a8b12d043bae15450e4da44184c2c1d5c355597` and post-merge Validate `32882137795` is SUCCESS.
 2. TASK-12 is completed and merged: spec PR #25, implementation PR #29, clean Claude review on exact head `43bd46c`.
-3. The deterministic resolver selects TASK-14. Its spec exists at `docs/specs/TASK-14.md` and is in review; no TASK-14 implementation has been started.
+3. The deterministic resolver selects TASK-14. Its spec merged on PR #32
+   (`ffdf8f9`); implementation is in progress on `feat/TASK-14-hardening`,
+   with no implementation PR opened yet.
 4. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per sale item. It binds nothing in TASK-14.
 5. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
 
@@ -97,8 +107,9 @@ Four of seventeen roadmap entries remain.
 
 ## Contracts TASK-14 inherits
 
-TASK-14 is specified. `docs/specs/TASK-14.md` is the contract to read before any
-write; it is in review and no implementation has started.
+TASK-14 is specified and its spec merged on PR #32. `docs/specs/TASK-14.md`
+is the contract to read before any write; implementation is in progress on
+`feat/TASK-14-hardening`.
 
 It inherits the TASK-12 nullable-phone contract (AC21): a customer without a
 phone is content rendered with a placeholder, never an empty state. ARCH-02 is
@@ -107,3 +118,14 @@ reopen it. ARCH-03 is open, non-blocking, and authorises no refactor here.
 
 The contracts TASK-13 inherited are history and live with that task, in
 `docs/specs/TASK-13.md` and `docs/evidence/TASK-13-validation.md`.
+
+## OWNER-02 — REVIEW_TRIGGER_ECONOMICS (queued, non-blocking for TASK-14)
+
+Authorized by the owner on 2026-09-17, recorded fresh with no prior repository
+trace claimed or invented. Scope: remove the automatic per-push Claude review
+dispatch and have the loop controller dispatch one independent review
+deterministically once `READY_FOR_INDEPENDENT_REVIEW`. The mandatory
+clean-exact-HEAD independent review before merge, and the FINDINGS → fix →
+push → CI/validation/preflight → new review cycle, are unchanged. This does
+not block or modify TASK-14; it is specified and implemented as its own task
+only after TASK-14 closes.
