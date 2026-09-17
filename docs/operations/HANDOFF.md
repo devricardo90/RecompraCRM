@@ -94,7 +94,9 @@ arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
 arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
 arch_04_impl_branch: feat/ARCH-04-review-dispatch
-arch_04_impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
+arch_04_impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
+arch_04_blocker: CLAUDE_CODE_ACTION_WORKFLOW_VALIDATION_BLOCKS_REVIEW_OF_ITS_OWN_WORKFLOW_FILE
+arch_04_blocker_owner_decision_required: true
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

@@ -269,7 +269,10 @@ arch_04_spec_review_rounds: 6
 arch_04_spec_main_ci_run: 35257845976
 arch_04_spec_main_ci_status: SUCCESS
 arch_04_impl_branch: feat/ARCH-04-review-dispatch
-arch_04_impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
+arch_04_impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
+arch_04_blocker: CLAUDE_CODE_ACTION_WORKFLOW_VALIDATION_BLOCKS_REVIEW_OF_ITS_OWN_WORKFLOW_FILE
+arch_04_blocker_evidence: run 35258611604 skipped with a green check and no verdict; precedent in PRs 27 and 28
+arch_04_blocker_owner_decision_required: true
 next_action_authorized: true
 updated_at: "2026-09-17T02:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)

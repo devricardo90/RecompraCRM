@@ -3,38 +3,16 @@ name: Claude PR Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-  # ARCH-04: the controller/watcher dispatches the review deterministically
-  # once CI, authoritative validation and the preflight have passed for the
-  # exact HEAD. The pull_request trigger above stays until ARCH-04's PR 2
-  # proves this path operational (spec requirement 9).
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: PR number to review
-        required: true
-        type: string
-      expected_head_sha:
-        description: Exact HEAD the dispatcher resolved for that PR
-        required: true
-        type: string
 
-# A workflow-level concurrency: block is evaluated at trigger time and can only
-# read github/inputs/vars - never a value computed inside the job. Without the
-# inputs.pr_number fallback every workflow_dispatch run would share one
-# empty-suffix group and cancel unrelated PRs' reviews.
 concurrency:
-  group: claude-pr-review-${{ github.event.pull_request.number || inputs.pr_number }}
+  group: claude-pr-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   review:
-    # draft/head-repo live on the pull_request payload only, so a
-    # workflow_dispatch run would be skipped outright by the original guard.
-    # It runs unconditionally here and re-checks those facts inside the job.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.draft == false &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -44,59 +22,20 @@ jobs:
       id-token: write
 
     steps:
-      - name: Resolve PR and expected HEAD
-        id: resolve
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "pr_number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "expected_head=${{ inputs.expected_head_sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "expected_head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Checked against the PR's live state, not the dispatch payload: a push
-      # can land between the dispatcher resolving the HEAD and this job
-      # starting, and reviewing the superseded commit would spend exactly the
-      # review this change exists to save.
-      - name: Verify PR is open, non-draft, same-repo and still at the expected HEAD
-        id: verify
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          DATA=$(gh pr view "${{ steps.resolve.outputs.pr_number }}" \
-            --repo "${{ github.repository }}" \
-            --json state,isDraft,headRefOid,headRepositoryOwner,isCrossRepository)
-          ACTUAL_HEAD=$(echo "$DATA" | jq -r .headRefOid)
-          STATE=$(echo "$DATA" | jq -r .state)
-          DRAFT=$(echo "$DATA" | jq -r .isDraft)
-          CROSS_REPO=$(echo "$DATA" | jq -r .isCrossRepository)
-          EXPECTED="${{ steps.resolve.outputs.expected_head }}"
-          echo "state=$STATE draft=$DRAFT cross_repo=$CROSS_REPO expected=$EXPECTED actual=$ACTUAL_HEAD"
-          if [ "$STATE" != "OPEN" ] || [ "$DRAFT" != "false" ] || [ "$CROSS_REPO" != "false" ] || [ "$ACTUAL_HEAD" != "$EXPECTED" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Skipping review: PR is not an open, non-draft, same-repo PR still at the expected HEAD."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout exact PR head
-        if: steps.verify.outputs.skip != 'true'
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.resolve.outputs.expected_head }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
       - name: Independent Claude review
-        if: steps.verify.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ steps.resolve.outputs.pr_number }}
-            EXACT HEAD: ${{ steps.resolve.outputs.expected_head }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            EXACT HEAD: ${{ github.event.pull_request.head.sha }}
 
             You are the independent code reviewer for Rick Loop. This is READ-ONLY review work.
             Do not edit files, commit, push, merge, or modify the implementation.
@@ -120,13 +59,13 @@ jobs:
             If and only if there are ZERO actionable findings of any severity and ZERO inline
             findings created by this review, the top-level comment MUST begin exactly:
 
-            Reviewed commit: ${{ steps.resolve.outputs.expected_head }}
+            Reviewed commit: ${{ github.event.pull_request.head.sha }}
             No major issues found.
             Review provider: Claude Code Action
 
             If there is ANY actionable finding, the top-level comment MUST instead begin:
 
-            Reviewed commit: ${{ steps.resolve.outputs.expected_head }}
+            Reviewed commit: ${{ github.event.pull_request.head.sha }}
             Review result: FINDINGS
             Review provider: Claude Code Action
 
