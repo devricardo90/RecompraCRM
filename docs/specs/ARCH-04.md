@@ -168,13 +168,14 @@ Dado um número de PR:
    execução que acabou de ser disparada por outro ciclo, esta checagem
    evita a maioria dos disparos redundantes mas **não** é, sozinha,
    suficiente para garantir exatamente uma execução — quem garante isso é
-   o grupo de concorrência do workflow (`claude-pr-review-<pr>-<head>`,
-   `cancel-in-progress: true`): se dois disparos para o mesmo HEAD
-   passarem por esta checagem antes de qualquer um aparecer em `gh run
-   list`, os dois são enfileirados, mas apenas o último a entrar no mesmo
-   grupo chega a **completar** — o anterior é cancelado pelo próprio
-   GitHub. AC6 é sobre isso: nunca duas execuções *completam* para o mesmo
-   HEAD, não que uma segunda nunca chegue a ser enfileirada.
+   o grupo de concorrência do workflow, inalterado desde hoje
+   (`claude-pr-review-<pr_number>`, `cancel-in-progress: true`): se dois
+   disparos para o mesmo HEAD passarem por esta checagem antes de qualquer
+   um aparecer em `gh run list`, os dois são enfileirados no mesmo grupo
+   (mesma PR), mas apenas o último chega a **completar** — o anterior é
+   cancelado pelo próprio GitHub. AC6 é sobre isso: nunca duas execuções
+   *completam* para o mesmo HEAD, não que uma segunda nunca chegue a ser
+   enfileirada.
 5. Se as condições 1–4 passarem, dispara `gh workflow run
    claude-pr-review.yml --ref <headRefName> -f pr_number=<n> -f
    expected_head_sha=<sha>`. `--ref` é obrigatório: sem ele, `gh workflow
@@ -228,14 +229,30 @@ O restante do job (checkout, prompt, `claude_args` incluindo
 `github.event.pull_request.*` diretamente, para que o prompt continue
 citando `PR NUMBER`/`EXACT HEAD` corretos nos dois casos.
 
-**Grupo de concorrência.** `concurrency.group` passa de
-`claude-pr-review-${{ github.event.pull_request.number }}` (só o número do
-PR) para `claude-pr-review-<pr_number>-<head>` (PR **e** HEAD). Isso é o
-que de fato impede duas execuções para o **mesmo** HEAD de completarem as
-duas — `cancel-in-progress: true` cancela a que estava enfileirada/rodando
-assim que uma segunda é enfileirada no mesmo grupo — sem impedir que uma
-revisão de um HEAD anterior (grupo diferente) continue quando o HEAD muda,
-que é o comportamento que já existe hoje e não deve mudar.
+**Grupo de concorrência.** `concurrency.group` **não muda**:
+`claude-pr-review-<pr_number>`, só o número do PR, exatamente como hoje —
+só é preciso garantir que `pr_number` resolve certo nos dois tipos de
+evento (mesmo valor do passo de resolução, acima). A primeira versão desta
+seção propunha estreitar o grupo para incluir o HEAD
+(`claude-pr-review-<pr_number>-<head>`), o que resolveria a corrida do
+passo 4 do dispatcher, mas tem um efeito colateral que a revisão da spec
+pegou: hoje, quando um HEAD novo chega enquanto a revisão de um HEAD
+anterior ainda está rodando, os dois caem no mesmo grupo (só PR) e
+`cancel-in-progress: true` cancela a revisão do HEAD velho — ela nunca
+termina de rodar, e o gasto que essa revisão representaria não acontece.
+Estreitar o grupo por HEAD quebra exatamente esse comportamento: a revisão
+do HEAD velho passaria a rodar até o fim mesmo depois de superada,
+reintroduzindo o gasto redundante que ARCH-04 existe para eliminar — o
+oposto do objetivo desta task.
+
+Mantendo o grupo por PR apenas, **as duas garantias saem de graça, do
+mesmo mecanismo**: duas execuções disparadas por engano para o **mesmo**
+HEAD (a corrida do passo 4) caem no mesmo grupo e só a última sobrevive —
+ainda válida, porque é para o mesmo HEAD; e uma execução para um HEAD
+**novo** cancela a execução ainda rodando de um HEAD **anterior**, que é o
+comportamento de hoje e o que evita o gasto redundante. Não há troca entre
+as duas propriedades — só existe se o grupo for estreitado por HEAD, o que
+esta versão do spec não faz mais.
 
 O gatilho `pull_request` **permanece presente** durante a PR 1 (ver
 sequência de bootstrap) e só é removido na PR 2, depois que o caminho novo
@@ -315,6 +332,13 @@ vivo exigido pelo owner (AC10).
    "nenhuma execução para este HEAD" e dispara de novo, exatamente como o
    `synchronize` fazia antes, só que depois do CI passar em vez de
    imediatamente.
+3.1. Push de correção chega **enquanto a revisão do HEAD anterior ainda
+   está rodando** (CI do HEAD novo termina antes da revisão do HEAD velho
+   terminar) → o dispatcher dispara para o HEAD novo assim que CI+preflight
+   passarem nele; como o grupo de concorrência é por PR, não por HEAD, essa
+   nova execução cai no mesmo grupo da que ainda está rodando para o HEAD
+   velho e a cancela — o gasto de terminar uma revisão já superada não
+   acontece, igual ao comportamento de hoje.
 4. A Action falha por erro de infraestrutura (não publica veredito) → já
    existe uma execução para aquele HEAD (mesmo com falha); o dispatcher não
    duplica, e o caminho de retry existente (`RERUN`, cooldown de uma hora)
@@ -382,9 +406,12 @@ AC5. Nenhuma função do gate de merge
 
 AC6. Nunca duas execuções completam para o mesmo HEAD: a checagem barata do
 dispatcher evita a maioria dos disparos redundantes, e o grupo de
-concorrência do workflow (`claude-pr-review-<pr>-<head>`,
-`cancel-in-progress: true`) garante que, mesmo que duas sejam enfileiradas
-por uma corrida, só a última a entrar no grupo chega a completar.
+concorrência do workflow — inalterado, por PR (`claude-pr-review-<pr_number>`,
+`cancel-in-progress: true`) — garante que, mesmo que duas sejam
+enfileiradas por uma corrida, só a última a entrar no grupo chega a
+completar; o mesmo grupo por PR também garante que a revisão de um HEAD
+anterior é cancelada assim que uma revisão de um HEAD mais novo é
+enfileirada, em vez de rodar até o fim depois de já estar superada.
 
 AC7. `--max-turns 50` e o contrato de texto do comentário de revisão
 permanecem exatamente como estão.
@@ -465,8 +492,9 @@ explícita de continuar TASK-15/16/17 depois que ARCH-04 fechar.
   disparo "pegou". Isso é exatamente por que a checagem de idempotência do
   passo 4 do dispatcher é só uma otimização barata, não a garantia: quem
   garante que no máximo uma execução *completa* por HEAD é o grupo de
-  concorrência do workflow (`claude-pr-review-<pr>-<head>`,
-  `cancel-in-progress: true`), que não depende de nenhuma leitura
+  concorrência do workflow, inalterado por PR
+  (`claude-pr-review-<pr_number>`, `cancel-in-progress: true`), que não
+  depende de nenhuma leitura
   assíncrona para funcionar.
 
 ## Assumptions explícitas
