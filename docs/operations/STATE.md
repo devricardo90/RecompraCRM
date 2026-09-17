@@ -76,7 +76,7 @@ current_task: TASK-14
 current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-14
 branch: feat/TASK-14-hardening
-pr_number: pending_open
+pr_number: 34
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -126,7 +126,7 @@ task_14_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_14_implementation_branch: feat/TASK-14-hardening
 task_14_implementation_baseline: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
-task_14_implementation_pr: pending_open
+task_14_implementation_pr: 34
 task_14_evidence: docs/evidence/TASK-14-validation.md
 task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
 task_14_guard: scripts/ui-hardening-check.mjs

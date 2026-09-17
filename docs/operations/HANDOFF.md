@@ -11,7 +11,7 @@ current_task: TASK-14
 current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-14
 current_branch: feat/TASK-14-hardening
-current_pr: pending_open
+current_pr: 34
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_evidence: docs/evidence/TASK-14-validation.md
