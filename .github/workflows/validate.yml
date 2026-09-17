@@ -113,6 +113,9 @@ jobs:
       - name: Test Rick Loop v1.4 protocol
         run: npm run test:loop-v1.4
 
+      - name: Test UI hardening floor
+        run: npm run test:ui-hardening
+
       - name: Lint
         run: npm run lint
 

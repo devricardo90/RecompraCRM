@@ -8,12 +8,14 @@ status: TASK_14_IMPLEMENTING
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
-current_task_status: IMPLEMENTING
+current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-14
 current_branch: feat/TASK-14-hardening
-current_pr: none
+current_pr: pending_open
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
+task_14_evidence: docs/evidence/TASK-14-validation.md
+task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
 owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
@@ -78,11 +80,11 @@ open_architecture_items: ARCH-03
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
-task_14_status: SPEC_MERGED_IMPLEMENTING
+task_14_status: IMPLEMENTED_AWAITING_REVIEW
 task_14_spec: docs/specs/TASK-14.md
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_14_implementation_branch: feat/TASK-14-hardening
-next_action: IMPLEMENT_TASK_14
+next_action: OPEN_PR_AND_AWAIT_CLAUDE_REVIEW
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

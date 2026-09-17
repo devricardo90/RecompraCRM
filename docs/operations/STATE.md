@@ -73,10 +73,10 @@ last_completed_task: TASK-12
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
-current_task_status: IMPLEMENTING
+current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-14
 branch: feat/TASK-14-hardening
-pr_number: none
+pr_number: pending_open
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -118,7 +118,7 @@ arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 arch_02_schema_impact: none
 arch_02_migration_impact: none
-task_14_status: SPEC_MERGED_IMPLEMENTING
+task_14_status: IMPLEMENTED_AWAITING_REVIEW
 task_14_spec: docs/specs/TASK-14.md
 task_14_baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
 task_14_spec_branch: docs/TASK-14-spec
@@ -126,7 +126,10 @@ task_14_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
 task_14_implementation_branch: feat/TASK-14-hardening
 task_14_implementation_baseline: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
-task_14_implementation_pr: none
+task_14_implementation_pr: pending_open
+task_14_evidence: docs/evidence/TASK-14-validation.md
+task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
+task_14_guard: scripts/ui-hardening-check.mjs
 owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
@@ -246,9 +249,9 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: IMPLEMENT_TASK_14
+next_action: OPEN_PR_AND_AWAIT_CLAUDE_REVIEW
 next_action_authorized: true
-updated_at: "2026-09-17T00:00:00Z"
+updated_at: "2026-09-17T01:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)
 ```
 
