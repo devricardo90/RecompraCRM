@@ -77,8 +77,8 @@ current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_IN_REVIEW (still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
-branch: main
-pr_number: none
+branch: feat/ARCH-04-review-dispatch
+pr_number: pending_open
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -260,10 +260,16 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_ARCH_04_SPEC
-arch_04_spec_status: SPEC_IN_REVIEW
+next_action: IMPLEMENT_ARCH_04_PR1
+arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
-arch_04_spec_pr: 36
+arch_04_spec_pr: 36 MERGED_SQUASH
+arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
+arch_04_spec_review_rounds: 6
+arch_04_spec_main_ci_run: 35257845976
+arch_04_spec_main_ci_status: SUCCESS
+arch_04_impl_branch: feat/ARCH-04-review-dispatch
+arch_04_impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
 next_action_authorized: true
 updated_at: "2026-09-17T02:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)

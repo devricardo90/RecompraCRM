@@ -11,8 +11,8 @@ current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_IN_REVIEW (not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
-current_branch: main
-current_pr: none
+current_branch: feat/ARCH-04-review-dispatch
+current_pr: pending_open
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
@@ -88,10 +88,13 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
-next_action: REVIEW_ARCH_04_SPEC
-arch_04_spec_status: SPEC_IN_REVIEW
+next_action: IMPLEMENT_ARCH_04_PR1
+arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
-arch_04_spec_pr: 36
+arch_04_spec_pr: 36 MERGED_SQUASH
+arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
+arch_04_impl_branch: feat/ARCH-04-review-dispatch
+arch_04_impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

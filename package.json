@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:customer && npm run test:product && npm run test:stock-alerts && npm run test:task-12-source && npm run test:repurchase-projection && npm run test:task-13-source && npm run test:task-13-schema && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration && npm run test:customer-history && npm run test:ui-hardening",
+    "test": "npm run test:customer && npm run test:product && npm run test:stock-alerts && npm run test:task-12-source && npm run test:repurchase-projection && npm run test:task-13-source && npm run test:task-13-schema && npm run test:sale && npm run test:sale-stock && npm run test:repurchase-forecast && npm run test:sale-registration && npm run test:customer-history && npm run test:ui-hardening && npm run test:review-dispatch",
     "test:customer": "node scripts/customer-model-check.mjs",
     "test:product": "node scripts/product-model-check.mjs",
     "test:stock-alerts": "node --experimental-strip-types scripts/stock-alerts-check.mjs",
@@ -44,7 +44,10 @@
     "test:task-12-source": "node scripts/task-12-source-check.mjs",
     "test:repurchase-dashboard": "node --experimental-strip-types scripts/repurchase-dashboard-check.mjs",
     "test:repurchase-api": "node --experimental-strip-types scripts/repurchase-api-integration-check.mjs",
-    "test:ui-hardening": "node scripts/ui-hardening-check.mjs"
+    "test:ui-hardening": "node scripts/ui-hardening-check.mjs",
+    "test:review-dispatch": "node scripts/rick-loop-review-dispatch-check.mjs",
+    "loop:preflight": "node scripts/rick-loop-preflight.mjs",
+    "loop:review-dispatch": "node scripts/rick-loop-review-dispatch.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

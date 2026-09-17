@@ -74,6 +74,26 @@ function clearWait() {
   try { sh(process.execPath, ["scripts/rick-loop-controller.mjs", "wait", "clear"]); } catch { /* no active runtime wait */ }
 }
 
+// ARCH-04: no run exists for this HEAD because a push no longer triggers one.
+// The controller owns dispatch now, so NO_RUN is the watcher's cue to act
+// rather than to keep observing. The dispatcher re-verifies CI and preflight
+// itself and refuses to dispatch twice for the same HEAD, so calling it on
+// every cycle while no run is visible is safe.
+function dispatchClaudeReview(identity) {
+  if (!identity?.pr) return { dispatched: false, reason: "NO_PR" };
+  try {
+    const raw = sh(process.execPath, ["scripts/rick-loop-review-dispatch.mjs", String(identity.pr)]);
+    return { dispatched: true, report: raw ? JSON.parse(raw) : null };
+  } catch (error) {
+    // A blocked dispatch exits non-zero with its named blockers on stdout;
+    // that is a normal not-yet-ready state, not a watcher failure.
+    const stdout = error?.stdout ? String(error.stdout).trim() : null;
+    let report = null;
+    try { report = stdout ? JSON.parse(stdout) : null; } catch { report = null; }
+    return { dispatched: false, reason: report ? "BLOCKED" : "ERROR", report, error: report ? null : String(error?.message ?? error) };
+  }
+}
+
 function retryClaudeReview(identity, now = new Date()) {
   if (!identity?.head || !identity?.branch) return { action: "NO_IDENTITY" };
   try {
@@ -84,6 +104,9 @@ function retryClaudeReview(identity, now = new Date()) {
     if (action === "RERUN") {
       sh("gh", ["run", "rerun", String(run.databaseId)]);
       return { action, run_id: run.databaseId, previous_conclusion: run.conclusion ?? null, last_run_at: run.updatedAt ?? run.createdAt ?? null };
+    }
+    if (action === "NO_RUN") {
+      return { action, run_id: null, status: null, conclusion: null, last_run_at: null, dispatch: dispatchClaudeReview(identity) };
     }
     return {
       action,

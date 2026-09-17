@@ -228,7 +228,12 @@ autorizam refatoração imediata.
   - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
   - blocking: true
   - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
-  - status: SPEC_IN_REVIEW
+  - status: SPEC_MERGED_IMPLEMENTING
+  - spec_pr: 36 MERGED_SQUASH
+  - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
+  - spec_review_rounds: 6
+  - impl_branch: feat/ARCH-04-review-dispatch
+  - impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
   - spec: docs/specs/ARCH-04.md
   - spec_branch: docs/ARCH-04-spec
   - spec_baseline: 6eae01631284742a7c06f47e411f6fa77361ea81
