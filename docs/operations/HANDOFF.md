@@ -4,23 +4,30 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-013
 loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
-status: TASK_14_IMPLEMENTING
+status: TASK_14_CLOSED_BLOCKED_ON_ARCH_04
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
-current_task_status: IMPLEMENTED_AWAITING_REVIEW
-next_eligible_task: TASK-14
-current_branch: feat/TASK-14-hardening
-current_pr: 34
+current_task_status: COMPLETED
+next_eligible_task: none
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status AUTHORIZED_NOT_YET_IMPLEMENTED; verified live via scripts/rick-loop-roadmap.mjs
+current_branch: main
+current_pr: none
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
+task_14_implementation_pr: 34 MERGED_SQUASH
+task_14_reviewed_head: b17c5b5a70ebf4a7965f670eef426ec17ef5c26b
+task_14_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+task_14_review_rounds: 2
+task_14_merge_main_head: c990654d32e2acda56faead8b28b1b8da33ce644
+task_14_main_ci: Validate 35231964035 SUCCESS
 task_14_evidence: docs/evidence/TASK-14-validation.md
 task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
 owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
 owner_decision_02_scope: remove the automatic per-push Claude review dispatch; controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW; the mandatory clean-exact-HEAD review before merge is unchanged
-owner_decision_02_next_action: SPEC_AFTER_TASK_14_CLOSES
+owner_decision_02_next_action: SPEC_ARCH_04_NOW
 owner_decision_02_roadmap_item: ARCH-04
 external_gate: none
 loop_upgrade_pr: 18 MERGED_SQUASH
@@ -76,15 +83,11 @@ task_13_local_reconciliation_commit: 98a40e1 PRESERVED_ON_recovery/TASK13-98a40e
 arch_01_status: RESOLVED
 arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
-open_architecture_items: ARCH-03
 arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
-task_14_status: IMPLEMENTED_AWAITING_REVIEW
-task_14_spec: docs/specs/TASK-14.md
-task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
-task_14_implementation_branch: feat/TASK-14-hardening
-next_action: OPEN_PR_AND_AWAIT_CLAUDE_REVIEW
+open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
+next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
@@ -92,43 +95,79 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains TASK-12 at `6a8b12d043bae15450e4da44184c2c1d5c355597` and post-merge Validate `32882137795` is SUCCESS.
-2. TASK-12 is completed and merged: spec PR #25, implementation PR #29, clean Claude review on exact head `43bd46c`.
-3. The deterministic resolver selects TASK-14. Its spec merged on PR #32
-   (`ffdf8f9`); implementation is in progress on `feat/TASK-14-hardening`,
-   with no implementation PR opened yet.
-4. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per sale item. It binds nothing in TASK-14.
-5. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`, never from a status label.
+1. Confirm `main` contains TASK-14 at `c990654d32e2acda56faead8b28b1b8da33ce644` and post-merge Validate `35231964035` is SUCCESS.
+2. TASK-14 is completed and merged: spec PR #32, implementation PR #34 (2
+   review rounds), clean Claude review on exact head `b17c5b5`.
+3. The deterministic resolver reports `NO_ELIGIBLE_TASK`: TASK-15
+   `depends_on` now names `ARCH-04`, whose status is
+   `AUTHORIZED_NOT_YET_IMPLEMENTED`. This was verified live by running
+   `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
+   `docs/roadmap/ROADMAP.md` after checking TASK-14 off, not asserted from
+   memory.
+4. ARCH-04 is OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`), authorized 2026-09-17:
+   replace the automatic per-push Claude review trigger with a
+   controller-dispatched one fired once `READY_FOR_INDEPENDENT_REVIEW`. The
+   mandatory clean-exact-HEAD independent review before merge is unchanged.
+   This is the next work: write its spec, get it independently reviewed,
+   implement, get that independently reviewed, merge — the same pipeline
+   every other loop/governance change in this repo has gone through.
+5. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per
+   sale item. It binds nothing in TASK-14 or ARCH-04.
+6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,
+   never from a status label.
 
-## Why TASK-14 is selected
+## Why the loop is stopped here, not at TASK-15
 
-TASK-12 is completed and merged, and TASK-13 before it. With both closed in the
-roadmap the deterministic resolver reports TASK-14 as the first pending entry
-whose dependencies are satisfied.
+TASK-12, TASK-13 and TASK-14 are completed and merged. Three of the
+seventeen `TASK-*` entries remain (TASK-15/16/17) — the "17" in TASK-17's
+`17/17 tasks verificadas` closure criterion counts tasks only. `ARCH-04` is
+also open, and unlike `ARCH-03` it exists as a real `ROADMAP.md` entry with
+`depends_on` wired onto TASK-15: it is deliberately a mechanical blocker,
+not just a `decide_before` note in prose, because a bare STATE/HANDOFF
+mention (which is all `ARCH-03` has — it has no `ROADMAP.md` entry) is
+invisible to the deterministic resolver, which only models `TASK-*`/`ARCH-*`
+roadmap entries. Without that wiring the loop would silently select TASK-15
+next and the owner-authorized review-trigger change would never get done.
+`ARCH-03` remains exactly the untracked, resolver-invisible reference this
+paragraph is warning against — it is not fixed by this closure.
 
-Four of seventeen roadmap entries remain.
+`NO_ELIGIBLE_TASK` is one of `rick-loop-controller.mjs`'s
+`TERMINAL_TRANSITIONS`: a fresh, unattended run of the controller stops
+here rather than inventing work — `scripts/rick-loop-controller-check.mjs`
+asserts this ("all-blocked roadmap must not invent a task") as a
+deliberate safety invariant, not a gap. Resuming past it requires a human
+or an agent reading this handoff to start the ARCH-04 spec by hand, the
+same way OWNER-01 and OWNER-02 themselves required an explicit owner
+decision the loop could not make on its own. Giving the controller a
+mechanical way to select and execute an open `ARCH-*` item is itself one
+of the items `ARCH-04`'s own scope already lists (`decide_before resolver
+gate`) — it is not bundled into this closure.
 
-## Contracts TASK-14 inherits
+## Contracts TASK-14 leaves behind
 
-TASK-14 is specified and its spec merged on PR #32. `docs/specs/TASK-14.md`
-is the contract to read before any write; implementation is in progress on
-`feat/TASK-14-hardening`.
+TASK-14 added `scripts/ui-hardening-check.mjs` as a permanent regression
+guard (wired into `npm test` and `validate.yml`) and `app/not-found.tsx` as
+the project's malformed-route boundary. Any new screen must be added to the
+guard's known-routes list or `test:ui-hardening` fails by design (AC14).
+Full disposition in `docs/evidence/TASK-14-validation.md`.
 
-It inherits the TASK-12 nullable-phone contract (AC21): a customer without a
-phone is content rendered with a placeholder, never an empty state. ARCH-02 is
-resolved as Option A, so the date contract stays as it is and this task must not
-reopen it. ARCH-03 is open, non-blocking, and authorises no refactor here.
+It inherited the TASK-12 nullable-phone contract (AC21) and ARCH-02's date
+contract (Option A, unchanged, not reopened). ARCH-03 stays open,
+non-blocking, and authorises no refactor.
 
 The contracts TASK-13 inherited are history and live with that task, in
 `docs/specs/TASK-13.md` and `docs/evidence/TASK-13-validation.md`.
 
-## OWNER-02 — REVIEW_TRIGGER_ECONOMICS (queued, non-blocking for TASK-14)
+## ARCH-04 — REVIEW_TRIGGER_ECONOMICS (the actual next work)
 
-Authorized by the owner on 2026-09-17, recorded fresh with no prior repository
-trace claimed or invented. Scope: remove the automatic per-push Claude review
-dispatch and have the loop controller dispatch one independent review
-deterministically once `READY_FOR_INDEPENDENT_REVIEW`. The mandatory
-clean-exact-HEAD independent review before merge, and the FINDINGS → fix →
-push → CI/validation/preflight → new review cycle, are unchanged. This does
-not block or modify TASK-14; it is specified and implemented as its own task
-only after TASK-14 closes.
+Authorized by the owner on 2026-09-17, recorded fresh with no prior
+repository trace claimed or invented. Scope: remove the automatic per-push
+Claude review dispatch and have the loop controller dispatch one
+independent review deterministically once `READY_FOR_INDEPENDENT_REVIEW`.
+The mandatory clean-exact-HEAD independent review before merge, and the
+FINDINGS → fix → push → CI/validation/preflight → new review cycle, are
+unchanged. It also includes: STATE/BASELINE pointer consistency checks,
+LOOP-REGISTER integrity, `current_task` vs `next_eligible_task` semantics,
+the `decide_before` resolver gate, remote-first reconciliation, mechanical
+checks before LLM review, and review usage metrics. Starts with its own
+spec doc, reviewed the same way every other spec in this repo has been.
