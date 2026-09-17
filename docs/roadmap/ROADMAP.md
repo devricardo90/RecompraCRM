@@ -242,7 +242,8 @@ autorizam refatoração imediata.
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
   - subsystem: STATE/HANDOFF/ROADMAP/LOOP-REGISTER e o loop controller
-  - blocking: false — nenhuma task depende deste item; o owner não forneceu uma arquitetura exata para ele, ao contrário de ARCH-04
+  - blocking: false
+  - blocking_rationale: nenhuma task depende deste item; o owner não forneceu uma arquitetura exata para ele, ao contrário de ARCH-04
   - status: OPEN
   - scope: STATE_POINTER_CONSISTENCY e BASELINE_POINTER_CONSISTENCY além do que o preflight de ARCH-04 cobre mecanicamente; integridade completa do LOOP-REGISTER (não só JSONL válido linha a linha); semântica de `current_task` vs `next_eligible_task` além do que `resolveEffectiveTask` já faz; reconciliação remote-first como mecanismo novo; métricas de uso de revisão
   - next_action: SPEC_QUANDO_PRIORIZADO — este item não bloqueia o roadmap; precisa de uma decisão de arquitetura do owner antes de virar spec, do mesmo jeito que ARCH-04 precisou

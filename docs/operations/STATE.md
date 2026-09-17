@@ -76,7 +76,7 @@ task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is AUTHORIZED_NOT_YET_IMPLEMENTED; verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_IN_REVIEW (still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
 branch: main
 pr_number: none
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -150,7 +150,7 @@ owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> determin
 owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
 owner_decision_02_next_action: SPEC_AFTER_TASK_14_CLOSES
 owner_decision_02_roadmap_item: ARCH-04
-owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status leaves AUTHORIZED_NOT_YET_IMPLEMENTED; a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
+owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_IN_REVIEW, previously AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW

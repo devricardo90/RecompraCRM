@@ -10,7 +10,7 @@ loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status AUTHORIZED_NOT_YET_IMPLEMENTED; verified live via scripts/rick-loop-roadmap.mjs
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_IN_REVIEW (not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
 current_branch: main
 current_pr: none
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -102,11 +102,11 @@ restart_command: git switch main && git pull --ff-only && npm install
 2. TASK-14 is completed and merged: spec PR #32, implementation PR #34 (2
    review rounds), clean Claude review on exact head `b17c5b5`.
 3. The deterministic resolver reports `NO_ELIGIBLE_TASK`: TASK-15
-   `depends_on` now names `ARCH-04`, whose status is
-   `AUTHORIZED_NOT_YET_IMPLEMENTED`. This was verified live by running
-   `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
-   `docs/roadmap/ROADMAP.md` after checking TASK-14 off, not asserted from
-   memory.
+   `depends_on` now names `ARCH-04`, whose status is `SPEC_IN_REVIEW` (spec
+   PR #36) — still not `RESOLVED`/`COMPLETED`, so TASK-15 stays blocked.
+   This was verified live by running `scripts/rick-loop-roadmap.mjs`'s
+   `resolveNextEligibleTask` against `docs/roadmap/ROADMAP.md` after
+   checking TASK-14 off, not asserted from memory.
 4. ARCH-04 is OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`), authorized 2026-09-17:
    replace the automatic per-push Claude review trigger with a
    controller-dispatched one fired once `READY_FOR_INDEPENDENT_REVIEW`. The
