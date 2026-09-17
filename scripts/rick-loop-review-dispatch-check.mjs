@@ -1,7 +1,14 @@
 import { strict as assert } from "node:assert";
 
 import { evaluatePreflight, validateJsonlLines, PREFLIGHT_CHECKS } from "./rick-loop-preflight.mjs";
-import { evaluateDispatch, buildDispatchArgs, findRunForHead } from "./rick-loop-review-dispatch.mjs";
+import {
+  evaluateDispatch,
+  buildDispatchArgs,
+  findRunForHead,
+  classifyExistingRun,
+  hasVerdictForHead,
+  REDISPATCH_COOLDOWN_MS,
+} from "./rick-loop-review-dispatch.mjs";
 
 /**
  * ARCH-04 deterministic gate. No network: every case is synthetic, so this
@@ -120,12 +127,39 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
     ["ci_not_green", { ci: null }],
     ["preflight_failed", { preflight: { pass: false, checks: {}, reasons: ["no_state_drift"] } }],
     ["preflight_failed", { preflight: null }],
-    ["already_dispatched", { existingRuns: [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success" }] }],
-    // Any status counts as dispatched; retrying a failed run is the watcher's job.
-    ["already_dispatched", { existingRuns: [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "failure" }] }],
+    ["head_unknown", { pr: okPr({ headRefOid: null }) }],
+    ["head_unknown", { pr: okPr({ headRefName: null }) }],
     ["already_dispatched", { existingRuns: [{ databaseId: 9, headSha: HEAD, status: "in_progress", conclusion: null }] }],
+    ["already_dispatched", { existingRuns: [{ databaseId: 9, headSha: HEAD, status: "queued", conclusion: null }] }],
     // An unreadable run list is unknown evidence and must fail closed.
     ["already_dispatched", { existingRuns: null }],
+    // A verdict already exists for this HEAD, so there is nothing to dispatch.
+    [
+      "already_reviewed",
+      {
+        existingRuns: [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "2026-09-17T12:00:00Z" }],
+        comments: [{ body: `Reviewed commit: ${HEAD}\nNo major issues found.` }],
+        now: new Date("2026-09-17T12:01:00Z"),
+      },
+    ],
+    // Completed without a verdict, but too recent to re-dispatch yet.
+    [
+      "awaiting_redispatch_cooldown",
+      {
+        existingRuns: [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "2026-09-17T12:00:00Z" }],
+        comments: [],
+        now: new Date("2026-09-17T12:01:00Z"),
+      },
+    ],
+    // An unreadable completion time is unknown age, so it waits rather than
+    // re-dispatching immediately.
+    [
+      "awaiting_redispatch_cooldown",
+      {
+        existingRuns: [{ databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "not-a-date" }],
+        comments: [],
+      },
+    ],
   ];
 
   for (const [expectedBlocker, override] of cases) {
@@ -165,6 +199,71 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
   const second = evaluateDispatch({ pr: okPr(), ci: okCi(), preflight: passingPreflight, existingRuns: runsAfterFirst });
   assert.equal(second.dispatch, false, "second call for the same HEAD must not dispatch again");
   assert.ok(second.blockers.includes("already_dispatched"), "the second call names already_dispatched");
+}
+
+// The stale-dispatch deadlock this protocol exists to prevent: the branch
+// advances H1 -> H2 between the dispatcher reading the HEAD and GitHub
+// accepting `gh workflow run --ref <branch>`, so the run is associated with H2
+// while carrying H1 as expected_head_sha. The workflow correctly refuses to
+// review the stale commit and skips, leaving a completed run on H2 that
+// published nothing. If that run were allowed to reserve H2, H2 could never be
+// reviewed: re-dispatch would be blocked and rerunning replays the same stale
+// input forever.
+{
+  const staleSkippedRun = [{
+    databaseId: 9,
+    headSha: HEAD,
+    status: "completed",
+    conclusion: "success",
+    updatedAt: "2026-09-17T12:00:00Z",
+  }];
+  const wellAfterCooldown = new Date(Date.parse("2026-09-17T12:00:00Z") + REDISPATCH_COOLDOWN_MS + 1000);
+
+  const decision = evaluateDispatch({
+    pr: okPr(),
+    ci: okCi(),
+    preflight: passingPreflight,
+    existingRuns: staleSkippedRun,
+    comments: [],
+    now: wellAfterCooldown,
+  });
+  assert.equal(
+    decision.dispatch,
+    true,
+    "a completed run that published no verdict for this HEAD must not reserve it forever; re-dispatch is the only way that HEAD ever gets reviewed",
+  );
+  assert.equal(decision.run_state, "STALE_NO_VERDICT", "the decision names why re-dispatch was allowed");
+
+  // Same run, but it did publish a verdict for this HEAD: nothing to redo.
+  const reviewed = evaluateDispatch({
+    pr: okPr(),
+    ci: okCi(),
+    preflight: passingPreflight,
+    existingRuns: staleSkippedRun,
+    comments: [{ body: `Reviewed commit: ${HEAD}\nReview result: FINDINGS` }],
+    now: wellAfterCooldown,
+  });
+  assert.equal(reviewed.dispatch, false, "a HEAD with a published verdict must not be dispatched again");
+  assert.ok(reviewed.blockers.includes("already_reviewed"), "that case is named already_reviewed");
+}
+
+{
+  assert.equal(classifyExistingRun(null, {}), "NONE", "no run is NONE");
+  assert.equal(classifyExistingRun({ status: "in_progress" }, {}), "IN_FLIGHT", "a running review is IN_FLIGHT");
+  assert.equal(classifyExistingRun({ status: "queued" }, {}), "IN_FLIGHT", "a queued review is IN_FLIGHT");
+  assert.equal(
+    classifyExistingRun({ status: "completed", updatedAt: "2026-09-17T12:00:00Z" }, { verdictPublished: true }),
+    "REVIEWED",
+    "a completed run with a verdict for the head is REVIEWED",
+  );
+}
+
+{
+  assert.equal(hasVerdictForHead([{ body: `Reviewed commit: ${HEAD}\nNo major issues found.` }], HEAD), true, "a clean verdict counts");
+  assert.equal(hasVerdictForHead([{ body: `Reviewed commit: ${HEAD}\nReview result: FINDINGS` }], HEAD), true, "a findings verdict counts too");
+  assert.equal(hasVerdictForHead([{ body: `Reviewed commit: ${OTHER_HEAD}\nNo major issues found.` }], HEAD), false, "another head's verdict does not count");
+  assert.equal(hasVerdictForHead([], HEAD), false, "no comments means no verdict");
+  assert.equal(hasVerdictForHead(null, HEAD), false, "an unreadable comment list means no verdict");
 }
 
 {

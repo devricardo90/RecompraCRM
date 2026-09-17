@@ -96,7 +96,13 @@ arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
 arch_04_impl_branch: feat/ARCH-04-review-dispatch
 arch_04_impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
 arch_04_blocker: CLAUDE_CODE_ACTION_WORKFLOW_VALIDATION_BLOCKS_REVIEW_OF_ITS_OWN_WORKFLOW_FILE
-arch_04_blocker_owner_decision_required: true
+arch_04_blocker_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED
+arch_04_blocker_owner_decision_at: "2026-09-17"
+arch_04_bootstrap_stage1: add .github/workflows/claude-pr-review-meta.yml in an isolated PR reviewed by the primary reviewer, merged and post-merge validated
+arch_04_bootstrap_stage2: cutover PR editing claude-pr-review.yml, reviewed by the secondary reviewer with a real exact-head verdict; a green check without a verdict is not sufficient and must stop the loop
+arch_04_bootstrap_stage3: activate controller dispatch, then remove the automatic per-push trigger only once the replacement is operational
+arch_04_bootstrap_stage4: acceptance proofs (multiple pushes trigger no review, one authorized HEAD produces one review, stale HEAD cannot invoke the model, workflow changes get a real review, findings revalidate, clean review merges only with all gates green)
+arch_04_secondary_reviewer_scope: activates only for changes to the primary review workflow or explicitly authorized review-infrastructure maintenance, never for normal PRs
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install

@@ -21,19 +21,70 @@ export const DISPATCH_BLOCKERS = Object.freeze([
   "ci_not_green",
   "preflight_failed",
   "already_dispatched",
+  "already_reviewed",
+  "awaiting_redispatch_cooldown",
 ]);
 
 /**
- * An existing run for the exact HEAD - in any status - means this HEAD has
- * already been dispatched. Retrying a run that exists but failed belongs to
- * the watcher's retryClaudeReview/RERUN path, not here.
+ * Deliberately shorter than the watcher's one-hour RERUN cooldown. A run that
+ * completed without publishing anything is most often a stale dispatch that
+ * skipped in seconds, and stalling a real review for an hour behind one would
+ * be worse than the duplicate-dispatch risk this bounds.
  */
+export const REDISPATCH_COOLDOWN_MS = 10 * 60 * 1000;
+
 export function findRunForHead(runs, headSha) {
   if (!Array.isArray(runs) || !headSha) return null;
   return runs.find((run) => run?.headSha === headSha) ?? null;
 }
 
-export function evaluateDispatch({ pr = null, ci = null, preflight = null, existingRuns = null } = {}) {
+/**
+ * Any published verdict for this exact HEAD, clean or findings - the same
+ * `Reviewed commit: <sha>` anchor the merge gate parses. Used to tell a run
+ * that actually reviewed this HEAD from one that merely got associated with
+ * it.
+ */
+export function hasVerdictForHead(comments, headSha) {
+  if (!Array.isArray(comments) || !headSha) return false;
+  return comments.some((entry) => {
+    const named = String(entry?.body ?? "").match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
+    return named ? headSha.startsWith(named[1]) : false;
+  });
+}
+
+/**
+ * `gh workflow run --ref <branch>` resolves the branch tip at dispatch time,
+ * so a push landing between the dispatcher reading the HEAD and GitHub
+ * accepting the dispatch produces a run associated with the NEW head while
+ * carrying the OLD head as expected_head_sha. The workflow correctly refuses
+ * to review the stale commit and skips - but that skipped run is still
+ * associated with the new head. Keying idempotency on the run's existence
+ * alone would let it reserve a HEAD it never reviewed, and because rerunning
+ * replays the same stale input, that HEAD could never get a review at all.
+ * A run therefore only reserves a HEAD while it is in flight, once it has
+ * published a verdict for that HEAD, or briefly after completing.
+ */
+export function classifyExistingRun(run, { verdictPublished = false, now = new Date(), cooldownMs = REDISPATCH_COOLDOWN_MS } = {}) {
+  if (!run) return "NONE";
+  if (["queued", "in_progress", "waiting", "pending"].includes(run.status)) return "IN_FLIGHT";
+  if (run.status !== "completed") return "IN_FLIGHT";
+  if (verdictPublished) return "REVIEWED";
+  const finishedAt = Date.parse(run.updatedAt ?? run.createdAt ?? "");
+  // An unreadable timestamp is unknown age, so it waits rather than
+  // re-dispatching immediately.
+  if (!Number.isFinite(finishedAt)) return "COOLING_DOWN";
+  return now.getTime() - finishedAt < cooldownMs ? "COOLING_DOWN" : "STALE_NO_VERDICT";
+}
+
+export function evaluateDispatch({
+  pr = null,
+  ci = null,
+  preflight = null,
+  existingRuns = null,
+  comments = null,
+  now = new Date(),
+  cooldownMs = REDISPATCH_COOLDOWN_MS,
+} = {}) {
   const blockers = [];
 
   if (!pr) blockers.push("pr_missing");
@@ -56,12 +107,27 @@ export function evaluateDispatch({ pr = null, ci = null, preflight = null, exist
 
   // An unreadable run list is unknown evidence, not proof that nothing was
   // dispatched; dispatching on unknown would risk a duplicate, so it blocks.
-  if (!Array.isArray(existingRuns)) blockers.push("already_dispatched");
-  else if (findRunForHead(existingRuns, pr?.headRefOid)) blockers.push("already_dispatched");
+  let runState = "UNKNOWN";
+  if (!Array.isArray(existingRuns)) {
+    blockers.push("already_dispatched");
+  } else {
+    const run = findRunForHead(existingRuns, pr?.headRefOid);
+    runState = classifyExistingRun(run, {
+      verdictPublished: hasVerdictForHead(comments, pr?.headRefOid),
+      now,
+      cooldownMs,
+    });
+    if (runState === "IN_FLIGHT") blockers.push("already_dispatched");
+    else if (runState === "REVIEWED") blockers.push("already_reviewed");
+    else if (runState === "COOLING_DOWN") blockers.push("awaiting_redispatch_cooldown");
+    // NONE and STALE_NO_VERDICT both mean this HEAD has no review and none is
+    // coming without a fresh dispatch.
+  }
 
   return {
     dispatch: blockers.length === 0,
     blockers,
+    run_state: runState,
     head: pr?.headRefOid ?? null,
     branch: pr?.headRefName ?? null,
   };
@@ -162,8 +228,9 @@ function main() {
   const pr = inputs.pr;
   const ci = pr ? fetchCiForHead(pr.headRefName, pr.headRefOid, null) : null;
   const existingRuns = pr ? fetchReviewRuns(pr.headRefName, null) : null;
+  const comments = parseJson(sh("gh", ["api", `repos/{owner}/{repo}/issues/${prNumber}/comments?per_page=100`]));
 
-  const decision = evaluateDispatch({ pr, ci, preflight, existingRuns });
+  const decision = evaluateDispatch({ pr, ci, preflight, existingRuns, comments });
   const report = {
     pr: prNumber,
     ...decision,

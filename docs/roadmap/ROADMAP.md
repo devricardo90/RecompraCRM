@@ -233,7 +233,10 @@ autorizam refatoração imediata.
   - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
   - spec_review_rounds: 6
   - impl_branch: feat/ARCH-04-review-dispatch
-  - impl_stage: PR1_ADDITIVE_WORKFLOW_DISPATCH
+  - impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
+  - impl_blocker: anthropics/claude-code-action@v1 recusa rodar quando o próprio arquivo de workflow difere do branch padrão, então a PR que edita claude-pr-review.yml não pode ser revisada por ele; o check fica verde sem veredito nenhum (evidência: run 35258611604; mesmo silêncio nas PRs 27 e 28)
+  - bootstrap_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED (owner, 2026-09-17)
+  - bootstrap_stages: STAGE1 adiciona .github/workflows/claude-pr-review-meta.yml em PR isolada revisada pelo reviewer primário; STAGE2 cutover de claude-pr-review.yml revisado pelo reviewer secundário com veredito real no HEAD exato; STAGE3 ativa o dispatch novo e só então remove o gatilho automático; STAGE4 aceitação
   - spec: docs/specs/ARCH-04.md
   - spec_branch: docs/ARCH-04-spec
   - spec_baseline: 6eae01631284742a7c06f47e411f6fa77361ea81
@@ -242,7 +245,7 @@ autorizam refatoração imediata.
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
   - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
-  - next_action: REVIEW_ARCH_04_SPEC_PR_36 — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - next_action: BOOTSTRAP_STAGE1_SECONDARY_REVIEWER — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
