@@ -237,7 +237,7 @@ autorizam refatoração imediata.
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
   - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
-  - next_action: SPEC_AFTER_TASK_14_CLOSES — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - next_action: REVIEW_ARCH_04_SPEC_PR_36 — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
