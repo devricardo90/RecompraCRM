@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 71
+state_version: 72
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -73,10 +73,12 @@ last_completed_task: TASK-12
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
-current_task_status: SPEC_IN_REVIEW
+current_task_status: IMPLEMENTING
 next_eligible_task: TASK-14
-branch: docs/TASK-14-spec
-pr_number: 32
+branch: feat/TASK-14-hardening
+pr_number: none
+task_14_spec_pr: 32 MERGED_SQUASH
+task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
 task_09_last_reviewed_ci_run: 32258132550
 task_09_last_reviewed_ci_status: SUCCESS
@@ -116,12 +118,27 @@ arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 arch_02_schema_impact: none
 arch_02_migration_impact: none
-task_14_status: SPEC_IN_REVIEW
+task_14_status: SPEC_MERGED_IMPLEMENTING
 task_14_spec: docs/specs/TASK-14.md
 task_14_baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
 task_14_spec_branch: docs/TASK-14-spec
 task_14_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_14_decision_dependency: ARCH-02_RESOLVED_OPTION_A
+task_14_implementation_branch: feat/TASK-14-hardening
+task_14_implementation_baseline: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
+task_14_implementation_pr: none
+owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
+owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
+owner_decision_02_decided_at: "2026-09-17"
+owner_decision_02_authorized_by: owner
+owner_decision_02_note: granted in this session; no prior repository record of this decision existed before this entry, and none is claimed
+owner_decision_02_scope: remove the automatic per-push Claude review dispatch (pull_request/synchronize trigger); the loop controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW
+owner_decision_02_forbids: weakening the mandatory clean-exact-HEAD independent review gate before merge; any manual @claude review command as a substitute
+owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> deterministic preflight PASS -> READY_FOR_INDEPENDENT_REVIEW -> one Claude review of the exact HEAD -> CLEAN -> merge; FINDINGS -> fix -> push -> CI and validation -> preflight -> one new independent review
+owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
+owner_decision_02_next_action: SPEC_AFTER_TASK_14_CLOSES
+owner_decision_02_roadmap_item: ARCH-04
+owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status leaves AUTHORIZED_NOT_YET_IMPLEMENTED; a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
@@ -229,10 +246,10 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_TASK_14_SPEC
+next_action: IMPLEMENT_TASK_14
 next_action_authorized: true
-updated_at: "2026-08-25T19:20:00Z"
-updated_by: ChatGPT Control Plane
+updated_at: "2026-09-17T00:00:00Z"
+updated_by: Claude Code (Rick Loop recovery after notebook shutdown)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
@@ -275,7 +292,16 @@ non-blocking and does not reopen TASK-11.
 Rick Loop v1.3.2 is merged in `main` at `ad2f7487f4fecc404fe310dacbeec018f4fe8d9a`
 and passed post-merge Validate #125. Its deterministic resolver evaluates the
 pending roadmap entries rather than trusting the persisted task pointer.
-ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked;
-TASK-13 is completed and merged. TASK-12 is the deterministic next task and its
-spec is in review on PR #25. Round detail lives in
-`docs/operations/LOOP-REGISTER.jsonl`, not in this narrative.
+ARCH-01 is resolved by Option A, so TASK-12 is no longer task-scoped blocked.
+TASK-12 and TASK-13 are both completed and merged. ARCH-02 is resolved by
+Option A. TASK-14's spec merged on PR #32; implementation is in progress on
+`feat/TASK-14-hardening`, with no implementation PR opened yet. Round detail
+lives in `docs/operations/LOOP-REGISTER.jsonl`, not in this narrative.
+
+OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`) was authorized by the owner on
+2026-09-17: after TASK-14 closes, the automatic per-push Claude review
+trigger is replaced with a controller-dispatched trigger fired once
+`READY_FOR_INDEPENDENT_REVIEW` is reached. The mandatory clean-exact-HEAD
+independent review before merge is unchanged and is not weakened by this
+decision. No prior record of this decision existed in this repository before
+this entry.

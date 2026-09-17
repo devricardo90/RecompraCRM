@@ -194,12 +194,15 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 - [ ] TASK-14 — Hardening do MVP
   - depends_on: TASK-01..TASK-13
   - architecture_decision: ARCH-02 RESOLVED — Opção A, instante + fuso declarado com A3 isolada
-  - status: SPEC_IN_REVIEW
+  - status: SPEC_MERGED_IMPLEMENTING
   - spec: docs/specs/TASK-14.md
+  - spec_pr: 32 MERGED_SQUASH
+  - spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
   - baseline: 51bfacf5e809c937de212a463f15a2c1d454ac81
+  - implementation_branch: feat/TASK-14-hardening
   - done_when: erros, loading, empty states, acessibilidade e responsividade sem bloqueios.
 - [ ] TASK-15 — Validação final do roadmap
-  - depends_on: TASK-14
+  - depends_on: TASK-14, ARCH-04
   - done_when: cliente → produto → venda → estoque → previsão → dashboard passa ponta a ponta.
 - [ ] TASK-16 — Deploy de homologação
   - depends_on: TASK-15
@@ -212,6 +215,18 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 
 Itens levantados por evidência de execução. Não reabrem tasks concluídas e não
 autorizam refatoração imediata.
+
+- [ ] ARCH-04 — Governança de gatilho de revisão (OWNER-02 / REVIEW_TRIGGER_ECONOMICS)
+  - origin: decisão do owner OWNER-02, autorizada em 2026-09-17 (ver `docs/operations/STATE.md`)
+  - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
+  - blocking: true
+  - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
+  - status: AUTHORIZED_NOT_YET_IMPLEMENTED
+  - decide_before: TASK-15 (mecanicamente, via depends_on)
+  - scope: remover o disparo automático de revisão Claude a cada push (`pull_request`/`synchronize`); o loop controller passa a disparar uma revisão independente de forma determinística ao atingir `READY_FOR_INDEPENDENT_REVIEW`
+  - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
+  - includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, integridade do LOOP-REGISTER, semântica de `current_task` vs `next_eligible_task`, gate do resolver `decide_before`, reconciliação remote-first, checagens mecânicas antes da revisão por LLM, métricas de uso de revisão
+  - next_action: SPEC_AFTER_TASK_14_CLOSES — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [x] ARCH-02 — Consolidar o contrato de data e hora do domínio
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-11 (9 rodadas, 15 classes de defeito distintas)
