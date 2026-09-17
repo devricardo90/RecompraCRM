@@ -390,6 +390,43 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
   );
 }
 
+// --- a verdict outlives the run-list window -----------------------------
+//
+// `gh run list --limit 20` is a window. On a PR several review rounds deep the
+// run that produced an earlier HEAD's verdict scrolls out of it. If the
+// decision asked about the run before the verdict, it would see no run, call
+// the HEAD unreviewed, and dispatch a second review for work already done.
+
+{
+  const verdict = [{ body: `Reviewed commit: ${HEAD}\nNo major issues found.` }];
+
+  assert.equal(
+    classifyExistingRun(null, { verdictPublished: true }),
+    "REVIEWED",
+    "a published verdict settles the HEAD even when its run has aged out of the listing window",
+  );
+  assert.equal(
+    claudeReviewAction({ run: null, verdictPublished: true }),
+    "REVIEWED",
+    "the watcher path must not dispatch for a HEAD whose verdict outlived its run",
+  );
+  assert.equal(
+    claudeReviewAction({ run: null, verdictPublished: false }),
+    "DISPATCH",
+    "with no run and no verdict there is genuinely nothing, so dispatch",
+  );
+
+  assert.equal(
+    evaluateDispatch({ pr: okPr(), ci: okCi(), preflight: passingPreflight, existingRuns: [], comments: verdict }).dispatch,
+    false,
+    "an empty run list plus a verdict for this HEAD must not re-dispatch",
+  );
+  assert.ok(
+    evaluateDispatch({ pr: okPr(), ci: okCi(), preflight: passingPreflight, existingRuns: [], comments: verdict }).blockers.includes("already_reviewed"),
+    "and it is named already_reviewed, not already_dispatched",
+  );
+}
+
 // --- dispatch outcome diagnostics ---------------------------------------
 //
 // BLOCKED and DISPATCH_FAILED exit the same way but mean opposite things

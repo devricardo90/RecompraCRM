@@ -54,10 +54,14 @@ export function claudeReviewAction({
   now = new Date(),
   cooldownMs = REVIEW_RETRY_COOLDOWN_MS,
 } = {}) {
+  // Checked before the run itself, for the same reason as classifyExistingRun:
+  // the run that produced a verdict ages out of the `--limit 20` window, and
+  // asking about the run first would dispatch a fresh review for a HEAD that
+  // already has one.
+  if (verdictPublished) return "REVIEWED";
   if (!run) return "DISPATCH";
   if (["queued", "in_progress", "waiting", "pending"].includes(run.status)) return "WAIT";
   if (run.status !== "completed") return "WAIT";
-  if (verdictPublished) return "REVIEWED";
   const timestamp = Date.parse(run.updatedAt ?? run.createdAt ?? "");
   // Unknown age waits rather than acting on evidence it cannot date.
   if (!Number.isFinite(timestamp)) return "WAIT";

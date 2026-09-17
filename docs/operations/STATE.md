@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: IMPLEMENT_ARCH_04_PR1
+next_action: AWAIT_ARCH_04_PR1_REVIEW_THEN_BOOTSTRAP_STAGE1
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH

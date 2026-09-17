@@ -66,10 +66,16 @@ export function hasVerdictForHead(comments, headSha) {
  * published a verdict for that HEAD, or briefly after completing.
  */
 export function classifyExistingRun(run, { verdictPublished = false, now = new Date(), cooldownMs = REDISPATCH_COOLDOWN_MS } = {}) {
+  // Checked before the run itself: `gh run list --limit 20` is a window, and
+  // the run that produced a verdict ages out of it on a PR several rounds
+  // deep. Asking about the run first would then report NONE for a HEAD that
+  // demonstrably has a verdict and re-review it - the exact waste this task
+  // exists to remove. A published verdict settles the HEAD whether or not the
+  // run that produced it is still listed.
+  if (verdictPublished) return "REVIEWED";
   if (!run) return "NONE";
   if (["queued", "in_progress", "waiting", "pending"].includes(run.status)) return "IN_FLIGHT";
   if (run.status !== "completed") return "IN_FLIGHT";
-  if (verdictPublished) return "REVIEWED";
   const finishedAt = Date.parse(run.updatedAt ?? run.createdAt ?? "");
   // An unreadable timestamp is unknown age, so it waits rather than
   // re-dispatching immediately.
