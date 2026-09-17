@@ -258,7 +258,10 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
+next_action: REVIEW_ARCH_04_SPEC
+arch_04_spec_status: SPEC_IN_REVIEW
+arch_04_spec: docs/specs/ARCH-04.md
+arch_04_spec_pr: pending_open
 next_action_authorized: true
 updated_at: "2026-09-17T02:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)

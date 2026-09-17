@@ -228,11 +228,15 @@ autorizam refatoração imediata.
   - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
   - blocking: true
   - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
-  - status: AUTHORIZED_NOT_YET_IMPLEMENTED
+  - status: SPEC_IN_REVIEW
+  - spec: docs/specs/ARCH-04.md
+  - spec_branch: docs/ARCH-04-spec
+  - spec_baseline: 6eae01631284742a7c06f47e411f6fa77361ea81
   - decide_before: TASK-15 (mecanicamente, via depends_on)
   - scope: remover o disparo automático de revisão Claude a cada push (`pull_request`/`synchronize`); o loop controller passa a disparar uma revisão independente de forma determinística ao atingir `READY_FOR_INDEPENDENT_REVIEW`
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, integridade do LOOP-REGISTER, semântica de `current_task` vs `next_eligible_task`, gate do resolver `decide_before`, reconciliação remote-first, checagens mecânicas antes da revisão por LLM, métricas de uso de revisão
+  - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
   - next_action: SPEC_AFTER_TASK_14_CLOSES — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [x] ARCH-02 — Consolidar o contrato de data e hora do domínio

@@ -87,7 +87,10 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
-next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
+next_action: REVIEW_ARCH_04_SPEC
+arch_04_spec_status: SPEC_IN_REVIEW
+arch_04_spec: docs/specs/ARCH-04.md
+arch_04_spec_pr: pending_open
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
