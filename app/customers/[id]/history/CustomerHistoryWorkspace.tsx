@@ -169,6 +169,10 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
           ) : notFound ? (
             <div
               className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5"
+              // status, not alert: a missing customer is a terminal condition the
+              // reader cannot fix by retrying, so alert would signal an urgency
+              // with no action behind it.
+              role="status"
               data-testid="history-not-found"
             >
               <p className="font-semibold text-amber-950">Cliente não encontrado.</p>
@@ -177,19 +181,23 @@ export default function CustomerHistoryWorkspace({ customerId }: { customerId: n
               </p>
               <Link
                 href="/"
-                className="mt-4 inline-flex min-h-10 items-center rounded-lg border border-amber-300 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+                className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-amber-300 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2"
               >
                 Voltar para clientes
               </Link>
             </div>
           ) : error ? (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5" data-testid="history-error">
+            <div
+              className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5"
+              role="alert"
+              data-testid="history-error"
+            >
               <p className="font-semibold text-red-950">Não foi possível carregar o histórico.</p>
               <p className="mt-1 text-sm text-red-800">{error}</p>
               <button
                 type="button"
                 onClick={() => void loadFirstPage()}
-                className="mt-4 min-h-10 rounded-lg border border-red-300 px-3 text-sm font-semibold text-red-900 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="mt-4 min-h-11 rounded-lg border border-red-300 px-3 text-sm font-semibold text-red-900 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
               >
                 Tentar novamente
               </button>

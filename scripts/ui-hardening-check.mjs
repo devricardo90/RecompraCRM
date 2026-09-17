@@ -1,0 +1,344 @@
+import { strict as assert } from "node:assert";
+import { readFile, readdir } from "node:fs/promises";
+import { resolve, sep } from "node:path";
+
+/**
+ * TASK-14 hardening floor. Source-only guard, no browser: proves everything in
+ * docs/specs/TASK-14.md's "Como o piso deixa de depender de inspeção" table
+ * that is verifiable statically. What it explicitly does not prove — that a
+ * marker is actually rendered, and that the body doesn't scroll horizontally
+ * at 320px — is the ephemeral Playwright pass's job.
+ */
+const root = process.cwd();
+
+async function read(path) {
+  return readFile(resolve(root, path), "utf8");
+}
+
+// Scopes anchor search to the JSX returned by the component, so a fallback
+// error string used in a fetch() catch above the render can't be mistaken for
+// the rendered branch that carries the same words.
+function jsxOf(source) {
+  const start = source.indexOf("return (");
+  assert.notEqual(start, -1, "no `return (` found; the component shape changed");
+  return source.slice(start);
+}
+
+function windowAround(text, anchor, { before = 300, after = 300 } = {}, label) {
+  const idx = text.indexOf(anchor);
+  assert.notEqual(idx, -1, `${label}: anchor not found: ${JSON.stringify(anchor)}`);
+  return text.slice(Math.max(0, idx - before), Math.min(text.length, idx + anchor.length + after));
+}
+
+function sliceBetween(text, startMarker, endMarker, label) {
+  const start = text.indexOf(startMarker);
+  assert.notEqual(start, -1, `${label}: start marker not found: ${JSON.stringify(startMarker)}`);
+  const from = start + startMarker.length;
+  const end = text.indexOf(endMarker, from);
+  assert.notEqual(end, -1, `${label}: end marker not found: ${JSON.stringify(endMarker)}`);
+  return text.slice(start, end);
+}
+
+function countTag(source, tagName, label) {
+  const matches = source.match(new RegExp(`<${tagName}\\b`, "gu")) ?? [];
+  assert.equal(matches.length, 1, `${label}: expected exactly one <${tagName}>, found ${matches.length}`);
+}
+
+// `=>` contains `>`, which would otherwise close a tag match early inside any
+// attribute holding an arrow function (onClick={() => ...}).
+function maskArrows(source) {
+  return source.replace(/=>/g, " ARROW ");
+}
+
+function unmaskArrows(text) {
+  return text.replace(/ ARROW /g, "=>");
+}
+
+function extractInteractiveTags(source) {
+  const masked = maskArrows(source);
+  const re = /<(button|Link|input|select)\b[\s\S]*?>/g;
+  const tags = [];
+  let m;
+  while ((m = re.exec(masked))) {
+    const line = masked.slice(0, m.index).split("\n").length;
+    tags.push({ tagName: m[1], text: unmaskArrows(m[0]), line });
+  }
+  return tags;
+}
+
+function resolveClassNameVars(source) {
+  const vars = new Map();
+  const re = /const\s+([A-Z0-9_]+)\s*=\s*"([^"]*)"/g;
+  let m;
+  while ((m = re.exec(source))) vars.set(m[1], m[2]);
+  return vars;
+}
+
+function assertFocusAndTouchTargets(source, label) {
+  const classVars = resolveClassNameVars(source);
+  for (const tag of extractInteractiveTags(source)) {
+    let className = "";
+    const literal = tag.text.match(/className="([^"]*)"/);
+    const varRef = tag.text.match(/className=\{([A-Z0-9_]+)\}/);
+    if (literal) {
+      className = literal[1];
+    } else if (varRef && classVars.has(varRef[1])) {
+      className = classVars.get(varRef[1]);
+    } else {
+      assert.fail(
+        `${label}:${tag.line}: cannot resolve className for <${tag.tagName}> (${tag.text.slice(0, 80)}...); ` +
+          "use a literal string or a top-level `const X = \"...\"` so the guard can check it",
+      );
+    }
+
+    assert.match(
+      className,
+      /focus:/u,
+      `${label}:${tag.line}: <${tag.tagName}> has no focus-visible styling`,
+    );
+
+    const minHeight = className.match(/min-h-(\d+)/u);
+    const squareHeight = className.match(/(?:^|\s)h-(\d+)(?:\s|$)/u);
+    const squareWidth = className.match(/(?:^|\s)w-(\d+)(?:\s|$)/u);
+    const meetsMinHeight = minHeight && Number(minHeight[1]) >= 11;
+    const meetsSquare =
+      squareHeight && squareWidth && Number(squareHeight[1]) >= 11 && Number(squareWidth[1]) >= 11;
+    assert.ok(
+      meetsMinHeight || meetsSquare,
+      `${label}:${tag.line}: <${tag.tagName}> touch target below 44px (min-h-11, or h-11/w-11 for a square control): ${JSON.stringify(className)}`,
+    );
+  }
+}
+
+function assertAccessibleNames(source, label) {
+  const masked = maskArrows(source);
+  for (const tagName of ["button", "Link"]) {
+    const re = new RegExp(`<${tagName}\\b[\\s\\S]*?>([\\s\\S]*?)</${tagName}>`, "g");
+    let m;
+    while ((m = re.exec(masked))) {
+      const openTag = unmaskArrows(m[0].slice(0, m[0].indexOf(">") + 1));
+      const line = masked.slice(0, m.index).split("\n").length;
+      if (/aria-label=/.test(openTag)) continue;
+
+      const inner = unmaskArrows(m[1])
+        .replace(/<span[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/span>/gu, "")
+        .replace(/<[^>]+>/gu, "");
+      assert.match(
+        inner,
+        /[A-Za-zÀ-ÿ]{2,}/u,
+        `${label}:${line}: <${tagName}> has neither aria-label nor visible text`,
+      );
+    }
+  }
+}
+
+function assertLabelledFormControls(source, label) {
+  const ids = new Set();
+  for (const m of source.matchAll(/<(?:input|select)\b[^>]*\bid=\{?`?"?([\w-]+)/gu)) ids.add(m[1]);
+  const labelledIds = new Set([...source.matchAll(/htmlFor=\{?`?"?([\w-]+)/gu)].map((m) => m[1]));
+  for (const id of ids) {
+    assert.ok(
+      labelledIds.has(id) || [...labelledIds].some((l) => id.startsWith(l.replace(/[`$]/gu, ""))),
+      `${label}: form control id ${JSON.stringify(id)} has no matching htmlFor`,
+    );
+  }
+}
+
+function assertNoRawLocaleDate(source, label) {
+  assert.doesNotMatch(source, /toLocaleDateString\s*\(/u, `${label}: uses raw toLocaleDateString instead of formatBusinessDate`);
+}
+
+function assertNoFixedPixelOverflow(source, label) {
+  assert.doesNotMatch(
+    source,
+    /\b(?:w|min-w)-\[\d+px\]/u,
+    `${label}: fixed pixel width container could force horizontal scroll`,
+  );
+}
+
+function assertNavHasAriaLabel(source, label) {
+  const navTags = source.match(/<nav\b[^>]*>/gu) ?? [];
+  assert.ok(navTags.length >= 1, `${label}: no <nav> found`);
+  for (const nav of navTags) {
+    assert.match(nav, /aria-label=/u, `${label}: <nav> missing aria-label: ${nav}`);
+  }
+}
+
+// --- Six-screen floor: main/h1, loading, error+retry, empty distinctness ---
+
+const screens = [
+  {
+    route: "/",
+    file: "app/customers/CustomerWorkspace.tsx",
+    loadingAnchor: 'aria-label="Carregando clientes"',
+    errorAnchor: "Não foi possível carregar sua base.",
+    retryText: "Tentar novamente",
+    emptyAnchor: "Sua base começa aqui",
+  },
+  {
+    route: "/products",
+    file: "app/products/ProductWorkspace.tsx",
+    loadingAnchor: 'aria-label="Carregando produtos"',
+    errorAnchor: "Não foi possível carregar seu catálogo.",
+    retryText: "Tentar novamente",
+    emptyAnchor: "Seu catálogo começa aqui",
+  },
+  {
+    route: "/sales",
+    file: "app/sales/SaleWorkspace.tsx",
+    loadingAnchor: 'aria-label="Carregando dados da venda"',
+    errorAnchor: "Não foi possível preparar a venda.",
+    retryText: "Tentar novamente",
+    emptyAnchor: "Falta um passo antes de vender",
+  },
+  {
+    route: "/inventory",
+    file: "app/inventory/InventoryWorkspace.tsx",
+    loadingAnchor: 'aria-label="Carregando alertas de estoque"',
+    errorAnchor: "Não foi possível carregar os alertas.",
+    retryText: "Tentar novamente",
+    emptyAnchor: "Nenhum produto precisa de reposição agora",
+  },
+];
+
+for (const screen of screens) {
+  const source = await read(screen.file);
+  const label = screen.route;
+  countTag(source, "main", label);
+  countTag(source, "h1", label);
+  assertNavHasAriaLabel(source, label);
+
+  const jsx = jsxOf(source);
+  const loadingWindow = windowAround(jsx, screen.loadingAnchor, { before: 40, after: 120 }, label);
+  assert.match(loadingWindow, /role="status"/u, `${label}: loading branch missing role="status"`);
+
+  const errorWindow = windowAround(jsx, screen.errorAnchor, { before: 300, after: 600 }, label);
+  assert.match(errorWindow, /role="alert"/u, `${label}: primary error branch missing role="alert"`);
+  assert.match(errorWindow, new RegExp(screen.retryText), `${label}: primary error branch missing a retry control`);
+
+  const emptyWindow = windowAround(jsx, screen.emptyAnchor, { before: 300, after: 50 }, label);
+  assert.doesNotMatch(emptyWindow, /role="alert"/u, `${label}: empty state must not be rendered as an error`);
+
+  assertFocusAndTouchTargets(source, label);
+  assertAccessibleNames(source, label);
+  assertLabelledFormControls(source, label);
+  assertNoRawLocaleDate(source, label);
+  assertNoFixedPixelOverflow(source, label);
+}
+
+// --- /repurchases: independent `&&` blocks rather than a ternary chain ---
+
+{
+  const label = "/repurchases";
+  const source = await read("app/repurchases/RepurchaseWorkspace.tsx");
+  countTag(source, "main", label);
+  countTag(source, "h1", label);
+  assertNavHasAriaLabel(source, label);
+
+  const jsx = jsxOf(source);
+  const loadingWindow = windowAround(jsx, "Carregando recompras", { before: 150, after: 20 }, label);
+  assert.match(loadingWindow, /role="status"/u, `${label}: loading branch missing role="status"`);
+
+  const errorBranch = sliceBetween(jsx, "{error && !isLoading && (", "{!isLoading && !error", label);
+  assert.match(errorBranch, /role="alert"/u, `${label}: primary error branch missing role="alert"`);
+  assert.match(errorBranch, /Tentar novamente/u, `${label}: primary error branch missing a retry control`);
+
+  const emptyWindow = windowAround(
+    jsx,
+    "Nenhuma recompra vencida, para hoje ou para os próximos sete dias.",
+    { before: 200, after: 20 },
+    label,
+  );
+  assert.doesNotMatch(emptyWindow, /role="alert"/u, `${label}: empty state must not be rendered as an error`);
+
+  assertFocusAndTouchTargets(source, label);
+  assertAccessibleNames(source, label);
+  assertNoRawLocaleDate(source, label);
+  assertNoFixedPixelOverflow(source, label);
+}
+
+// --- /customers/[id]/history: five branches, including the two not-found paths ---
+
+{
+  const label = "/customers/[id]/history";
+  const source = await read("app/customers/[id]/history/CustomerHistoryWorkspace.tsx");
+  countTag(source, "main", label);
+  countTag(source, "h1", label);
+  assertNavHasAriaLabel(source, label);
+
+  const jsx = jsxOf(source);
+  const loadingWindow = windowAround(jsx, 'aria-label="Carregando histórico"', { before: 40, after: 120 }, label);
+  assert.match(loadingWindow, /role="status"/u, `${label}: loading branch missing role="status"`);
+
+  const notFoundBranch = sliceBetween(jsx, ") : notFound ? (", ") : error ? (", label);
+  assert.match(notFoundBranch, /role="status"/u, `${label}: notFound branch must be announced with role="status"`);
+  assert.match(notFoundBranch, /href="\/"/u, `${label}: notFound branch must offer a navigation exit`);
+  assert.doesNotMatch(notFoundBranch, /role="alert"/u, `${label}: notFound is not an error`);
+  assert.doesNotMatch(notFoundBranch, /Tentar novamente/u, `${label}: notFound must not offer a retry`);
+
+  const errorBranch = sliceBetween(jsx, ") : error ? (", ") : sales.length === 0 ? (", label);
+  assert.match(errorBranch, /role="alert"/u, `${label}: primary error branch missing role="alert"`);
+  assert.match(errorBranch, /Tentar novamente/u, `${label}: primary error branch missing a retry control`);
+
+  const emptyWindow = windowAround(jsx, "Nenhuma compra ainda", { before: 300, after: 50 }, label);
+  assert.doesNotMatch(emptyWindow, /role="alert"/u, `${label}: empty state must not be rendered as an error`);
+  assert.doesNotMatch(emptyWindow, /role="status"/u, `${label}: empty state must not be rendered as loading`);
+
+  assertFocusAndTouchTargets(source, label);
+  assertAccessibleNames(source, label);
+  assertNoRawLocaleDate(source, label);
+  assertNoFixedPixelOverflow(source, label);
+}
+
+// --- app/not-found.tsx: the malformed-id boundary ---
+
+{
+  const label = "app/not-found.tsx";
+  const source = await read("app/not-found.tsx");
+  countTag(source, "main", label);
+  countTag(source, "h1", label);
+  assert.match(source, /href="\/"/u, `${label}: must offer a navigation exit`);
+  assert.match(source, /[À-ÿ]/u, `${label}: must be in pt-BR, not the Next default English 404`);
+  assertFocusAndTouchTargets(source, label);
+  assertAccessibleNames(source, label);
+}
+
+// --- lang="pt-BR" once, in the root layout ---
+
+{
+  const layout = await read("app/layout.tsx");
+  assert.match(layout, /<html\s+lang="pt-BR"/u, "app/layout.tsx must declare lang=\"pt-BR\"");
+}
+
+// --- AC14: every route under app/ (outside app/api) must be one of the six screens ---
+
+async function findPageRoutes(dir, base = "") {
+  const entries = await readdir(resolve(root, dir), { withFileTypes: true });
+  const routes = [];
+  for (const entry of entries) {
+    const entryPath = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (entryPath === "app/api") continue;
+      routes.push(...(await findPageRoutes(entryPath, `${base}/${entry.name}`)));
+    } else if (entry.name === "page.tsx") {
+      routes.push(base === "" ? "/" : base.split(sep).join("/"));
+    }
+  }
+  return routes;
+}
+
+const knownRoutes = new Set([...screens.map((s) => s.route), "/repurchases", "/customers/[id]/history"]);
+const discoveredRoutes = await findPageRoutes("app");
+for (const route of discoveredRoutes) {
+  assert.ok(
+    knownRoutes.has(route),
+    `route ${JSON.stringify(route)} (a page.tsx under app/) is not covered by the UI hardening floor list`,
+  );
+}
+assert.equal(
+  discoveredRoutes.length,
+  knownRoutes.size,
+  `expected exactly ${knownRoutes.size} routes (${[...knownRoutes].join(", ")}), found ${discoveredRoutes.length}: ${discoveredRoutes.join(", ")}`,
+);
+
+console.log("UI hardening floor (TASK-14): PASS");

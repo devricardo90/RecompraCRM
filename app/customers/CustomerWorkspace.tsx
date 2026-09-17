@@ -226,7 +226,7 @@ export default function CustomerWorkspace() {
             <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5" role="alert">
               <p className="font-semibold text-red-950">Não foi possível carregar sua base.</p>
               <p className="mt-1 text-sm text-red-800">{error}</p>
-              <button type="button" onClick={() => void loadCustomers()} className="mt-4 min-h-10 rounded-lg border border-red-300 px-3 text-sm font-semibold text-red-900 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Tentar novamente</button>
+              <button type="button" onClick={() => void loadCustomers()} className="mt-4 min-h-11 rounded-lg border border-red-300 px-3 text-sm font-semibold text-red-900 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Tentar novamente</button>
             </div>
           ) : filteredCustomers.length === 0 ? (
             <div className="mt-6 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 px-5 py-12 text-center">
@@ -248,8 +248,8 @@ export default function CustomerWorkspace() {
                   </div>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
                     <div className="flex items-center gap-2">
-                      <Link href={`/customers/${customer.id}/history`} data-testid="customer-history-link" className="min-h-10 inline-flex items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Histórico</Link>
-                      <button type="button" onClick={() => openEditForm(customer)} className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Editar</button>
+                      <Link href={`/customers/${customer.id}/history`} data-testid="customer-history-link" className="min-h-11 inline-flex items-center rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Histórico</Link>
+                      <button type="button" onClick={() => openEditForm(customer)} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">Editar</button>
                     </div>
                   </div>
                 </article>
@@ -267,7 +267,7 @@ export default function CustomerWorkspace() {
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-700">{editingId ? "Editar cadastro" : "Novo cadastro"}</p>
                 <h2 id="customer-form-title" className="mt-1 text-2xl font-bold text-slate-950">{editingId ? "Atualize os dados" : "Cadastre um cliente"}</h2>
               </div>
-              <button type="button" onClick={closeForm} aria-label="Fechar formulário" className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600">×</button>
+              <button type="button" onClick={closeForm} aria-label="Fechar formulário" className="flex h-11 w-11 items-center justify-center rounded-full text-2xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600">×</button>
             </div>
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <div>
@@ -280,8 +280,8 @@ export default function CustomerWorkspace() {
               </div>
               {formError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-800" role="alert">{formError}</p>}
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-                <button type="button" onClick={closeForm} disabled={isSaving} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button>
-                <button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60">{isSaving ? "Salvando…" : editingId ? "Salvar alterações" : "Cadastrar cliente"}</button>
+                <button type="button" onClick={closeForm} disabled={isSaving} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="min-h-11 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">{isSaving ? "Salvando…" : editingId ? "Salvar alterações" : "Cadastrar cliente"}</button>
               </div>
             </form>
           </section>
