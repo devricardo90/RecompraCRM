@@ -76,7 +76,7 @@ task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is AUTHORIZED_NOT_YET_IMPLEMENTED; verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_IN_REVIEW (still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
 branch: main
 pr_number: none
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -148,9 +148,11 @@ owner_decision_02_scope: remove the automatic per-push Claude review dispatch (p
 owner_decision_02_forbids: weakening the mandatory clean-exact-HEAD independent review gate before merge; any manual @claude review command as a substitute
 owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> deterministic preflight PASS -> READY_FOR_INDEPENDENT_REVIEW -> one Claude review of the exact HEAD -> CLEAN -> merge; FINDINGS -> fix -> push -> CI and validation -> preflight -> one new independent review
 owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
-owner_decision_02_next_action: SPEC_AFTER_TASK_14_CLOSES
+owner_decision_02_includes_split: only decide_before resolver gate and mechanical checks before LLM review are implemented by ARCH-04; the other six items are tracked non-blocking as ARCH-05, so closing ARCH-04 does not silently close OWNER-02
+owner_decision_02_next_action: REVIEW_ARCH_04_SPEC_PR_36
 owner_decision_02_roadmap_item: ARCH-04
-owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status leaves AUTHORIZED_NOT_YET_IMPLEMENTED; a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
+owner_decision_02_roadmap_item_remainder: ARCH-05
+owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_IN_REVIEW, previously AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
@@ -258,7 +260,10 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: SPEC_ARCH_04_REVIEW_TRIGGER_ECONOMICS
+next_action: REVIEW_ARCH_04_SPEC
+arch_04_spec_status: SPEC_IN_REVIEW
+arch_04_spec: docs/specs/ARCH-04.md
+arch_04_spec_pr: 36
 next_action_authorized: true
 updated_at: "2026-09-17T02:00:00Z"
 updated_by: Claude Code (Rick Loop recovery after notebook shutdown)

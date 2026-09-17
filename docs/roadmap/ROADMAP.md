@@ -228,12 +228,25 @@ autorizam refatoração imediata.
   - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
   - blocking: true
   - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
-  - status: AUTHORIZED_NOT_YET_IMPLEMENTED
+  - status: SPEC_IN_REVIEW
+  - spec: docs/specs/ARCH-04.md
+  - spec_branch: docs/ARCH-04-spec
+  - spec_baseline: 6eae01631284742a7c06f47e411f6fa77361ea81
   - decide_before: TASK-15 (mecanicamente, via depends_on)
   - scope: remover o disparo automático de revisão Claude a cada push (`pull_request`/`synchronize`); o loop controller passa a disparar uma revisão independente de forma determinística ao atingir `READY_FOR_INDEPENDENT_REVIEW`
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
-  - includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, integridade do LOOP-REGISTER, semântica de `current_task` vs `next_eligible_task`, gate do resolver `decide_before`, reconciliação remote-first, checagens mecânicas antes da revisão por LLM, métricas de uso de revisão
-  - next_action: SPEC_AFTER_TASK_14_CLOSES — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
+  - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
+  - next_action: REVIEW_ARCH_04_SPEC_PR_36 — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+
+- [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
+  - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
+  - subsystem: STATE/HANDOFF/ROADMAP/LOOP-REGISTER e o loop controller
+  - blocking: false
+  - blocking_rationale: nenhuma task depende deste item; o owner não forneceu uma arquitetura exata para ele, ao contrário de ARCH-04
+  - status: OPEN
+  - scope: STATE_POINTER_CONSISTENCY e BASELINE_POINTER_CONSISTENCY além do que o preflight de ARCH-04 cobre mecanicamente; integridade completa do LOOP-REGISTER (não só JSONL válido linha a linha); semântica de `current_task` vs `next_eligible_task` além do que `resolveEffectiveTask` já faz; reconciliação remote-first como mecanismo novo; métricas de uso de revisão
+  - next_action: SPEC_QUANDO_PRIORIZADO — este item não bloqueia o roadmap; precisa de uma decisão de arquitetura do owner antes de virar spec, do mesmo jeito que ARCH-04 precisou
 
 - [x] ARCH-02 — Consolidar o contrato de data e hora do domínio
   - origin: ARCHITECTURE_COMPLEXITY_SIGNAL emitido na TASK-11 (9 rodadas, 15 classes de defeito distintas)
