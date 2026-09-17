@@ -90,7 +90,7 @@ open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md
 next_action: REVIEW_ARCH_04_SPEC
 arch_04_spec_status: SPEC_IN_REVIEW
 arch_04_spec: docs/specs/ARCH-04.md
-arch_04_spec_pr: pending_open
+arch_04_spec_pr: 36
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
