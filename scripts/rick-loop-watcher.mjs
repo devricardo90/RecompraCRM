@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { fetchIssueComments, hasVerdictForHead, REDISPATCH_COOLDOWN_MS } from "./rick-loop-review-dispatch.mjs";
+import { fetchIssueComments, hasVerdictForHead, reviewRunMatchesHead, REDISPATCH_COOLDOWN_MS } from "./rick-loop-review-dispatch.mjs";
 
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
 export const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
@@ -21,7 +21,12 @@ export function retryDelaySeconds(cycle) {
 
 export function selectClaudeReviewRun(runs, head) {
   if (!Array.isArray(runs) || !head) return null;
-  return runs.find((run) => run?.headSha === head) ?? null;
+  // Shares reviewRunMatchesHead with the dispatcher: a dispatched run executes
+  // the default branch's definition and is recorded against it, so its headSha
+  // is main's and only the run-name carries the reviewed HEAD. Matching on
+  // headSha alone here would report "no run" for every dispatched review and
+  // re-dispatch it forever.
+  return runs.find((run) => reviewRunMatchesHead(run, head)) ?? null;
 }
 
 export function claudeReviewRetryAction(run, { now = new Date(), cooldownMs = REVIEW_RETRY_COOLDOWN_MS } = {}) {
@@ -199,7 +204,7 @@ function fetchVerdictPublished(identity) {
 function retryClaudeReview(identity, now = new Date()) {
   if (!identity?.head || !identity?.branch) return { action: "NO_IDENTITY" };
   try {
-    const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--branch", identity.branch, "--limit", "20", "--json", "databaseId,headSha,status,conclusion,createdAt,updatedAt"]);
+    const raw = sh("gh", ["run", "list", "--workflow", CLAUDE_REVIEW_WORKFLOW, "--limit", "20", "--json", "databaseId,headSha,displayTitle,status,conclusion,createdAt,updatedAt"]);
     const runs = raw ? JSON.parse(raw) : [];
     const run = selectClaudeReviewRun(runs, identity.head);
     const verdictPublished = fetchVerdictPublished(identity);

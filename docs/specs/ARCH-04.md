@@ -177,14 +177,20 @@ Dado um número de PR:
    *completam* para o mesmo HEAD, não que uma segunda nunca chegue a ser
    enfileirada.
 5. Se as condições 1–4 passarem, dispara `gh workflow run
-   claude-pr-review.yml --ref <headRefName> -f pr_number=<n> -f
-   expected_head_sha=<sha>`. `--ref` é obrigatório: sem ele, `gh workflow
-   run` executa contra o branch padrão do repositório (confirmado via `gh
-   workflow run --help`), a execução resultante fica gravada com
-   `head_branch=main`, e nem a checagem de idempotência do passo 4 nem o
-   `retryClaudeReview`/`selectClaudeReviewRun` existente (que filtra por
-   `--branch <branch>` e casa `headSha`) jamais a encontram — o watcher
-   dispara de novo a cada ciclo, sem fim. Retry de uma execução existente
+   claude-pr-review.yml --ref <branch-padrão> -f pr_number=<n> -f
+   expected_head_sha=<sha>`. **`--ref` nomeia o branch cuja *versão do
+   arquivo de workflow* executa, não apenas o código revisado.** Apontá-lo
+   para o branch do PR executaria a cópia de `claude-pr-review.yml` do
+   próprio autor do PR, com o `CLAUDE_CODE_OAUTH_TOKEN` e os escopos de
+   escrita do job — e todos os passos de validação vivem nesse mesmo
+   arquivo, então poderiam simplesmente ser removidos. Qualquer pessoa com
+   permissão de push num branch do mesmo repositório escalaria para leitura
+   do token de revisão. Por isso o disparo sempre roda a definição do branch
+   padrão, que nenhum PR pode modificar, e o HEAD do PR viaja como input que
+   o workflow confiável revalida e faz checkout. Achado P1 da revisão
+   independente na PR 40; a versão anterior deste spec exigia
+   `--ref <branch-do-PR>` apenas por correlação de execução, resolvida agora
+   por `reviewRunMatchesHead` (ver abaixo). Retry de uma execução existente
    que falhou continua sendo `retryClaudeReview` (inalterado), não este
    script.
 
@@ -270,15 +276,20 @@ O gatilho `pull_request` **permanece presente** durante a PR 1 (ver
 sequência de bootstrap) e só é removido na PR 2, depois que o caminho novo
 estiver provado.
 
-**Por que isso preserva `retryClaudeReview` inalterado.** Uma vez que o
-disparo usa `-r/--ref <branch-do-PR>` (ver dispatcher, abaixo), GitHub
-grava a execução com `head_branch = <branch-do-PR>` e `head_sha` = a ponta
-dessa branch no momento do disparo — os mesmos dois campos que
-`gh run list --branch <branch>` e `selectClaudeReviewRun` (`headSha ===
-head`) já usam hoje para casar uma execução com o PR/HEAD certos
-(`rick-loop-watcher.mjs:20-23`). Sem `--ref`, a execução ficaria gravada
-contra o branch padrão (`main`) e nunca seria encontrada por essa consulta
-— era esse o defeito na primeira versão deste spec.
+**Como a correlação de execução funciona.** Como o disparo roda a
+definição do branch padrão (ver dispatcher, abaixo), GitHub grava a
+execução contra o branch padrão: `head_branch = main` e `head_sha` = a
+ponta de `main`, não o HEAD do PR. Filtrar por `gh run list --branch
+<branch-do-PR>` e casar `headSha` — o que `selectClaudeReviewRun` fazia —
+esconderia exatamente as execuções que este dispatcher cria, e o watcher
+dispararia de novo a cada ciclo, sem fim.
+
+A correlação passa a ser explícita: o workflow declara um `run-name` que
+carrega `PR #<n> @ <sha>`, e `reviewRunMatchesHead` (compartilhado entre
+dispatcher e watcher) casa por `headSha` **ou** pelo HEAD nomeado no
+`run-name`. O `headSha` continua sendo tentado primeiro porque o gatilho
+`pull_request` segue ativo na Stage 2 e essas execuções ficam ancoradas
+normalmente. A consulta não filtra mais por `--branch`.
 
 ### `rick-loop-watcher.mjs`
 
@@ -402,15 +413,18 @@ silenciosa.
 AC3. `scripts/rick-loop-review-dispatch.mjs` só dispara quando CI está
 verde no HEAD exato, o preflight passa, e a checagem barata de
 idempotência não encontra execução para esse HEAD; cada bloqueio é
-nomeado; o disparo usa `--ref <branch-do-PR>` (sem isso a execução fica
-gravada contra o branch padrão e nunca é encontrada por essa mesma
-checagem nem pelo `retryClaudeReview` existente).
+nomeado; o disparo usa `--ref <branch-padrão>` para que a definição de
+workflow executada seja sempre uma que nenhum PR possa modificar, e a
+execução resultante é correlacionada pelo `run-name` via
+`reviewRunMatchesHead`.
 
 AC4. `rick-loop-watcher.mjs` chama o dispatcher quando observa
 `WAIT_FOR_CODEX`/`WAIT_FOR_INDEPENDENT_REVIEW` sem execução existente
-(`NO_RUN`), preservando o caminho de retry existente (`RERUN`,
-`selectClaudeReviewRun` casando por `branch`+`headSha`) inalterado — o que
-só continua funcionando porque AC3 exige `--ref`.
+(`NO_RUN`), preservando o caminho de retry existente (`RERUN`)
+inalterado; `selectClaudeReviewRun` passa a casar por
+`reviewRunMatchesHead` (headSha **ou** HEAD nomeado no `run-name`) em vez
+de `branch`+`headSha`, porque AC3 agora executa a definição do branch
+padrão.
 
 AC5. Nenhuma função do gate de merge
 (`evaluateMergeAllowed`/`isCleanReviewResult`/`countUnresolvedFindings`/
@@ -515,11 +529,13 @@ explícita de continuar TASK-15/16/17 depois que ARCH-04 fechar.
 
 ## Assumptions explícitas
 
-- **A1**: `gh workflow run` com `--ref <branch-do-PR> -f ...` preenche
-  `inputs.*` corretamente e grava a execução com `head_branch`/`head_sha`
-  da ponta dessa branch (comportamento padrão da CLI, não configuração
-  adicional) — sem `--ref` cairia no branch padrão, que é exatamente o
-  defeito corrigido nesta versão do spec.
+- **A1**: `gh workflow run` com `--ref <branch-padrão> -f ...` preenche
+  `inputs.*` corretamente e grava a execução contra o branch padrão
+  (comportamento padrão da CLI, não configuração adicional). A correlação
+  com o PR/HEAD não vem mais de `head_branch`/`head_sha` e sim do
+  `run-name` declarado no workflow, lido por `reviewRunMatchesHead`.
+  Assumir o contrário — que `--ref` escolhe só o código revisado, não a
+  definição executada — foi o defeito P1 corrigido nesta versão do spec.
 - **A2**: o token usado pelo controller/watcher (o mesmo `gh` já autenticado
   usado em todo o resto do loop) tem permissão de `actions: write` para
   disparar `workflow_dispatch` — se não tiver, isso aparece como uma falha

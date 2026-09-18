@@ -14,6 +14,15 @@ name: Claude PR Review
 # from claude-pr-review-meta.yml, which is unchanged here and so stays
 # identical to the default branch.
 
+# The dispatcher runs this workflow from the DEFAULT BRANCH, never from the PR
+# branch, so the definition executing here is always the trusted one (see
+# buildDispatchArgs). That costs the natural correlation handle: GitHub records
+# a default-branch dispatch against the default branch, so `run.headSha` is
+# main's sha and not the PR's. This run-name carries the PR number and the
+# reviewed HEAD instead, and the dispatcher and watcher match on it.
+run-name: >-
+  Claude PR Review · PR #${{ inputs.pr_number || github.event.pull_request.number }} @ ${{ inputs.expected_head_sha || github.event.pull_request.head.sha }}
+
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
