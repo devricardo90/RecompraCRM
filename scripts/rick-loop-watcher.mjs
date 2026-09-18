@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-import { fetchIssueComments, hasVerdictForHead } from "./rick-loop-review-dispatch.mjs";
+import { fetchIssueComments, hasVerdictForHead, REDISPATCH_COOLDOWN_MS } from "./rick-loop-review-dispatch.mjs";
 
 const RETRY_DELAYS_SECONDS = Object.freeze([30, 60, 300, 600, 1800, 3600]);
 export const REVIEW_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
@@ -52,7 +52,13 @@ export function claudeReviewAction({
   run,
   verdictPublished = false,
   now = new Date(),
-  cooldownMs = REVIEW_RETRY_COOLDOWN_MS,
+  // REDISPATCH_COOLDOWN_MS, not REVIEW_RETRY_COOLDOWN_MS: this decision ends
+  // in a fresh dispatch, not a rerun of the old one. The one-hour rerun
+  // cooldown exists to avoid hammering a genuinely failing Action; the
+  // stale-dispatch race this decision recovers from resolves in seconds, and
+  // making it wait an hour would stall a real review for exactly the reason
+  // the shorter constant was introduced.
+  cooldownMs = REDISPATCH_COOLDOWN_MS,
 } = {}) {
   // Checked before the run itself, for the same reason as classifyExistingRun:
   // the run that produced a verdict ages out of the `--limit 20` window, and

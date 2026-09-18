@@ -307,8 +307,26 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
 
 {
   const staleRun = { databaseId: 9, headSha: HEAD, status: "completed", conclusion: "success", updatedAt: "2026-09-17T12:00:00Z" };
-  const afterCooldown = new Date("2026-09-17T14:00:00Z");
-  const withinCooldown = new Date("2026-09-17T12:30:00Z");
+  const completedAt = Date.parse("2026-09-17T12:00:00Z");
+  // Pinned to the re-dispatch boundary itself, not to some loose later time.
+  // A loose assertion here previously passed while the watcher was silently
+  // falling back to the one-hour rerun cooldown, hiding the fact that the
+  // ten-minute constant never applied on the live path at all.
+  const justBeforeCooldown = new Date(completedAt + REDISPATCH_COOLDOWN_MS - 1000);
+  const justAfterCooldown = new Date(completedAt + REDISPATCH_COOLDOWN_MS + 1000);
+  const afterCooldown = justAfterCooldown;
+  const withinCooldown = justBeforeCooldown;
+
+  assert.equal(
+    claudeReviewAction({ run: staleRun, verdictPublished: false, now: justBeforeCooldown }),
+    "COOLDOWN",
+    "one second before the re-dispatch cooldown elapses, the watcher still waits",
+  );
+  assert.equal(
+    claudeReviewAction({ run: staleRun, verdictPublished: false, now: justAfterCooldown }),
+    "REDISPATCH",
+    "one second after it elapses the watcher re-dispatches - proving the ten-minute constant, not the one-hour rerun cooldown, governs this path",
+  );
 
   assert.equal(claudeReviewAction({ run: null }), "DISPATCH", "no run at all means dispatch");
   assert.equal(
@@ -339,8 +357,18 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
 
   // The regression itself: the old headSha-only decision said RERUN, which is
   // precisely the action that cannot break the deadlock.
+  // The legacy decision keeps its own one-hour cooldown, so it needs its own
+  // timestamp: at the ten-minute mark it is still in COOLDOWN, which is
+  // exactly the gap that made REDISPATCH_COOLDOWN_MS dead on the live path
+  // until the watcher stopped falling back to the legacy default.
+  const pastLegacyCooldown = new Date(completedAt + 2 * 60 * 60 * 1000);
   assert.equal(
-    claudeReviewRetryAction(staleRun, { now: afterCooldown }),
+    claudeReviewRetryAction(staleRun, { now: justAfterCooldown }),
+    "COOLDOWN",
+    "at the re-dispatch boundary the legacy decision is still waiting - the two cooldowns are genuinely different, not aliases",
+  );
+  assert.equal(
+    claudeReviewRetryAction(staleRun, { now: pastLegacyCooldown }),
     "RERUN",
     "the legacy decision still returns RERUN for this shape - retained for the v1.4 suite, but no longer what the watcher acts on",
   );
