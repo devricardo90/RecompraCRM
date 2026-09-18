@@ -8,7 +8,7 @@ status: TASK_15_SPEC_IN_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_5
 current_task: TASK-15
-current_task_status: COMPLETED
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-15
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED (merge 82018d3, pós-merge Validate 35373493515 SUCCESS) liberou o depends_on de TASK-15; supervisor retorna TASK_ADVANCE para TASK-15 e a spec está em revisão na PR 43
 current_branch: docs/TASK-15-spec

@@ -53,17 +53,21 @@ O teste percorre um caminho só, com identificadores únicos por execução:
    `minimumStock` e `consumptionDays` explícitos. O campo aceito por
    `parseProductInput` é `consumptionDays`; não existe
    `repurchaseIntervalDays`.
-3. **Venda** — `POST /api/sales` registra a venda ligando os dois, com
-   `quantity` explícito.
+3. **Venda** — `POST /api/sales` registra a venda ligando os dois. A rota
+   aceita `customerId` e um array `items: [{ productId, quantity }]` — não um
+   `productId`/`quantity` achatados na venda —, conforme `parseSaleInput`.
 4. **Estoque** — `GET /api/products` confirma o decremento exato do produto
    criado (`estoque inicial − quantidade vendida`), não apenas "diminuiu".
    Não existe `GET /api/products/[id]`: a rota por id exporta apenas `PUT`,
    então a leitura é feita na listagem, selecionando pelo id criado.
-5. **Previsão** — a venda passa a ter `expectedRepurchaseAt` igual a
-   `soldAt + (quantity × consumptionDays) dias`, que é a fórmula que
+5. **Previsão** — o **item** da venda passa a ter `expectedRepurchaseAt`
+   igual a `soldAt + (quantity × consumptionDays) dias`, que é a fórmula que
    `compute_expected_repurchase_at` implementa, no contrato de data/hora que
-   ARCH-02 fixou (instante com timezone declarado). A quantidade faz parte da
-   fórmula: omiti-la só acerta quando `quantity = 1`.
+   ARCH-02 fixou (instante com timezone declarado). O campo é uma coluna de
+   `SaleItem`, não de `Sale`: a resposta de `POST /api/sales` o traz aninhado
+   em `sale.items[].expectedRepurchaseAt`, e `GET /api/repurchases` o lê de
+   `saleItem`. A quantidade faz parte da fórmula: omiti-la só acerta quando
+   `quantity = 1`.
 6. **Dashboard** — `GET /api/repurchases` inclui **aquele** cliente, com a
    classificação correspondente à data prevista.
 
@@ -137,14 +141,15 @@ não devolver o registro criado.
 AC3. O produto é criado por `POST /api/products` com `currentStock`,
 `minimumStock` e `consumptionDays` explícitos.
 
-AC4. A venda é criada por `POST /api/sales` ligando aquele cliente e aquele
-produto.
+AC4. A venda é criada por `POST /api/sales` com `customerId` e
+`items: [{ productId, quantity }]`, ligando aquele cliente e aquele produto.
 
 AC5. O estoque resultante é conferido por `GET /api/products`, selecionando o
 produto criado pelo id, contra o valor exato esperado — não contra "menor que
 o inicial".
 
-AC6. `expectedRepurchaseAt` da venda é conferido contra
+AC6. O `expectedRepurchaseAt` do **item da venda** (coluna de `SaleItem`,
+lido em `sale.items[].expectedRepurchaseAt`) é conferido contra
 `soldAt + (quantity × consumptionDays) dias` no contrato de ARCH-02, com
 `quantity > 1` em pelo menos uma execução para que a multiplicação seja
 realmente exercida.
@@ -155,6 +160,9 @@ AC8. A classificação devolvida para esse cliente corresponde à data prevista,
 provada com dois intervalos que caem em classificações diferentes.
 
 AC9. `GET /api/customers/[id]/sales` inclui a venda criada pela execução.
+
+AC18. Nenhum critério desta spec atribui `expectedRepurchaseAt` a `Sale`: o
+campo pertence a `SaleItem`, e qualquer asserção o lê de lá.
 
 AC10. O teste roda inteiramente em um schema próprio, criado por execução, e
 nunca lê nem escreve no schema `public`.
@@ -188,7 +196,7 @@ PR.
 
 ## Definition of Done
 
-- AC1 a AC17 provados por teste, não por inspeção;
+- AC1 a AC18 provados por teste, não por inspeção;
 - todos os gates determinísticos verdes no HEAD exato do PR;
 - preflight determinístico passando antes de qualquer revisão despachada;
 - revisão independente publicada para esse HEAD exato, sem findings em
@@ -241,3 +249,8 @@ desenvolvimento.
   previa.
 - **A3**: o contrato de data/hora de ARCH-02 (instante com timezone
   declarado) continua valendo e não é reaberto por esta task.
+- **A4**: a forma das rotas de escrita é lida do código, não da memória. As
+  duas rodadas de revisão desta spec corrigiram quatro divergências desse
+  tipo (`consumptionDays`, ausência de `GET /api/products/[id]`, `items[]` em
+  vez de campos achatados, e `expectedRepurchaseAt` em `SaleItem` e não em
+  `Sale`). A implementação confere cada rota antes de usá-la.
