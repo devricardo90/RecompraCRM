@@ -12,8 +12,12 @@ name: Claude PR Review
 #
 # Removal happens here and not earlier because the owner required the
 # replacement path to be implemented, tested and demonstrably operational
-# first. It is: the dispatch path is proven live in docs/evidence/
-# ARCH-04-validation.md, on this very PR.
+# first. The live acceptance evidence is recorded in
+# docs/evidence/ARCH-04-validation.md, which is added by this same PR: six
+# pushes producing zero review runs, one authorized HEAD producing exactly one
+# dispatched review with a real exact-head verdict (run 35366498301), and
+# duplicate dispatch refused in both the in-flight and already-reviewed
+# states.
 #
 # The dispatcher runs this workflow from the DEFAULT BRANCH, never from the PR
 # branch, so the definition executing here is always the trusted one (see

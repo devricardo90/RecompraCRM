@@ -10,7 +10,7 @@ loop_version: RICK_LOOP_V1_5
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 (PR 38) in review - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; PR 37 merged at 3bb1ec1; Stage 1 PR 38 at f83b668; Stage 1b PR 39 at f3fc479; Stage 2 PR 40 at 1a27df3; Stage 3 PR 41 in review - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
 current_branch: feat/ARCH-04-dispatch-activation
 current_pr: 41
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -145,9 +145,13 @@ restart_command: git switch main && git pull --ff-only && npm install
    round detail in `docs/operations/LOOP-REGISTER.jsonl` under
    `run_id: RCRM-MVP01-RUN-014`); implementation PR #37 carried the
    scripts half and merged at `3bb1ec1` after 10 review rounds. Stage 1
-   (PR #38, the secondary reviewer workflow) is now in review — the same
+   (PR #38, the secondary reviewer workflow) merged at `f83b668`, the
+   pointer gate (PR #39) at `f3fc479` and the Stage 2 cutover (PR #40) at
+   `1a27df3`, each post-merge validated. Stage 3 (PR #41, which removes the
+   automatic trigger from both review workflows) is now in review — the same
    pipeline every other loop/governance change in this repo has gone
-   through.
+   through. The live acceptance evidence is in
+   `docs/evidence/ARCH-04-validation.md`.
 5. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per
    sale item. It binds nothing in TASK-14 or ARCH-04.
 6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,
