@@ -16,13 +16,26 @@ name: Claude PR Review (review infrastructure)
 # workflow, so ordinary PRs keep getting exactly one review from exactly one
 # reviewer.
 
+# ARCH-04 Stage 3: dispatch-only, like the primary.
+#
+# The automatic pull_request trigger is gone here too. Leaving it would have
+# broken the owner's rule that a push alone must NEVER invoke an LLM review -
+# and it demonstrably did: on PR 41 the Stage 4 acceptance probe pushed twice
+# with no primary runs, while this workflow started the model both times
+# (runs 35365924867 and 35365946583). The cutover was not finished until this
+# trigger went too.
+#
+# Removing it is safe now in a way it was not in Stage 1. A dispatched review
+# runs the DEFAULT BRANCH's definition, so the action's workflow validation
+# passes by construction and the dispatched primary can review PRs that edit
+# claude-pr-review.yml - the very failure that made this secondary reviewer
+# necessary. The secondary stays permanently available for explicitly
+# authorized review-infrastructure maintenance, as the owner required; it is
+# simply no longer triggered by a push.
+run-name: >-
+  Claude PR Review (review infrastructure) · PR #${{ inputs.pr_number }} @ ${{ inputs.expected_head_sha }}
+
 on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    paths:
-      - '.github/workflows/claude-pr-review.yml'
-  # For explicitly authorized review-infrastructure maintenance, when the
-  # change needs a review but does not touch the path filter above.
   workflow_dispatch:
     inputs:
       pr_number:
@@ -38,18 +51,14 @@ on:
 # job-step output. Without the inputs fallback every dispatched run would share
 # one empty-suffix group and cancel unrelated PRs' reviews.
 concurrency:
-  group: claude-pr-review-meta-${{ github.event.pull_request.number || inputs.pr_number }}
+  group: claude-pr-review-meta-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   review:
-    # draft/head-repo live on the pull_request payload only, so a
-    # workflow_dispatch run would be skipped outright by a guard that reads
-    # them. It runs unconditionally there and re-checks those facts in-job.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.draft == false &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    # No event-branched guard: workflow_dispatch is the only trigger, and
+    # draft/head-repo do not exist on its payload. The verify step below checks
+    # those facts against the PR's live state instead, which is stronger.
     runs-on: ubuntu-latest
     # Minimal: read the code, write the review. No actions: write, because this
     # workflow never dispatches anything.
@@ -73,20 +82,12 @@ jobs:
       - name: Resolve PR and expected HEAD
         id: resolve
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_EXPECTED_HEAD: ${{ inputs.expected_head_sha }}
-          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            PR_NUMBER="$INPUT_PR_NUMBER"
-            EXPECTED_HEAD="$INPUT_EXPECTED_HEAD"
-          else
-            PR_NUMBER="$EVENT_PR_NUMBER"
-            EXPECTED_HEAD="$EVENT_HEAD_SHA"
-          fi
+          PR_NUMBER="$INPUT_PR_NUMBER"
+          EXPECTED_HEAD="$INPUT_EXPECTED_HEAD"
           case "$PR_NUMBER" in
             ''|*[!0-9]*) echo "Refusing: pr_number is not a positive integer." >&2; exit 1 ;;
           esac
