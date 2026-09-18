@@ -176,11 +176,17 @@ function dispatchClaudeReview(identity) {
 function fetchVerdictPublished(identity) {
   if (!identity?.pr || !identity?.head) return false;
   try {
+    // The PR author is needed to judge independence: a verdict written by the
+    // author is not evidence of review, and trusting it would stall dispatch
+    // for that HEAD permanently.
+    const pr = JSON.parse(sh("gh", ["pr", "view", String(identity.pr), "--json", "author"]) || "null");
     // Paged deliberately: issue comments come back oldest-first, so a single
     // page would drop the newest ones - exactly where a verdict for the
     // current HEAD lives on a long-running PR - and report "no verdict" for a
     // HEAD that was actually reviewed.
-    return hasVerdictForHead(fetchIssueComments(identity.pr), identity.head);
+    return hasVerdictForHead(fetchIssueComments(identity.pr), identity.head, {
+      authorLogin: pr?.author?.login ?? null,
+    });
   } catch {
     // Unknown verdict evidence: treat as "not published" so the loop keeps
     // trying to obtain a review rather than assuming one exists. Bounded by

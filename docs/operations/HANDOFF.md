@@ -10,7 +10,7 @@ loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_IN_REVIEW (not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 open - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
 current_branch: feat/ARCH-04-review-dispatch
 current_pr: 37
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -27,7 +27,7 @@ owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
 owner_decision_02_scope: remove the automatic per-push Claude review dispatch; controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW; the mandatory clean-exact-HEAD review before merge is unchanged
-owner_decision_02_next_action: REVIEW_ARCH_04_SPEC_PR_36
+owner_decision_02_next_action: AWAIT_ARCH_04_PR1_REVIEW_THEN_BOOTSTRAP_STAGE1
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_item: ARCH-04
 external_gate: none
@@ -114,7 +114,7 @@ restart_command: git switch main && git pull --ff-only && npm install
 2. TASK-14 is completed and merged: spec PR #32, implementation PR #34 (2
    review rounds), clean Claude review on exact head `b17c5b5`.
 3. The deterministic resolver reports `NO_ELIGIBLE_TASK`: TASK-15
-   `depends_on` now names `ARCH-04`, whose status is `SPEC_IN_REVIEW` (spec
+   `depends_on` now names `ARCH-04`, whose status is `SPEC_MERGED_IMPLEMENTING` (spec
    PR #36) — still not `RESOLVED`/`COMPLETED`, so TASK-15 stays blocked.
    This was verified live by running `scripts/rick-loop-roadmap.mjs`'s
    `resolveNextEligibleTask` against `docs/roadmap/ROADMAP.md` after
@@ -123,11 +123,11 @@ restart_command: git switch main && git pull --ff-only && npm install
    replace the automatic per-push Claude review trigger with a
    controller-dispatched one fired once `READY_FOR_INDEPENDENT_REVIEW`. The
    mandatory clean-exact-HEAD independent review before merge is unchanged.
-   Its spec exists and is in review on PR #36 (`docs/specs/ARCH-04.md`,
+   Its spec merged on PR #36 (`docs/specs/ARCH-04.md`, 6 review rounds,
    round detail in `docs/operations/LOOP-REGISTER.jsonl` under
-   `run_id: RCRM-MVP01-RUN-014`); implementation follows once the spec
-   merges — the same pipeline every other loop/governance change in this
-   repo has gone through.
+   `run_id: RCRM-MVP01-RUN-014`); implementation PR #37 carries the
+   scripts half and is in review — the same pipeline every other
+   loop/governance change in this repo has gone through.
 5. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per
    sale item. It binds nothing in TASK-14 or ARCH-04.
 6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,
@@ -155,7 +155,7 @@ asserts this ("all-blocked roadmap must not invent a task") as a
 deliberate safety invariant, not a gap. Resuming past it requires a human
 or an agent reading this handoff to drive the ARCH-04 spec/implementation
 by hand — as of this entry that work is already underway (PR #36,
-`SPEC_IN_REVIEW`) rather than unstarted — the same way OWNER-01 and
+`SPEC_MERGED_IMPLEMENTING`) rather than unstarted — the same way OWNER-01 and
 OWNER-02 themselves required an explicit owner decision the loop could not
 make on its own. Giving the controller a
 mechanical way to select and execute an open `ARCH-*` item is itself one
@@ -188,7 +188,7 @@ preflight all pass. The mandatory clean-exact-HEAD independent review
 before merge, and the FINDINGS → fix → push → CI/validation/preflight →
 new review cycle, are unchanged.
 
-Spec is `docs/specs/ARCH-04.md`, in review on PR #36 (round detail in
+Spec is `docs/specs/ARCH-04.md`, merged on PR #36 (round detail in
 `docs/operations/LOOP-REGISTER.jsonl`, `run_id: RCRM-MVP01-RUN-014`).
 Of the eight `owner_decision_02_includes` items, this spec implements only
 the two the dispatch mechanism itself requires — the `decide_before`

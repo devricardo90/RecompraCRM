@@ -115,7 +115,7 @@ export function collectPreflightInputs(prNumber, { repo = null } = {}) {
       String(prNumber),
       ...repoArgs,
       "--json",
-      "number,state,isDraft,baseRefName,headRefName,headRefOid,mergeable",
+      "number,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,author",
     ]),
   );
 

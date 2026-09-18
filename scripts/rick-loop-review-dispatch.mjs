@@ -45,9 +45,22 @@ export function findRunForHead(runs, headSha) {
  * that actually reviewed this HEAD from one that merely got associated with
  * it.
  */
-export function hasVerdictForHead(comments, headSha) {
+export function hasVerdictForHead(comments, headSha, { authorLogin = null } = {}) {
   if (!Array.isArray(comments) || !headSha) return false;
   return comments.some((entry) => {
+    const login = entry?.user?.login ?? null;
+    // Independence is required here for the same reason the merge gate
+    // requires it in buildAnchoredResults: a verdict the PR's own author wrote
+    // is not evidence anyone reviewed anything. Without this, posting
+    // "Reviewed commit: <headSha>" on your own PR would convince the
+    // dispatcher that HEAD is already reviewed and permanently stop it from
+    // dispatching a real one - the merge gate would still refuse to merge, so
+    // nothing unsafe lands, but the loop stalls silently, which is exactly the
+    // deterministic-dispatch invariant this task exists to establish.
+    // An unknown author or unknown PR author fails closed: unproven
+    // independence costs at most an extra review, while trusting it costs the
+    // loop its liveness.
+    if (!login || !authorLogin || login === authorLogin) return false;
     const named = String(entry?.body ?? "").match(/reviewed commit:[^0-9a-zA-Z]{0,8}([0-9a-f]{7,40})/i);
     return named ? headSha.startsWith(named[1]) : false;
   });
@@ -120,7 +133,7 @@ export function evaluateDispatch({
   } else {
     const run = findRunForHead(existingRuns, pr?.headRefOid);
     runState = classifyExistingRun(run, {
-      verdictPublished: hasVerdictForHead(comments, pr?.headRefOid),
+      verdictPublished: hasVerdictForHead(comments, pr?.headRefOid, { authorLogin: pr?.author?.login ?? null }),
       now,
       cooldownMs,
     });
