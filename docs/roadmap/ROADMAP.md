@@ -223,12 +223,12 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 Itens levantados por evidência de execução. Não reabrem tasks concluídas e não
 autorizam refatoração imediata.
 
-- [ ] ARCH-04 — Governança de gatilho de revisão (OWNER-02 / REVIEW_TRIGGER_ECONOMICS)
+- [x] ARCH-04 — Governança de gatilho de revisão (OWNER-02 / REVIEW_TRIGGER_ECONOMICS)
   - origin: decisão do owner OWNER-02, autorizada em 2026-09-17 (ver `docs/operations/STATE.md`)
   - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
   - blocking: true
   - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
-  - status: SPEC_MERGED_IMPLEMENTING
+  - status: COMPLETED
   - spec_pr: 36 MERGED_SQUASH
   - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
   - spec_review_rounds: 6
@@ -250,7 +250,12 @@ autorizam refatoração imediata.
   - pointer_gate: ARCH-04 owns "checagens mecânicas antes da revisão por LLM"; a deriva de ponteiro já custou oito rodadas de revisão, então antes da Stage 2 entra uma PR própria e pequena adicionando ao rick-loop-preflight.mjs uma checagem que compara os campos compartilhados de ARCH-04 (impl_branch, impl_stage, next_action) entre STATE.md, HANDOFF.md e esta entrada, falhando quando discordam. Disciplina manual já falhou oito vezes; o gate é a correção
   - pointer_gate_result: 39 MERGED_SQUASH (3 rodadas), HEAD revisado limpo f2d60a5754c8eec9c735eee55fecb82a97aa3aad, merge head f3fc47971acde296482c58e43fcd5982961c17e4, pós-merge Validate 35344725337 SUCCESS. A própria PR do gate foi barrada pelo preflight (no_state_drift: current_branch/current_pr defasados no HANDOFF) com CI verde e revisão limpa no HEAD exato — nona ocorrência da classe de deriva e a primeira pega por máquina, não por revisor
   - stage2: 40 MERGED_SQUASH (2 rodadas), HEAD revisado limpo 1c969de9218d99dbd7450d3480aa0252aa995af8, merge head 1a27df3, pos-merge Validate 35347958284 SUCCESS; o reviewer secundario rodou o modelo de verdade (29 turnos) enquanto o primario fechou verde em 12s sem veredito nenhum, e o gate deterministico barrou o primeiro HEAD por um P1 inline que o veredito limpo do secundario nao viu
-  - next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato, e agora é o próprio preflight que verifica essa igualdade em vez de depender de eu lembrar. A PR1 (#37), a Stage 1 (#38), o pointer gate (#39) e a Stage 2 (#40) estão mergeados e validados; a Stage 3 (PR #41, remove o gatilho automático dos dois workflows) está em revisão, com a evidência de aceitação ao vivo em docs/evidence/ARCH-04-validation.md. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - stage3: 41 MERGED_SQUASH (3 rodadas despachadas), HEAD revisado limpo 9ac3130e167bff8d2a5db43e6fbe985e6827eda9, merge head 70c19d0, pós-merge Validate 35369010788 SUCCESS; os dois workflows de revisão passaram a ser workflow_dispatch-only
+  - acceptance: docs/evidence/ARCH-04-validation.md — nove pushes na PR #41 produziram zero execuções de revisão; um HEAD autorizado produziu exatamente uma revisão despachada com veredito real no HEAD exato; dispatch duplicado recusado em IN_FLIGHT e REVIEWED; dispatcher falha fechado em ci_not_green; o gate de merge recusou a PR #40 mesmo com veredito limpo, por um P1 inline de um segundo revisor
+  - gate_unchanged: evaluateMergeAllowed, isCleanReviewResult, countUnresolvedFindings, selectMergeResult, buildAnchoredResults e filterAnchoredCleanComments não foram tocados por nenhuma das seis PRs
+  - self_caught_defect: o próprio teste de aceitação reprovou a primeira versão da Stage 3, que deixara o reviewer secundário disparando o modelo a cada push (execuções 35365924867 e 35365946583, uma delas cancelada no meio por concurrency — custo sem veredito)
+  - resolved_at: "2026-09-18"
+  - next_action: NONE — ARCH-04 encerrado — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato, e agora é o próprio preflight que verifica essa igualdade em vez de depender de eu lembrar. A PR1 (#37), a Stage 1 (#38), o pointer gate (#39) e a Stage 2 (#40) estão mergeados e validados; a Stage 3 (PR #41, remove o gatilho automático dos dois workflows) está em revisão, com a evidência de aceitação ao vivo em docs/evidence/ARCH-04-validation.md. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
