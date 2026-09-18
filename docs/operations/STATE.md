@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 78
+state_version: 79
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -73,12 +73,12 @@ completed_tasks:
 last_completed_task: TASK-14
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
-current_task: TASK-14
-current_task_status: COMPLETED
+current_task: TASK-15
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 está COMPLETED (Stage 3, PR 41, merge 70c19d0, pós-merge Validate 35369010788 SUCCESS), então o depends_on de TASK-15 foi liberado; verificado ao vivo com resolveNextEligibleTask, que retorna TASK-15
-branch: docs/ARCH-04-closure
-pr_number: 42
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED (merge 82018d3, pós-merge Validate 35373493515 SUCCESS) liberou o depends_on de TASK-15; supervisor retorna TASK_ADVANCE para TASK-15 e a spec está em revisão na PR 43
+branch: docs/TASK-15-spec
+pr_number: 43
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -112,7 +112,7 @@ task_09_round3_ci_status: SUCCESS
 task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lock_order
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
-task_spec: docs/specs/TASK-14.md
+task_spec: docs/specs/TASK-15.md
 arch_02_status: RESOLVED_MERGED
 arch_02_pr: 31 MERGED_SQUASH
 arch_02_merge_main_head: 51bfacf5e809c937de212a463f15a2c1d454ac81
@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: START_TASK-15
+next_action: REVIEW_TASK_15_SPEC
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -315,7 +315,7 @@ arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the fi
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
 updated_at: "2026-09-18T19:30:00Z"
-updated_by: Claude Code (Rick Loop, ARCH-04 closure — COMPLETED, TASK-15 unblocked)
+updated_by: Claude Code (Rick Loop, TASK-15 spec)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
