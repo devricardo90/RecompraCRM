@@ -12,7 +12,7 @@ current_task_status: COMPLETED
 next_eligible_task: TASK-15
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 está COMPLETED (Stage 3, PR 41, merge 70c19d0, pós-merge Validate 35369010788 SUCCESS), então o depends_on de TASK-15 foi liberado; verificado ao vivo com resolveNextEligibleTask, que retorna TASK-15
 current_branch: docs/ARCH-04-closure
-current_pr: none
+current_pr: 42
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
