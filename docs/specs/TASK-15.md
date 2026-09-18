@@ -120,11 +120,19 @@ o Next e o Prisma apontam para o schema da execução, não para `public`, e
 Prisma é usado para migrar, ler o `expectedRepurchaseAt` persistido e
 descartar o schema no fim.
 
-A cadeia roda duas vezes no mesmo schema, variando `soldAt` e
-`consumptionDays` para que uma venda caia em `atrasado` e a outra em
-`no prazo`, e com `quantity > 1` em pelo menos uma delas. Assim o estágio 6
-prova classificação e não só presença, e o estágio 5 exercita a multiplicação
-da fórmula em vez do caso degenerado `quantity = 1`.
+A cadeia roda duas vezes no mesmo schema, sobre **o mesmo cliente e o mesmo
+produto**, variando apenas `soldAt` — e com `quantity > 1` em pelo menos uma
+das duas.
+
+Varia só `soldAt` porque `consumptionDays` é coluna de `Product`, não da
+venda: variá-lo exigiria um segundo produto (contra AC1 e AC3) ou um passo de
+atualização que nenhum AC verifica. E é desnecessário — `classifyRepurchase`
+classifica pelo instante absoluto de `expectedRepurchaseAt` comparado ao
+momento de referência, então duas vendas do mesmo produto com `soldAt`
+suficientemente distantes já caem em faixas diferentes.
+
+Assim o estágio 6 prova classificação e não só presença, e o estágio 5
+exercita a multiplicação da fórmula em vez do caso degenerado `quantity = 1`.
 
 A camada visual fica com Playwright efêmero, conforme
 `docs/operations/PLAYWRIGHT-EPHEMERAL.md`: `retries: 0`, artefatos apagados,
@@ -157,7 +165,8 @@ realmente exercida.
 AC7. `GET /api/repurchases` inclui o cliente criado pela execução.
 
 AC8. A classificação devolvida para esse cliente corresponde à data prevista,
-provada com dois intervalos que caem em classificações diferentes.
+provada com duas vendas do mesmo cliente e do mesmo produto cujos `soldAt`
+diferentes as colocam em classificações diferentes.
 
 AC9. `GET /api/customers/[id]/sales` inclui a venda criada pela execução.
 
