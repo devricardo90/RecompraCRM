@@ -172,6 +172,21 @@ ponteiro foi encontrada por revisão independente oito vezes nas PRs #36/#37/
 #38. A nona ocorrência foi pega por máquina: o preflight barrou a própria PR
 do gate (`no_state_drift`) com CI verde e revisão limpa no HEAD exato.
 
+## Consequência operacional: o check verde deixa de significar revisão
+
+Com os dois workflows dispatch-only, uma execução `workflow_dispatch` nao se
+anexa ao PR como check. Depois desta PR, o unico check do PR e o `quality`
+(`Validate`). Nada na interface do GitHub fica vermelho se uma revisao estiver
+faltando ou tiver retornado FINDINGS.
+
+Isso e o desenho correto — o gate de merge sempre ancorou no **comentario** de
+veredito no HEAD exato (`filterAnchoredCleanComments`,
+`countUnresolvedFindings`), nunca num check — mas muda o que um humano ve. A
+instrucao do owner de que um check verde nao e suficiente passa a valer mais
+depois deste merge do que antes: a partir daqui um check verde nao prova
+absolutamente nada sobre revisao, e `evaluateMergeAllowed` e a unica coisa
+entre um PR e um merge sem revisao.
+
 ## Custo
 
 Vereditos despachados nesta PR custaram `total_cost_usd` 1.14 (execução

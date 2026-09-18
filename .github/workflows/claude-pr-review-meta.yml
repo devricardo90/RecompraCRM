@@ -47,9 +47,12 @@ on:
         required: true
         type: string
 
-# Evaluated at trigger time, so it can only read github/inputs/vars - never a
-# job-step output. Without the inputs fallback every dispatched run would share
-# one empty-suffix group and cancel unrelated PRs' reviews.
+# Per PR, not per HEAD: a newer dispatch for the same PR supersedes an older
+# one, and cancelling the stale run is correct because its expected_head_sha is
+# no longer current. Evaluated at trigger time, so it can only read
+# github/inputs/vars - never a job-step output. There is no longer a
+# github.event.pull_request fallback here because workflow_dispatch is the only
+# trigger; inputs.pr_number is always present.
 concurrency:
   group: claude-pr-review-meta-${{ inputs.pr_number }}
   cancel-in-progress: true
