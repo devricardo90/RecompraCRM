@@ -18,7 +18,8 @@ execução abaixo são de execuções reais, verificáveis via
 | Stage 1 (reviewer secundário) | #38 | 3 | `ccc9c49` | `f83b668` | 35342232305 SUCCESS |
 | Stage 1b (pointer gate) | #39 | 3 | `f2d60a5` | `f3fc479` | 35344725337 SUCCESS |
 | Stage 2 (cutover aditivo) | #40 | 2 | `1c969de` | `1a27df3` | 35347958284 SUCCESS |
-| Stage 3 (dispatch-only) | #41 | ver abaixo | — | — | — |
+| Stage 3 (dispatch-only) | #41 | 3 | `9ac3130` | `70c19d0` | 35369010788 SUCCESS |
+| Encerramento | #42 | ver LOOP-REGISTER | — | — | — |
 
 ## Teste de aceitação ao vivo (AC9/AC10)
 
@@ -26,8 +27,10 @@ Executado na PR #41, branch `feat/ARCH-04-dispatch-activation`.
 
 ### A. Múltiplos pushes não disparam revisão
 
-Seis pushes na PR #41. Execuções de `claude-pr-review.yml` (reviewer
-primário) criadas por esses pushes: **zero**. Não "skipped" — nenhuma
+Nove pushes na PR #41 (`e1f0121`, `8c1f49a`, `b5be48f`, `a7c1f53`,
+`6190914`, `b8d56e8`, `fff9728`, `9ac3130`, mais o push inicial do branch).
+Execuções de `claude-pr-review.yml` (reviewer primário) criadas por esses
+pushes: **zero**. Não "skipped" — nenhuma
 execução chegou a ser criada, porque o gatilho `pull_request` não existe mais
 na definição do branch.
 
@@ -137,7 +140,18 @@ A revisão despachada em C retornou `Review result: FINDINGS` — um P1
 (este arquivo não existia, enquanto o comentário do workflow afirmava que
 existia) e um P2 (narrativa desatualizada em ROADMAP/HANDOFF). Ambos
 corrigidos, seguidos de novo push e nova revisão despachada no novo HEAD.
-Nenhum push disparou revisão sozinho em nenhum momento desse ciclo.
+
+A rodada 2 (execução 35367527590, HEAD `b8d56e8`, 35 turnos) encontrou mais
+dois defeitos de comentário que a própria PR falsificara: o comentário de
+`concurrency` do workflow secundário ainda descrevia o fallback `||` que a
+PR removera, e a docstring de `reviewRunMatchesHead` ainda se justificava
+por um gatilho `pull_request` que a PR apagava. A rodada 3 (execução
+35368576709, HEAD `9ac3130`) retornou `No major issues found.` e foi o HEAD
+mergeado.
+
+Três rodadas despachadas ao todo, cada uma pedida explicitamente depois de
+CI verde e preflight de nove em nove. Nenhum push disparou revisão sozinho
+em nenhum momento desse ciclo.
 
 ## O gate de merge não foi enfraquecido
 
