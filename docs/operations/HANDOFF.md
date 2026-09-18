@@ -188,9 +188,13 @@ merged and post-merge validated), which is why the resolver now returns
 TASK-15 instead of `NO_ELIGIBLE_TASK` — the same way OWNER-01 and
 OWNER-02 themselves required an explicit owner decision the loop could not
 make on its own. Giving the controller a
-mechanical way to select and execute an open `ARCH-*` item is itself one
-of the items `ARCH-04`'s own scope already lists (`decide_before resolver
-gate`) — it is not bundled into this closure.
+mechanical way to select and execute an open `ARCH-*` item was one
+of the items `ARCH-04`'s scope listed (`decide_before resolver gate`), and
+it is closed: the gate is the `depends_on` wiring itself, which held TASK-15
+until ARCH-04 completed and then released it. What remains unautomated is an
+`ARCH-*` item having its *spec and implementation* driven without a human
+decision, which is deliberately out of scope — an architecture item exists
+precisely because the loop cannot decide it alone.
 
 ## Contracts TASK-14 leaves behind
 
@@ -207,7 +211,7 @@ non-blocking, and authorises no refactor.
 The contracts TASK-13 inherited are history and live with that task, in
 `docs/specs/TASK-13.md` and `docs/evidence/TASK-13-validation.md`.
 
-## ARCH-04 — REVIEW_TRIGGER_ECONOMICS (in progress: spec in review)
+## ARCH-04 — REVIEW_TRIGGER_ECONOMICS (COMPLETED 2026-09-18)
 
 Authorized by the owner on 2026-09-17, recorded fresh with no prior
 repository trace claimed or invented. Scope: remove the automatic per-push
@@ -218,9 +222,18 @@ preflight all pass. The mandatory clean-exact-HEAD independent review
 before merge, and the FINDINGS → fix → push → CI/validation/preflight →
 new review cycle, are unchanged.
 
-Spec is `docs/specs/ARCH-04.md`, merged on PR #36 (round detail in
-`docs/operations/LOOP-REGISTER.jsonl`, `run_id: RCRM-MVP01-RUN-014`).
-Of the eight `owner_decision_02_includes` items, this spec implements only
+Delivered across six PRs, all merged and post-merge validated: spec (#36,
+`2f5c687`), additive dispatcher (#37, `3bb1ec1`), secondary reviewer (#38,
+`f83b668`), pointer gate (#39, `f3fc479`), additive cutover (#40,
+`1a27df3`) and dispatch-only activation (#41, `70c19d0`, post-merge
+`Validate` 35369010788 SUCCESS). Both review workflows are now
+`workflow_dispatch`-only: no push invokes an LLM review, and
+`scripts/rick-loop-review-dispatch.mjs` owns dispatch. Live acceptance
+evidence is in `docs/evidence/ARCH-04-validation.md`; round detail is in
+`docs/operations/LOOP-REGISTER.jsonl` under `run_id: RCRM-MVP01-RUN-014`.
+
+Spec is `docs/specs/ARCH-04.md`, merged on PR #36.
+Of the eight `owner_decision_02_includes` items, it implemented only
 the two the dispatch mechanism itself requires — the `decide_before`
 resolver gate (already closed via `ARCH-04`'s `depends_on` on TASK-15) and
 mechanical checks before LLM review (`rick-loop-preflight.mjs`). The other
@@ -229,3 +242,10 @@ full LOOP-REGISTER integrity, `current_task`/`next_eligible_task` semantics
 beyond `resolveEffectiveTask`, remote-first reconciliation, and review
 usage metrics — are tracked separately as `ARCH-05`, non-blocking, so
 closing `ARCH-04` does not silently close `OWNER-02`.
+
+ARCH-05 gained concrete evidence during this closure: the pointer gate
+compares only `impl_branch`, `impl_stage` and `next_action`, so six separate
+status fields and prose sections went stale across PR #42's two review
+rounds without the gate reporting anything — correctly, since none of them
+are tracked. Prose and status-field consistency is ARCH-05 scope, and the
+closure does not pretend the gate covers it.

@@ -138,7 +138,7 @@ task_14_main_ci_status: SUCCESS
 task_14_evidence: docs/evidence/TASK-14-validation.md
 task_14_playwright: PASS_8_EPHEMERAL_RETRIES_0
 task_14_guard: scripts/ui-hardening-check.mjs
-task_14_blocks_next: ARCH-04 must resolve before TASK-15 (mechanically enforced via ROADMAP.md depends_on)
+task_14_blocks_next: ARCH-04 resolved before TASK-15 could proceed (mechanically enforced via ROADMAP.md depends_on; ARCH-04 is COMPLETED and the gate released on 2026-09-18)
 owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: IMPLEMENTED_ARCH_04_CLOSED_REMAINDER_TRACKED_AS_ARCH_05
 owner_decision_02_decided_at: "2026-09-17"
@@ -314,8 +314,8 @@ arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition 
 arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
-updated_at: "2026-09-18T12:20:00Z"
-updated_by: Claude Code (Rick Loop, ARCH-04 Stage 1b pointer gate)
+updated_at: "2026-09-18T19:30:00Z"
+updated_by: Claude Code (Rick Loop, ARCH-04 closure — COMPLETED, TASK-15 unblocked)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
@@ -369,12 +369,14 @@ on exact head `b17c5b5`, merged at `c990654` with post-merge Validate
 
 OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`) was authorized by the owner on
 2026-09-17: now that TASK-14 has closed, the automatic per-push Claude
-review trigger is to be replaced with a controller-dispatched trigger fired
-once `READY_FOR_INDEPENDENT_REVIEW` is reached. The mandatory clean-exact-HEAD
+review trigger was replaced with a controller-dispatched trigger fired
+once `READY_FOR_INDEPENDENT_REVIEW` is reached (delivered and merged; both
+review workflows are `workflow_dispatch`-only as of `70c19d0`). The mandatory clean-exact-HEAD
 independent review before merge is unchanged and is not weakened by this
 decision. It is tracked as `ARCH-04` in `docs/roadmap/ROADMAP.md`, and
-TASK-15's `depends_on` names it, so the deterministic resolver reports
-`NO_ELIGIBLE_TASK` rather than silently selecting TASK-15 until it resolves —
+TASK-15's `depends_on` names it, so until ARCH-04 reached `COMPLETED` the
+deterministic resolver reported `NO_ELIGIBLE_TASK` rather than silently
+selecting TASK-15; it now reports `ELIGIBLE_TASK_FOUND` for TASK-15 —
 verified live against `scripts/rick-loop-roadmap.mjs` after TASK-14 was
 checked off. No prior record of this decision existed in this repository
 before this entry.
