@@ -232,8 +232,8 @@ autorizam refatoração imediata.
   - spec_pr: 36 MERGED_SQUASH
   - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
   - spec_review_rounds: 6
-  - impl_branch: feat/ARCH-04-secondary-reviewer
-  - impl_stage: STAGE1_SECONDARY_REVIEWER
+  - impl_branch: feat/ARCH-04-pointer-gate
+  - impl_stage: STAGE1B_POINTER_GATE
   - pr1: 37 MERGED_SQUASH (10 rodadas de revisão), merge head 3bb1ec1432911e6f35e71e49b8c2c415d5ca0fce, pós-merge Validate 35307171971 SUCCESS
   - impl_blocker: anthropics/claude-code-action@v1 recusa rodar quando o próprio arquivo de workflow difere do branch padrão, então a PR que edita claude-pr-review.yml não pode ser revisada por ele; o check fica verde sem veredito nenhum (evidência: run 35258611604; mesmo silêncio nas PRs 27 e 28)
   - bootstrap_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED (owner, 2026-09-17)
@@ -246,8 +246,9 @@ autorizam refatoração imediata.
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
   - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
+  - stage1: 38 MERGED_SQUASH (3 rodadas de revisão), HEAD revisado limpo ccc9c493829b0a438c36fecaf432da9feb140c78, merge head f83b66868d792983267e5a49944466e7cb5e850f, pós-merge Validate 35342232305 SUCCESS
   - pointer_gate: ARCH-04 owns "checagens mecânicas antes da revisão por LLM"; a deriva de ponteiro já custou oito rodadas de revisão, então antes da Stage 2 entra uma PR própria e pequena adicionando ao rick-loop-preflight.mjs uma checagem que compara os campos compartilhados de ARCH-04 (impl_branch, impl_stage, next_action) entre STATE.md, HANDOFF.md e esta entrada, falhando quando discordam. Disciplina manual já falhou oito vezes; o gate é a correção
-  - next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato; a PR1 (#37) está mergeada e validada, e a Stage 1 (PR #38, claude-pr-review-meta.yml) está em revisão. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - next_action: REVIEW_ARCH_04_POINTER_GATE — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato, e agora é o próprio preflight que verifica essa igualdade em vez de depender de eu lembrar. A PR1 (#37) e a Stage 1 (#38) estão mergeadas e validadas; a Stage 1b (pointer gate) está em revisão antes do cutover da Stage 2. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade

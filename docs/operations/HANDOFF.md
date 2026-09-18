@@ -27,7 +27,7 @@ owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
 owner_decision_02_scope: remove the automatic per-push Claude review dispatch; controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW; the mandatory clean-exact-HEAD review before merge is unchanged
-owner_decision_02_next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
+owner_decision_02_next_action: REVIEW_ARCH_04_POINTER_GATE
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_item: ARCH-04
 external_gate: none
@@ -88,13 +88,13 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
-next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
+next_action: REVIEW_ARCH_04_POINTER_GATE
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
 arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
-arch_04_impl_branch: feat/ARCH-04-secondary-reviewer
-arch_04_impl_stage: STAGE1_SECONDARY_REVIEWER
+arch_04_impl_branch: feat/ARCH-04-pointer-gate
+arch_04_impl_stage: STAGE1B_POINTER_GATE
 arch_04_pr1_status: 37 MERGED_SQUASH
 arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
 arch_04_pr1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -108,6 +108,12 @@ arch_04_bootstrap_stage2: cutover PR editing claude-pr-review.yml, reviewed by t
 arch_04_bootstrap_stage3: activate controller dispatch, then remove the automatic per-push trigger only once the replacement is operational
 arch_04_bootstrap_stage4: acceptance proofs (multiple pushes trigger no review, one authorized HEAD produces one review, stale HEAD cannot invoke the model, workflow changes get a real review, findings revalidate, clean review merges only with all gates green)
 arch_04_secondary_reviewer_scope: activates only for changes to the primary review workflow or explicitly authorized review-infrastructure maintenance, never for normal PRs
+arch_04_stage1_status: 38 MERGED_SQUASH
+arch_04_stage1_reviewed_head: ccc9c493829b0a438c36fecaf432da9feb140c78
+arch_04_stage1_merge_main_head: f83b66868d792983267e5a49944466e7cb5e850f
+arch_04_stage1_main_ci_run: 35342232305
+arch_04_stage1_main_ci_status: SUCCESS
+arch_04_pointer_gate: rick-loop-preflight.mjs now compares ARCH-04's impl_branch, impl_stage and next_action across STATE.md, HANDOFF.md and the ROADMAP entry, and fails closed when they disagree
 next_action_authorized: true
 human_intermediate_approval_required: false
 restart_command: git switch main && git pull --ff-only && npm install
