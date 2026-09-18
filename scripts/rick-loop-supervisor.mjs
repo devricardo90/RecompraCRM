@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-export const LOOP_VERSION = "RICK_LOOP_V1_4";
+export const LOOP_VERSION = "RICK_LOOP_V1_5";
 export const VALIDATION_PATH = ".rick/tmp/validation.json";
 const RETRYABLE_WAITS = new Set(["WAIT_FOR_CI", "WAIT_FOR_CODEX", "EXTERNAL_RETRYABLE"]);
 // Evidence artifacts are restricted to non-executable documentation/data formats. Anything

@@ -6,7 +6,7 @@ run_id: RCRM-MVP01-RUN-013
 loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
 status: TASK_14_CLOSED_BLOCKED_ON_ARCH_04
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_4
+loop_version: RICK_LOOP_V1_5
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
