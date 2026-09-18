@@ -77,8 +77,8 @@ current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 open - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
-branch: feat/ARCH-04-review-dispatch
-pr_number: 37
+branch: feat/ARCH-04-secondary-reviewer
+pr_number: pending_open
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -149,7 +149,7 @@ owner_decision_02_forbids: weakening the mandatory clean-exact-HEAD independent 
 owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> deterministic preflight PASS -> READY_FOR_INDEPENDENT_REVIEW -> one Claude review of the exact HEAD -> CLEAN -> merge; FINDINGS -> fix -> push -> CI and validation -> preflight -> one new independent review
 owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
 owner_decision_02_includes_split: only decide_before resolver gate and mechanical checks before LLM review are implemented by ARCH-04; the other six items are tracked non-blocking as ARCH-05, so closing ARCH-04 does not silently close OWNER-02
-owner_decision_02_next_action: AWAIT_ARCH_04_PR1_REVIEW_THEN_BOOTSTRAP_STAGE1
+owner_decision_02_next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
 owner_decision_02_roadmap_item: ARCH-04
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_MERGED_IMPLEMENTING, previously SPEC_IN_REVIEW and before that AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: AWAIT_ARCH_04_PR1_REVIEW_THEN_BOOTSTRAP_STAGE1
+next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -268,8 +268,13 @@ arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
 arch_04_spec_review_rounds: 6
 arch_04_spec_main_ci_run: 35257845976
 arch_04_spec_main_ci_status: SUCCESS
-arch_04_impl_branch: feat/ARCH-04-review-dispatch
-arch_04_impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
+arch_04_impl_branch: feat/ARCH-04-secondary-reviewer
+arch_04_impl_stage: STAGE1_SECONDARY_REVIEWER
+arch_04_pr1_status: 37 MERGED_SQUASH
+arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
+arch_04_pr1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+arch_04_pr1_review_rounds: 10
+arch_04_pr1_merge_main_head: 3bb1ec1432911e6f35e71e49b8c2c415d5ca0fce
 arch_04_blocker: CLAUDE_CODE_ACTION_WORKFLOW_VALIDATION_BLOCKS_REVIEW_OF_ITS_OWN_WORKFLOW_FILE
 arch_04_blocker_evidence: run 35258611604 skipped with a green check and no verdict; precedent in PRs 27 and 28
 arch_04_blocker_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED
