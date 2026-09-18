@@ -174,18 +174,18 @@ do gate (`no_state_drift`) com CI verde e revisão limpa no HEAD exato.
 
 ## Consequência operacional: o check verde deixa de significar revisão
 
-Com os dois workflows dispatch-only, uma execução `workflow_dispatch` nao se
-anexa ao PR como check. Depois desta PR, o unico check do PR e o `quality`
-(`Validate`). Nada na interface do GitHub fica vermelho se uma revisao estiver
+Com os dois workflows dispatch-only, uma execução `workflow_dispatch` não se
+anexa ao PR como check. Depois desta PR, o único check do PR é o `quality`
+(`Validate`). Nada na interface do GitHub fica vermelho se uma revisão estiver
 faltando ou tiver retornado FINDINGS.
 
-Isso e o desenho correto — o gate de merge sempre ancorou no **comentario** de
+Isso é o desenho correto — o gate de merge sempre ancorou no **comentário** de
 veredito no HEAD exato (`filterAnchoredCleanComments`,
-`countUnresolvedFindings`), nunca num check — mas muda o que um humano ve. A
-instrucao do owner de que um check verde nao e suficiente passa a valer mais
-depois deste merge do que antes: a partir daqui um check verde nao prova
-absolutamente nada sobre revisao, e `evaluateMergeAllowed` e a unica coisa
-entre um PR e um merge sem revisao.
+`countUnresolvedFindings`), nunca num check — mas muda o que um humano vê. A
+instrução do owner de que um check verde não é suficiente passa a valer mais
+depois deste merge do que antes: a partir daqui um check verde não prova
+absolutamente nada sobre revisão, e `evaluateMergeAllowed` é a única coisa
+entre um PR e um merge sem revisão.
 
 ## Custo
 
