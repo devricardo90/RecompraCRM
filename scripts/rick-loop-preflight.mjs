@@ -82,15 +82,35 @@ export function readRoadmapEntryFields(text, entryId) {
  * everywhere is nothing to disagree about, and a value present in only one
  * source has nothing to disagree with. Two or more present and differing is
  * the drift this exists to catch.
+ *
+ * Absent *values* are benign that way, but an absent *source* is not. If the
+ * ROADMAP cannot be read, or the entry a pointer names is gone or no longer
+ * matches the heading shape, the third source drops out of the comparison
+ * entirely - and STATE and HANDOFF agreeing with each other is no evidence at
+ * all about the source that vanished. That is reported rather than silently
+ * downgraded to a two-source check, so this check fails closed like the rest
+ * of the module.
  */
 export function comparePointers({ state = null, handoff = null, roadmapText = null } = {}) {
-  const mismatches = [];
+  const issues = [];
   for (const [pointer, spec] of Object.entries(TRACKED_POINTERS)) {
     const roadmapFields = roadmapText === null ? null : readRoadmapEntryFields(roadmapText, spec.entry);
-    // Once an entry is checked off, its fields are a historical record of how
-    // that item finished, while STATE/HANDOFF have moved on to the next work.
-    // Comparing the two then manufactures drift out of correct bookkeeping.
-    if (roadmapFields?.__checked === true) continue;
+    if (roadmapFields === null || roadmapFields.__found !== true) {
+      issues.push({
+        kind: "source_unavailable",
+        pointer,
+        source: "roadmap",
+        detail: roadmapText === null ? "roadmap_text_missing" : `entry_not_found:${spec.entry}`,
+      });
+      // Deliberately no `continue`: STATE and HANDOFF disagreeing is still
+      // worth naming in the same run, rather than surfacing one defect at a
+      // time across repeated preflights.
+    } else if (roadmapFields.__checked === true) {
+      // Once an entry is checked off, its fields are a historical record of
+      // how that item finished, while STATE/HANDOFF have moved on to the next
+      // work. Comparing the two manufactures drift out of correct bookkeeping.
+      continue;
+    }
     const values = {};
     const fromState = normalizePointerValue(state?.[spec.state]);
     const fromHandoff = normalizePointerValue(handoff?.[spec.handoff]);
@@ -100,9 +120,9 @@ export function comparePointers({ state = null, handoff = null, roadmapText = nu
     if (fromRoadmap !== null) values.roadmap = fromRoadmap;
 
     if (Object.keys(values).length < 2) continue;
-    if (new Set(Object.values(values)).size > 1) mismatches.push({ pointer, values });
+    if (new Set(Object.values(values)).size > 1) issues.push({ kind: "disagreement", pointer, values });
   }
-  return mismatches;
+  return issues;
 }
 
 function isNonEmptyRecord(value) {
@@ -137,7 +157,7 @@ export function evaluatePreflight({
   defaultBranch = "main",
 } = {}) {
   const jsonl = validateJsonlLines(registerLines);
-  const pointerMismatches = comparePointers({ state, handoff, roadmapText });
+  const pointerIssues = comparePointers({ state, handoff, roadmapText });
   const checks = {
     state_parseable: isNonEmptyRecord(state),
     handoff_parseable: isNonEmptyRecord(handoff),
@@ -150,7 +170,9 @@ export function evaluatePreflight({
     // GitHub has not finished computing mergeability, which is not proof of
     // anything and must not pass a gate that exists to be deterministic.
     pr_not_conflicting: pr ? pr.mergeable === "MERGEABLE" : false,
-    roadmap_pointers_agree: pointerMismatches.length === 0,
+    // Fails both when the three sources disagree and when one of them could
+    // not be consulted at all - an unevaluable check is never a silent pass.
+    roadmap_pointers_agree: pointerIssues.length === 0,
   };
 
   const reasons = [];
@@ -161,10 +183,16 @@ export function evaluatePreflight({
     reasons.push(`register_invalid_json_at_line_${jsonl.invalidLine}`);
   }
   // Named individually so the log says which pointer disagreed and what each
-  // source claimed, rather than only that something did.
-  for (const mismatch of pointerMismatches) {
-    const detail = Object.entries(mismatch.values).map(([source, value]) => `${source}=${value}`).join(" ");
-    reasons.push(`pointer_disagreement:${mismatch.pointer}(${detail})`);
+  // source claimed, rather than only that something did. An unreadable source
+  // gets its own reason shape: "they disagree" and "one of them is missing"
+  // need different fixes, so the log must not blur them together.
+  for (const issue of pointerIssues) {
+    if (issue.kind === "source_unavailable") {
+      reasons.push(`pointer_source_unavailable:${issue.pointer}(${issue.source}=${issue.detail})`);
+      continue;
+    }
+    const detail = Object.entries(issue.values).map(([source, value]) => `${source}=${value}`).join(" ");
+    reasons.push(`pointer_disagreement:${issue.pointer}(${detail})`);
   }
 
   return { pass: reasons.length === 0, checks, reasons };

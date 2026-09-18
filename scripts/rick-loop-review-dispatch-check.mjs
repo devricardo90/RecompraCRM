@@ -7,6 +7,7 @@ import {
   comparePointers,
   readRoadmapEntryFields,
   normalizePointerValue,
+  TRACKED_POINTERS,
 } from "./rick-loop-preflight.mjs";
 import {
   evaluateDispatch,
@@ -188,8 +189,39 @@ function okPreflightInputs(overrides = {}) {
     handoff: { arch_04_impl_stage: "STAGE2" },
     roadmapText: null,
   });
-  assert.equal(twoSources.length, 1, "STATE and HANDOFF disagreeing is drift even with no roadmap available");
-  assert.deepEqual(twoSources[0].values, { state: "STAGE1", handoff: "STAGE2" }, "both claimed values are reported");
+  const disagreements = twoSources.filter((issue) => issue.kind === "disagreement");
+  assert.equal(disagreements.length, 1, "STATE and HANDOFF disagreeing is drift even with no roadmap available");
+  assert.deepEqual(disagreements[0].values, { state: "STAGE1", handoff: "STAGE2" }, "both claimed values are reported");
+}
+
+{
+  // An absent *value* is benign; an absent *source* is not. If the ROADMAP
+  // cannot be consulted, STATE and HANDOFF agreeing with each other says
+  // nothing about the third source, and a gate that reported pass there would
+  // be exactly the silent two-source degradation this check exists to prevent.
+  const missingFile = comparePointers({ ...AGREEING_POINTERS, roadmapText: null });
+  assert.equal(missingFile.length, Object.keys(TRACKED_POINTERS).length, "an unreadable ROADMAP is reported for every tracked pointer");
+  assert.ok(missingFile.every((issue) => issue.kind === "source_unavailable" && issue.detail === "roadmap_text_missing"), "each names the missing source");
+
+  // The subtler shape: the file reads fine, but the entry the pointers name is
+  // gone - deleted, renamed, or no longer matching the heading format.
+  const entryGone = comparePointers({
+    ...AGREEING_POINTERS,
+    roadmapText: ["- [ ] TASK-14 — Hardening", "  - impl_branch: feat/TASK-14-hardening"].join("\n"),
+  });
+  assert.ok(
+    entryGone.some((issue) => issue.kind === "source_unavailable" && issue.detail === "entry_not_found:ARCH-04"),
+    `a missing ARCH-04 entry is reported, got ${JSON.stringify(entryGone)}`,
+  );
+
+  // And it must reach the gate, not just the comparison function.
+  const gated = evaluatePreflight(okPreflightInputs({ roadmapText: null }));
+  assert.equal(gated.pass, false, "an unevaluable pointer check fails preflight rather than passing silently");
+  assert.ok(gated.reasons.includes("roadmap_pointers_agree"), "the failing check is named");
+  assert.ok(
+    gated.reasons.some((r) => r.startsWith("pointer_source_unavailable:ARCH-04.impl_branch(roadmap=roadmap_text_missing")),
+    `the reason distinguishes an absent source from a disagreement, got ${JSON.stringify(gated.reasons)}`,
+  );
 }
 
 {
