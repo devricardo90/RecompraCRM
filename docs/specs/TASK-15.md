@@ -49,43 +49,78 @@ objeto desta task.
 O teste percorre um caminho só, com identificadores únicos por execução:
 
 1. **Cliente** — `POST /api/customers` cria um cliente com sufixo único.
-2. **Produto** — `POST /api/products` cria um produto com estoque inicial
-   conhecido e um `repurchaseIntervalDays` explícito.
-3. **Venda** — `POST /api/sales` registra a venda ligando os dois.
-4. **Estoque** — `GET /api/products/[id]` confirma o decremento exato
-   (`estoque inicial − quantidade vendida`), não apenas "diminuiu".
-5. **Previsão** — a venda passa a ter `expectedRepurchaseAt` derivado de
-   `soldAt + repurchaseIntervalDays`, no contrato de data/hora que ARCH-02
-   fixou (instante com timezone declarado).
+2. **Produto** — `POST /api/products` cria um produto com `currentStock`,
+   `minimumStock` e `consumptionDays` explícitos. O campo aceito por
+   `parseProductInput` é `consumptionDays`; não existe
+   `repurchaseIntervalDays`.
+3. **Venda** — `POST /api/sales` registra a venda ligando os dois, com
+   `quantity` explícito.
+4. **Estoque** — `GET /api/products` confirma o decremento exato do produto
+   criado (`estoque inicial − quantidade vendida`), não apenas "diminuiu".
+   Não existe `GET /api/products/[id]`: a rota por id exporta apenas `PUT`,
+   então a leitura é feita na listagem, selecionando pelo id criado.
+5. **Previsão** — a venda passa a ter `expectedRepurchaseAt` igual a
+   `soldAt + (quantity × consumptionDays) dias`, que é a fórmula que
+   `compute_expected_repurchase_at` implementa, no contrato de data/hora que
+   ARCH-02 fixou (instante com timezone declarado). A quantidade faz parte da
+   fórmula: omiti-la só acerta quando `quantity = 1`.
 6. **Dashboard** — `GET /api/repurchases` inclui **aquele** cliente, com a
    classificação correspondente à data prevista.
 
 E a volta: `GET /api/customers/[id]/sales` mostra a venda no histórico
 daquele cliente.
 
-## Segurança dos dados
+## Segurança dos dados: schema isolado, não limpeza por linha
 
-O banco de desenvolvimento contém dados pré-existentes. O teste:
+A primeira versão desta spec mandava apagar as linhas criadas no `finally`.
+**Isso é impossível neste schema.** A migração
+`20260809203000_add_sale_models` instala o trigger `Sale_deletion_blocked`,
+que levanta exceção em *qualquer* `DELETE` sobre `Sale`, mesmo depois de os
+`SaleItem` terem sido removidos — deliberadamente, porque restaurar estoque
+exige uma política que TASK-08 não definiu.
 
-- cria tudo o que usa, com sufixo `${Date.now()}-${process.pid}`;
-- nunca atualiza nem apaga linha que não tenha criado;
-- remove, no `finally`, exatamente os ids que criou, na ordem
-  venda → produto → cliente;
-- não depende de contagem global (`total de clientes`), só da presença dos
-  seus próprios registros, para não quebrar quando o banco tem outros dados.
+Isso expõe um defeito nas verificações de integração já existentes: elas
+fazem `prisma.sale.delete(...)` seguido de um `catch` vazio. O `catch` engole
+a exceção do trigger, o `delete` do produto e do cliente falha em seguida por
+chave estrangeira e também é engolido, e a limpeza *reporta sucesso sem ter
+apagado nada*. É por isso que o banco de desenvolvimento acumulou registros
+de execuções anteriores. Fica registrado como achado; corrigi-lo não é
+escopo desta task.
 
-Uma asserção que dependa de estado global é defeito, não teste.
+Portanto o teste não limpa linhas — ele descarta o schema inteiro:
+
+- deriva `DATABASE_URL` trocando `?schema=public` por um schema próprio,
+  nomeado com timestamp e pid da execução;
+- aplica as migrações nesse schema com `prisma migrate deploy`;
+- roda a cadeia inteira lá dentro, com o Next apontado para essa URL;
+- no `finally`, executa `DROP SCHEMA ... CASCADE`.
+
+`DROP SCHEMA CASCADE` remove a tabela junto com o trigger, então não há
+`DELETE` por linha para o trigger bloquear. O schema `public` não é lido nem
+escrito em momento nenhum, o que torna a segurança dos dados uma
+consequência estrutural e não uma questão de disciplina.
+
+O teste continua não dependendo de contagem global: mesmo em schema vazio,
+uma asserção sobre "total de clientes" acoplaria o teste a dados que ele não
+criou. Uma asserção que dependa de estado global é defeito, não teste.
+
+Se o `DROP SCHEMA` falhar, o teste falha ruidosamente em vez de engolir a
+exceção — o erro oposto ao que as verificações existentes cometem.
 
 ## Estratégia de testes
 
 `scripts/task-15-e2e-check.mjs`, no mesmo idioma dos checks de integração já
-existentes: sobe o Next em porta livre, exercita as rotas reais por HTTP,
-usa Prisma apenas para preparar e limpar, e falha com mensagem que nomeia o
-estágio.
+existentes: sobe o Next em porta livre e exercita as rotas reais por HTTP,
+falhando com mensagem que nomeia o estágio. A diferença é o isolamento —
+o Next e o Prisma apontam para o schema da execução, não para `public`, e
+Prisma é usado para migrar, ler o `expectedRepurchaseAt` persistido e
+descartar o schema no fim.
 
-A cadeia roda duas vezes com intervalos de recompra diferentes — um que cai
-em `atrasado` e outro em `no prazo` — para que o estágio 6 prove
-classificação, não só presença.
+A cadeia roda duas vezes no mesmo schema, variando `soldAt` e
+`consumptionDays` para que uma venda caia em `atrasado` e a outra em
+`no prazo`, e com `quantity > 1` em pelo menos uma delas. Assim o estágio 6
+prova classificação e não só presença, e o estágio 5 exercita a multiplicação
+da fórmula em vez do caso degenerado `quantity = 1`.
 
 A camada visual fica com Playwright efêmero, conforme
 `docs/operations/PLAYWRIGHT-EPHEMERAL.md`: `retries: 0`, artefatos apagados,
@@ -99,17 +134,20 @@ uma única execução, com um único cliente e um único produto criados por ela
 AC2. O cliente é criado por `POST /api/customers` e o teste falha se a rota
 não devolver o registro criado.
 
-AC3. O produto é criado por `POST /api/products` com estoque inicial e
-`repurchaseIntervalDays` explícitos.
+AC3. O produto é criado por `POST /api/products` com `currentStock`,
+`minimumStock` e `consumptionDays` explícitos.
 
 AC4. A venda é criada por `POST /api/sales` ligando aquele cliente e aquele
 produto.
 
-AC5. O estoque resultante é conferido por `GET /api/products/[id]` contra o
-valor exato esperado, não contra "menor que o inicial".
+AC5. O estoque resultante é conferido por `GET /api/products`, selecionando o
+produto criado pelo id, contra o valor exato esperado — não contra "menor que
+o inicial".
 
 AC6. `expectedRepurchaseAt` da venda é conferido contra
-`soldAt + repurchaseIntervalDays` no contrato de ARCH-02.
+`soldAt + (quantity × consumptionDays) dias` no contrato de ARCH-02, com
+`quantity > 1` em pelo menos uma execução para que a multiplicação seja
+realmente exercida.
 
 AC7. `GET /api/repurchases` inclui o cliente criado pela execução.
 
@@ -118,11 +156,12 @@ provada com dois intervalos que caem em classificações diferentes.
 
 AC9. `GET /api/customers/[id]/sales` inclui a venda criada pela execução.
 
-AC10. O teste cria todos os registros que usa, com sufixo único por execução,
-e não altera nenhuma linha pré-existente.
+AC10. O teste roda inteiramente em um schema próprio, criado por execução, e
+nunca lê nem escreve no schema `public`.
 
-AC11. O teste remove no `finally` exatamente os ids que criou, e a limpeza
-roda mesmo quando uma asserção falha.
+AC11. O `finally` executa `DROP SCHEMA ... CASCADE` do schema da execução, e
+roda mesmo quando uma asserção falha; uma falha no drop faz o teste falhar em
+vez de ser engolida.
 
 AC12. Nenhuma asserção depende de contagem global ou de dado pré-existente
 no banco.
@@ -180,17 +219,25 @@ decidiu que o cálculo é síncrono e pertence ao trigger persistido; se a
 leitura logo após o `POST /api/sales` vier sem `expectedRepurchaseAt`, isso é
 achado real e não motivo para inserir espera arbitrária no teste.
 
-**Dados pré-existentes no banco de desenvolvimento.** Ver "Segurança dos
-dados": qualquer asserção global quebraria de forma intermitente e mascararia
-o que a task quer provar.
+**`prisma migrate deploy` por execução custa tempo.** É o preço de não tocar
+no schema `public`, e é determinístico — preferível a uma limpeza por linha
+que o trigger de venda torna impossível.
+
+**Schemas órfãos se o processo for morto entre a criação e o `DROP`.** Ficam
+com prefixo identificável e timestamp, então são localizáveis e removíveis; o
+risco é de higiene do ambiente, não de corrupção dos dados de
+desenvolvimento.
 
 ## Assumptions explícitas
 
 - **A1**: `DATABASE_URL` aponta para um banco com as migrações aplicadas;
   sem isso o teste falha imediatamente com mensagem explícita, em vez de
   passar vazio.
-- **A2**: as rotas de escrita aceitam os campos que esta spec usa; se alguma
-  exigir campo não previsto aqui, a divergência é achado e a spec é corrigida
-  antes da implementação, não durante.
+- **A2**: as rotas de escrita aceitam os campos que esta spec usa. Esta
+  assumption já foi exercida: a revisão independente da própria spec mostrou
+  que `POST /api/products` exige `consumptionDays` e não
+  `repurchaseIntervalDays`, e que não existe `GET /api/products/[id]`. A spec
+  foi corrigida antes da implementação, que é exatamente o que a assumption
+  previa.
 - **A3**: o contrato de data/hora de ARCH-02 (instante com timezone
   declarado) continua valendo e não é reaberto por esta task.
