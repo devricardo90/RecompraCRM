@@ -10,7 +10,7 @@ loop_version: RICK_LOOP_V1_4
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 open - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 (PR 38) in review - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
 current_branch: feat/ARCH-04-secondary-reviewer
 current_pr: 38
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -93,7 +93,7 @@ arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
 arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
-arch_04_impl_branch: feat/ARCH-04-review-dispatch
+arch_04_impl_branch: feat/ARCH-04-secondary-reviewer
 arch_04_impl_stage: STAGE1_SECONDARY_REVIEWER
 arch_04_pr1_status: 37 MERGED_SQUASH
 arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
@@ -130,9 +130,11 @@ restart_command: git switch main && git pull --ff-only && npm install
    mandatory clean-exact-HEAD independent review before merge is unchanged.
    Its spec merged on PR #36 (`docs/specs/ARCH-04.md`, 6 review rounds,
    round detail in `docs/operations/LOOP-REGISTER.jsonl` under
-   `run_id: RCRM-MVP01-RUN-014`); implementation PR #37 carries the
-   scripts half and is in review — the same pipeline every other
-   loop/governance change in this repo has gone through.
+   `run_id: RCRM-MVP01-RUN-014`); implementation PR #37 carried the
+   scripts half and merged at `3bb1ec1` after 10 review rounds. Stage 1
+   (PR #38, the secondary reviewer workflow) is now in review — the same
+   pipeline every other loop/governance change in this repo has gone
+   through.
 5. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per
    sale item. It binds nothing in TASK-14 or ARCH-04.
 6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,

@@ -57,19 +57,44 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      # Read-only, but required: the allowlist below permits `gh run view` and
+      # the prompt tells the reviewer to inspect CI state. Without it that tool
+      # 403s and the instruction points at something that cannot work.
+      actions: read
       id-token: write
 
     steps:
+      # Dispatch inputs reach the shell through env, never through `${{ }}`
+      # interpolation into the script source: GitHub substitutes those before
+      # Bash parses the line, so a value containing $(...) would execute with
+      # this job's pull-requests/issues write token. As env vars they are data.
+      # Both are then shape-checked, so anything downstream that does use them
+      # via interpolation is working from a validated integer and hex sha.
       - name: Resolve PR and expected HEAD
         id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_EXPECTED_HEAD: ${{ inputs.expected_head_sha }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "pr_number=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
-            echo "expected_head=${{ inputs.expected_head_sha }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PR_NUMBER="$INPUT_PR_NUMBER"
+            EXPECTED_HEAD="$INPUT_EXPECTED_HEAD"
           else
-            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "expected_head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            PR_NUMBER="$EVENT_PR_NUMBER"
+            EXPECTED_HEAD="$EVENT_HEAD_SHA"
           fi
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) echo "Refusing: pr_number is not a positive integer." >&2; exit 1 ;;
+          esac
+          case "$EXPECTED_HEAD" in
+            ''|*[!0-9a-fA-F]*) echo "Refusing: expected_head_sha is not a hex sha." >&2; exit 1 ;;
+          esac
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "expected_head=$EXPECTED_HEAD" >> "$GITHUB_OUTPUT"
 
       # Checked against the PR's live state, not the dispatch payload: a push
       # can land between the HEAD being resolved and this job starting, and a
@@ -78,18 +103,22 @@ jobs:
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
+          # Via env for the same reason as above, even though both values are
+          # already shape-checked.
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          EXPECTED_HEAD: ${{ steps.resolve.outputs.expected_head }}
+          TARGET_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          DATA=$(gh pr view "${{ steps.resolve.outputs.pr_number }}" \
-            --repo "${{ github.repository }}" \
+          DATA=$(gh pr view "$PR_NUMBER" \
+            --repo "$TARGET_REPO" \
             --json state,isDraft,headRefOid,isCrossRepository)
           ACTUAL_HEAD=$(echo "$DATA" | jq -r .headRefOid)
           STATE=$(echo "$DATA" | jq -r .state)
           DRAFT=$(echo "$DATA" | jq -r .isDraft)
           CROSS_REPO=$(echo "$DATA" | jq -r .isCrossRepository)
-          EXPECTED="${{ steps.resolve.outputs.expected_head }}"
-          echo "state=$STATE draft=$DRAFT cross_repo=$CROSS_REPO expected=$EXPECTED actual=$ACTUAL_HEAD"
-          if [ "$STATE" != "OPEN" ] || [ "$DRAFT" != "false" ] || [ "$CROSS_REPO" != "false" ] || [ "$ACTUAL_HEAD" != "$EXPECTED" ]; then
+          echo "state=$STATE draft=$DRAFT cross_repo=$CROSS_REPO expected=$EXPECTED_HEAD actual=$ACTUAL_HEAD"
+          if [ "$STATE" != "OPEN" ] || [ "$DRAFT" != "false" ] || [ "$CROSS_REPO" != "false" ] || [ "$ACTUAL_HEAD" != "$EXPECTED_HEAD" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Skipping review: PR is not an open, non-draft, same-repo PR still at the expected HEAD."
           else
