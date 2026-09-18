@@ -232,8 +232,8 @@ autorizam refatoração imediata.
   - spec_pr: 36 MERGED_SQUASH
   - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
   - spec_review_rounds: 6
-  - impl_branch: feat/ARCH-04-dispatch-cutover
-  - impl_stage: STAGE2_DISPATCH_CUTOVER
+  - impl_branch: feat/ARCH-04-dispatch-activation
+  - impl_stage: STAGE3_DISPATCH_ACTIVATION
   - pr1: 37 MERGED_SQUASH (10 rodadas de revisão), merge head 3bb1ec1432911e6f35e71e49b8c2c415d5ca0fce, pós-merge Validate 35307171971 SUCCESS
   - impl_blocker: anthropics/claude-code-action@v1 recusa rodar quando o próprio arquivo de workflow difere do branch padrão, então a PR que edita claude-pr-review.yml não pode ser revisada por ele; o check fica verde sem veredito nenhum (evidência: run 35258611604; mesmo silêncio nas PRs 27 e 28)
   - bootstrap_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED (owner, 2026-09-17)
@@ -249,7 +249,8 @@ autorizam refatoração imediata.
   - stage1: 38 MERGED_SQUASH (3 rodadas de revisão), HEAD revisado limpo ccc9c493829b0a438c36fecaf432da9feb140c78, merge head f83b66868d792983267e5a49944466e7cb5e850f, pós-merge Validate 35342232305 SUCCESS
   - pointer_gate: ARCH-04 owns "checagens mecânicas antes da revisão por LLM"; a deriva de ponteiro já custou oito rodadas de revisão, então antes da Stage 2 entra uma PR própria e pequena adicionando ao rick-loop-preflight.mjs uma checagem que compara os campos compartilhados de ARCH-04 (impl_branch, impl_stage, next_action) entre STATE.md, HANDOFF.md e esta entrada, falhando quando discordam. Disciplina manual já falhou oito vezes; o gate é a correção
   - pointer_gate_result: 39 MERGED_SQUASH (3 rodadas), HEAD revisado limpo f2d60a5754c8eec9c735eee55fecb82a97aa3aad, merge head f3fc47971acde296482c58e43fcd5982961c17e4, pós-merge Validate 35344725337 SUCCESS. A própria PR do gate foi barrada pelo preflight (no_state_drift: current_branch/current_pr defasados no HANDOFF) com CI verde e revisão limpa no HEAD exato — nona ocorrência da classe de deriva e a primeira pega por máquina, não por revisor
-  - next_action: REVIEW_ARCH_04_STAGE2_CUTOVER — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato, e agora é o próprio preflight que verifica essa igualdade em vez de depender de eu lembrar. A PR1 (#37), a Stage 1 (#38) e o pointer gate (#39) estão mergeados e validados; a Stage 2 (cutover de claude-pr-review.yml, PR #40) está em revisão pelo reviewer secundário. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - stage2: 40 MERGED_SQUASH (2 rodadas), HEAD revisado limpo 1c969de9218d99dbd7450d3480aa0252aa995af8, merge head 1a27df3, pos-merge Validate 35347958284 SUCCESS; o reviewer secundario rodou o modelo de verdade (29 turnos) enquanto o primario fechou verde em 12s sem veredito nenhum, e o gate deterministico barrou o primeiro HEAD por um P1 inline que o veredito limpo do secundario nao viu
+  - next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato, e agora é o próprio preflight que verifica essa igualdade em vez de depender de eu lembrar. A PR1 (#37), a Stage 1 (#38), o pointer gate (#39) e a Stage 2 (#40) estão mergeados e validados; a Stage 3 (PR #41, remove o gatilho automático dos dois workflows) está em revisão, com a evidência de aceitação ao vivo em docs/evidence/ARCH-04-validation.md. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade

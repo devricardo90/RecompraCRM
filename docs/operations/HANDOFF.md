@@ -6,13 +6,13 @@ run_id: RCRM-MVP01-RUN-013
 loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
 status: TASK_14_CLOSED_BLOCKED_ON_ARCH_04
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_4
+loop_version: RICK_LOOP_V1_5
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 (PR 38) in review - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
-current_branch: feat/ARCH-04-dispatch-cutover
-current_pr: 40
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, status SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; PR 37 merged at 3bb1ec1; Stage 1 PR 38 at f83b668; Stage 1b PR 39 at f3fc479; Stage 2 PR 40 at 1a27df3; Stage 3 PR 41 in review - not yet RESOLVED/COMPLETED); verified live via scripts/rick-loop-roadmap.mjs
+current_branch: feat/ARCH-04-dispatch-activation
+current_pr: 41
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
@@ -27,7 +27,7 @@ owner_decision_02: OWNER-02_REVIEW_TRIGGER_ECONOMICS
 owner_decision_02_status: AUTHORIZED_NOT_YET_IMPLEMENTED
 owner_decision_02_decided_at: "2026-09-17"
 owner_decision_02_scope: remove the automatic per-push Claude review dispatch; controller dispatches one independent review deterministically once READY_FOR_INDEPENDENT_REVIEW; the mandatory clean-exact-HEAD review before merge is unchanged
-owner_decision_02_next_action: REVIEW_ARCH_04_STAGE2_CUTOVER
+owner_decision_02_next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_item: ARCH-04
 external_gate: none
@@ -88,13 +88,13 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
-next_action: REVIEW_ARCH_04_STAGE2_CUTOVER
+next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
 arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
-arch_04_impl_branch: feat/ARCH-04-dispatch-cutover
-arch_04_impl_stage: STAGE2_DISPATCH_CUTOVER
+arch_04_impl_branch: feat/ARCH-04-dispatch-activation
+arch_04_impl_stage: STAGE3_DISPATCH_ACTIVATION
 arch_04_pr1_status: 37 MERGED_SQUASH
 arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
 arch_04_pr1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -145,9 +145,13 @@ restart_command: git switch main && git pull --ff-only && npm install
    round detail in `docs/operations/LOOP-REGISTER.jsonl` under
    `run_id: RCRM-MVP01-RUN-014`); implementation PR #37 carried the
    scripts half and merged at `3bb1ec1` after 10 review rounds. Stage 1
-   (PR #38, the secondary reviewer workflow) is now in review — the same
+   (PR #38, the secondary reviewer workflow) merged at `f83b668`, the
+   pointer gate (PR #39) at `f3fc479` and the Stage 2 cutover (PR #40) at
+   `1a27df3`, each post-merge validated. Stage 3 (PR #41, which removes the
+   automatic trigger from both review workflows) is now in review — the same
    pipeline every other loop/governance change in this repo has gone
-   through.
+   through. The live acceptance evidence is in
+   `docs/evidence/ARCH-04-validation.md`.
 5. OWNER-01 stays resolved as Option A for TASK-12: one dashboard row per
    sale item. It binds nothing in TASK-14 or ARCH-04.
 6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,

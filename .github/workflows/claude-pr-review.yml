@@ -1,31 +1,41 @@
 name: Claude PR Review
 
-# ARCH-04 Stage 2, cutover (additive).
+# ARCH-04 Stage 3: controller-dispatched review only.
 #
-# workflow_dispatch is added alongside the existing pull_request trigger. The
-# automatic per-push trigger is NOT removed here: the owner's requirement is
-# that the replacement path be implemented, tested and demonstrably
-# operational before the old one is disabled. Stage 3 removes it, after the
-# acceptance proofs.
+# The automatic per-push trigger is gone. A push NEVER invokes an LLM review
+# now; scripts/rick-loop-review-dispatch.mjs decides, and it dispatches only
+# after CI is green on the exact HEAD, the deterministic preflight passes, and
+# no run or published verdict already covers that HEAD. This is OWNER-02
+# (REVIEW_TRIGGER_ECONOMICS) as authorized: the per-push *execution* is
+# removed, while the mandatory clean exact-HEAD independent review before merge
+# is untouched.
 #
-# This PR edits this file, so anthropics/claude-code-action@v1 refuses to run
-# it (workflow validation: the file differs from the default branch) and skips
-# with a green check and no verdict. The verdict for this PR therefore comes
-# from claude-pr-review-meta.yml, which is unchanged here and so stays
-# identical to the default branch.
-
+# Removal happens here and not earlier because the owner required the
+# replacement path to be implemented, tested and demonstrably operational
+# first. The live acceptance evidence is recorded in
+# docs/evidence/ARCH-04-validation.md, which is added by this same PR: six
+# pushes producing zero review runs, one authorized HEAD producing exactly one
+# dispatched review with a real exact-head verdict (run 35366498301), and
+# duplicate dispatch refused in both the in-flight and already-reviewed
+# states.
+#
 # The dispatcher runs this workflow from the DEFAULT BRANCH, never from the PR
 # branch, so the definition executing here is always the trusted one (see
 # buildDispatchArgs). That costs the natural correlation handle: GitHub records
 # a default-branch dispatch against the default branch, so `run.headSha` is
 # main's sha and not the PR's. This run-name carries the PR number and the
 # reviewed HEAD instead, and the dispatcher and watcher match on it.
+#
+# A useful consequence of running main's definition: the action's own workflow
+# validation ("must have identical content to the default branch") passes by
+# construction, so a dispatched review no longer fails open on PRs that edit
+# this file - the failure mode that made the Stage 1 secondary reviewer
+# necessary in the first place. The secondary reviewer stays available for
+# review-infrastructure changes regardless, as the owner required.
 run-name: >-
-  Claude PR Review · PR #${{ inputs.pr_number || github.event.pull_request.number }} @ ${{ inputs.expected_head_sha || github.event.pull_request.head.sha }}
+  Claude PR Review · PR #${{ inputs.pr_number }} @ ${{ inputs.expected_head_sha }}
 
 on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -37,22 +47,20 @@ on:
         required: true
         type: string
 
-# Evaluated at trigger time, so it can only read github/inputs/vars - never a
-# job-step output. Without the inputs fallback every dispatched run would share
-# one empty-suffix group and cancel unrelated PRs' reviews.
+# Per PR, not per HEAD: a newer dispatch for the same PR supersedes an older
+# one, and cancelling the stale run is correct because its expected_head_sha is
+# no longer current. Evaluated at trigger time, so it can only read
+# github/inputs/vars - never a job-step output.
 concurrency:
-  group: claude-pr-review-${{ github.event.pull_request.number || inputs.pr_number }}
+  group: claude-pr-review-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   review:
-    # draft/head-repo live on the pull_request payload only, so a
-    # workflow_dispatch run would be skipped outright by a guard that reads
-    # them. It runs unconditionally there and re-checks those facts in-job.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.draft == false &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    # No event-branched guard any more: workflow_dispatch is the only trigger,
+    # and draft/head-repo do not exist on its payload. Those facts are checked
+    # against the PR's live state in the verify step below, which is stronger
+    # anyway - the payload could be stale by the time the job starts.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,20 +79,12 @@ jobs:
       - name: Resolve PR and expected HEAD
         id: resolve
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_EXPECTED_HEAD: ${{ inputs.expected_head_sha }}
-          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            PR_NUMBER="$INPUT_PR_NUMBER"
-            EXPECTED_HEAD="$INPUT_EXPECTED_HEAD"
-          else
-            PR_NUMBER="$EVENT_PR_NUMBER"
-            EXPECTED_HEAD="$EVENT_HEAD_SHA"
-          fi
+          PR_NUMBER="$INPUT_PR_NUMBER"
+          EXPECTED_HEAD="$INPUT_EXPECTED_HEAD"
           case "$PR_NUMBER" in
             ''|*[!0-9]*) echo "Refusing: pr_number is not a positive integer." >&2; exit 1 ;;
           esac

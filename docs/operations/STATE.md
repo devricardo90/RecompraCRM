@@ -2,12 +2,12 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 75
+state_version: 76
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
 mode: CONTROLLED_AUTONOMOUS
-loop_version: RICK_LOOP_V1_4
+loop_version: RICK_LOOP_V1_5
 loop_upgrade_01b_status: MERGED
 loop_upgrade_02_status: MERGED_V1_3_FROZEN
 loop_upgrade_02_merge_main_head: 44b1f3f0612ebf815f2cfbf261596dbbd3a2fbc6
@@ -77,8 +77,8 @@ current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 PR 38 merged at f83b6686; Stage 1b pointer gate PR 39 merged at f3fc479; Stage 2 cutover in flight - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
-branch: feat/ARCH-04-dispatch-cutover
-pr_number: 40
+branch: feat/ARCH-04-dispatch-activation
+pr_number: 41
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -149,7 +149,7 @@ owner_decision_02_forbids: weakening the mandatory clean-exact-HEAD independent 
 owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> deterministic preflight PASS -> READY_FOR_INDEPENDENT_REVIEW -> one Claude review of the exact HEAD -> CLEAN -> merge; FINDINGS -> fix -> push -> CI and validation -> preflight -> one new independent review
 owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
 owner_decision_02_includes_split: only decide_before resolver gate and mechanical checks before LLM review are implemented by ARCH-04; the other six items are tracked non-blocking as ARCH-05, so closing ARCH-04 does not silently close OWNER-02
-owner_decision_02_next_action: REVIEW_ARCH_04_STAGE2_CUTOVER
+owner_decision_02_next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION
 owner_decision_02_roadmap_item: ARCH-04
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_MERGED_IMPLEMENTING, previously SPEC_IN_REVIEW and before that AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_ARCH_04_STAGE2_CUTOVER
+next_action: REVIEW_ARCH_04_STAGE3_ACTIVATION
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -268,8 +268,8 @@ arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
 arch_04_spec_review_rounds: 6
 arch_04_spec_main_ci_run: 35257845976
 arch_04_spec_main_ci_status: SUCCESS
-arch_04_impl_branch: feat/ARCH-04-dispatch-cutover
-arch_04_impl_stage: STAGE2_DISPATCH_CUTOVER
+arch_04_impl_branch: feat/ARCH-04-dispatch-activation
+arch_04_impl_stage: STAGE3_DISPATCH_ACTIVATION
 arch_04_pr1_status: 37 MERGED_SQUASH
 arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
 arch_04_pr1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -303,6 +303,15 @@ arch_04_pointer_gate_main_ci_status: SUCCESS
 arch_04_pointer_gate_ninth_occurrence: the gate's own PR was blocked by no_state_drift (HANDOFF current_branch/current_pr stale against STATE and the live PR) with CI green and the review clean on the exact HEAD - the first time the drift class was caught by a machine instead of a reviewer, and a demonstration that the fail-closed order holds even when every other gate is satisfied
 arch_04_stage2_reviewer: SECONDARY_claude-pr-review-meta.yml
 arch_04_stage2_requirement: a green check without a real exact-head verdict is NOT sufficient; if the secondary review fails or silently skips, stop and do not merge
+arch_04_stage2_status: 40 MERGED_SQUASH
+arch_04_stage2_review_rounds: 2
+arch_04_stage2_reviewed_head: 1c969de9218d99dbd7450d3480aa0252aa995af8
+arch_04_stage2_merge_main_head: 1a27df3
+arch_04_stage2_main_ci_run: 35347958284
+arch_04_stage2_main_ci_status: SUCCESS
+arch_04_stage2_secondary_proof: secondary run 35347401663 ran 4m45s with num_turns 29, zero workflow-validation skip lines, and published Reviewed commit 1c969de; primary run 35347401649 finished in 12s logging "Exiting due to workflow validation skip" with no verdict - a green check that proves nothing, which is why the verdict was required and not the check
+arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition because --ref named the PR branch; fixed by dispatching the default branch and correlating runs via run-name
+arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
 updated_at: "2026-09-18T12:20:00Z"

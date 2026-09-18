@@ -38,8 +38,16 @@ export const REDISPATCH_COOLDOWN_MS = 10 * 60 * 1000;
  * A dispatched run executes the default branch's workflow definition, so
  * GitHub records it against the default branch and its headSha is main's, not
  * the PR's. The workflow's run-name carries `PR #<n> @ <sha>` for exactly this
- * reason. headSha is still matched first because the additive `pull_request`
- * trigger is still live in Stage 2 and those runs are anchored normally.
+ * reason, and that is how every run this function sees is now anchored: since
+ * Stage 3 removed the `pull_request` trigger from both review workflows, no
+ * live path produces a run anchored by headSha any more.
+ *
+ * The headSha branch stays as a defensive fallback rather than an expected
+ * case. It still matches runs created before the cutover that remain inside
+ * the listing window, and it keeps this function correct if a
+ * `pull_request`-triggered review workflow is ever reintroduced - failing to
+ * match a real run is the dangerous direction here, because it would
+ * re-dispatch a review that already exists.
  */
 export function reviewRunMatchesHead(run, headSha) {
   if (!run || !headSha) return false;
