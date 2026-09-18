@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 72
+state_version: 74
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -76,9 +76,9 @@ task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-14
 current_task_status: COMPLETED
 next_eligible_task: none
-next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 (PR 38) in review - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
-branch: feat/ARCH-04-secondary-reviewer
-pr_number: 38
+next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 PR 38 merged at f83b6686; Stage 1b pointer gate in flight - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
+branch: feat/ARCH-04-pointer-gate
+pr_number: 39
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -149,7 +149,7 @@ owner_decision_02_forbids: weakening the mandatory clean-exact-HEAD independent 
 owner_decision_02_sequence: CI PASS -> authoritative validation PASS -> deterministic preflight PASS -> READY_FOR_INDEPENDENT_REVIEW -> one Claude review of the exact HEAD -> CLEAN -> merge; FINDINGS -> fix -> push -> CI and validation -> preflight -> one new independent review
 owner_decision_02_includes: STATE_POINTER_CONSISTENCY, BASELINE_POINTER_CONSISTENCY, LOOP-REGISTER integrity, current_task vs next_eligible_task semantics, decide_before resolver gate, remote-first reconciliation, mechanical checks before LLM review, review usage metrics
 owner_decision_02_includes_split: only decide_before resolver gate and mechanical checks before LLM review are implemented by ARCH-04; the other six items are tracked non-blocking as ARCH-05, so closing ARCH-04 does not silently close OWNER-02
-owner_decision_02_next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
+owner_decision_02_next_action: REVIEW_ARCH_04_POINTER_GATE
 owner_decision_02_roadmap_item: ARCH-04
 owner_decision_02_roadmap_item_remainder: ARCH-05
 owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_MERGED_IMPLEMENTING, previously SPEC_IN_REVIEW and before that AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER
+next_action: REVIEW_ARCH_04_POINTER_GATE
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -268,8 +268,8 @@ arch_04_spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
 arch_04_spec_review_rounds: 6
 arch_04_spec_main_ci_run: 35257845976
 arch_04_spec_main_ci_status: SUCCESS
-arch_04_impl_branch: feat/ARCH-04-secondary-reviewer
-arch_04_impl_stage: STAGE1_SECONDARY_REVIEWER
+arch_04_impl_branch: feat/ARCH-04-pointer-gate
+arch_04_impl_stage: STAGE1B_POINTER_GATE
 arch_04_pr1_status: 37 MERGED_SQUASH
 arch_04_pr1_reviewed_head: 45ddde18a96f9e1ee0cd13cb0ae8fae42c505203
 arch_04_pr1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
@@ -284,9 +284,18 @@ arch_04_bootstrap_stage2: cutover PR editing claude-pr-review.yml, reviewed by t
 arch_04_bootstrap_stage3: activate controller dispatch, then remove the automatic per-push trigger only once the replacement is operational
 arch_04_bootstrap_stage4: acceptance proofs (multiple pushes trigger no review, one authorized HEAD produces one review, stale HEAD cannot invoke the model, workflow changes get a real review, findings revalidate, clean review merges only with all gates green)
 arch_04_secondary_reviewer_scope: activates only for changes to the primary review workflow or explicitly authorized review-infrastructure maintenance, never for normal PRs
+arch_04_stage1_status: 38 MERGED_SQUASH
+arch_04_stage1_reviewed_head: ccc9c493829b0a438c36fecaf432da9feb140c78
+arch_04_stage1_review: CLAUDE_PR_REVIEW_CLEAN_ON_EXACT_HEAD
+arch_04_stage1_review_rounds: 3
+arch_04_stage1_merge_main_head: f83b66868d792983267e5a49944466e7cb5e850f
+arch_04_stage1_main_ci_run: 35342232305
+arch_04_stage1_main_ci_status: SUCCESS
+arch_04_pointer_gate_rationale: eight review rounds across PRs 36/37/38 caught the same fact updated in two of the three files that carry it; the gate replaces the discipline that failed eight times
+arch_04_pointer_gate_position: before STAGE2, so the cutover PR does not land with the hole open
 next_action_authorized: true
-updated_at: "2026-09-17T02:00:00Z"
-updated_by: Claude Code (Rick Loop recovery after notebook shutdown)
+updated_at: "2026-09-18T12:20:00Z"
+updated_by: Claude Code (Rick Loop, ARCH-04 Stage 1b pointer gate)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.

@@ -1,6 +1,14 @@
 import { strict as assert } from "node:assert";
 
-import { evaluatePreflight, validateJsonlLines, PREFLIGHT_CHECKS } from "./rick-loop-preflight.mjs";
+import {
+  evaluatePreflight,
+  validateJsonlLines,
+  PREFLIGHT_CHECKS,
+  comparePointers,
+  readRoadmapEntryFields,
+  normalizePointerValue,
+  TRACKED_POINTERS,
+} from "./rick-loop-preflight.mjs";
 import {
   evaluateDispatch,
   buildDispatchArgs,
@@ -50,10 +58,27 @@ function okCi(overrides = {}) {
   return { databaseId: 1, headSha: HEAD, status: "completed", conclusion: "success", ...overrides };
 }
 
+function roadmapWith(fields = {}) {
+  const lines = [
+    "- [x] TASK-14 — Hardening",
+    "  - impl_branch: feat/TASK-14-hardening",
+    "- [ ] ARCH-04 — Governança de gatilho de revisão",
+    ...Object.entries(fields).map(([k, v]) => `  - ${k}: ${v}`),
+    "- [ ] ARCH-05 — Itens remanescentes",
+    "  - impl_branch: none",
+  ];
+  return lines.join("\n");
+}
+
+const AGREEING_POINTERS = {
+  state: { current_task: "ARCH-04", arch_04_impl_branch: "feat/x", arch_04_impl_stage: "STAGE1", next_action: "DO_THING" },
+  handoff: { current_task: "ARCH-04", arch_04_impl_branch: "feat/x", arch_04_impl_stage: "STAGE1", next_action: "DO_THING" },
+  roadmapText: roadmapWith({ impl_branch: "feat/x", impl_stage: "STAGE1", next_action: "DO_THING — com prosa explicativa" }),
+};
+
 function okPreflightInputs(overrides = {}) {
   return {
-    state: { current_task: "ARCH-04" },
-    handoff: { current_task: "ARCH-04" },
+    ...AGREEING_POINTERS,
     registerLines: ['{"a":1}', "", '{"b":2}'],
     drift: [],
     pr: okPr(),
@@ -115,6 +140,127 @@ function okPreflightInputs(overrides = {}) {
   assert.equal(validateJsonlLines(["nope"]).invalidLine, 1, "the first bad line is reported by 1-based number");
   assert.equal(validateJsonlLines(['{"a":1}', "nope"]).invalidLine, 2, "the reported line number is the bad one");
   assert.equal(validateJsonlLines(null).valid, false, "a missing register is unknown, therefore invalid");
+}
+
+// --- the pointer gate ---------------------------------------------------
+//
+// The same fact lives in STATE.md, HANDOFF.md and the matching ROADMAP entry,
+// and eight review rounds across PRs 36/37/38 caught it updated in two of the
+// three - the last one inside a commit whose own message said all three had
+// been swept. Nothing mechanical was looking. Now something is.
+
+{
+  // The exact drift from PR 38 round 2, reproduced: STATE and HANDOFF moved
+  // to the Stage 1 branch, ROADMAP left on PR1's.
+  const drifted = evaluatePreflight(okPreflightInputs({
+    roadmapText: roadmapWith({ impl_branch: "feat/ARCH-04-review-dispatch", impl_stage: "STAGE1", next_action: "DO_THING" }),
+    state: { ...AGREEING_POINTERS.state, arch_04_impl_branch: "feat/ARCH-04-secondary-reviewer" },
+    handoff: { ...AGREEING_POINTERS.handoff, arch_04_impl_branch: "feat/ARCH-04-secondary-reviewer" },
+  }));
+  assert.equal(drifted.pass, false, "two-of-three pointer drift must fail preflight");
+  assert.ok(drifted.reasons.includes("roadmap_pointers_agree"), "the failing check is named");
+  assert.ok(
+    drifted.reasons.some((r) => r.startsWith("pointer_disagreement:ARCH-04.impl_branch(")),
+    `the reason names the pointer and each source's value, got ${JSON.stringify(drifted.reasons)}`,
+  );
+}
+
+{
+  // Trailing prose after an em dash is the ROADMAP's house style, not drift.
+  const mismatches = comparePointers({
+    state: { next_action: "DO_THING" },
+    handoff: { next_action: "DO_THING" },
+    roadmapText: roadmapWith({ next_action: "DO_THING — porque a PR ainda está aberta" }),
+  });
+  assert.deepEqual(mismatches, [], "explanatory prose after an em dash is not disagreement");
+}
+
+{
+  // A pointer nobody records is nothing to disagree about; one source alone
+  // has nothing to disagree with. Only two-or-more-and-differing is drift.
+  assert.deepEqual(comparePointers({ state: {}, handoff: {}, roadmapText: roadmapWith({}) }), [], "absent everywhere is not drift");
+  assert.deepEqual(
+    comparePointers({ state: { arch_04_impl_branch: "feat/x" }, handoff: {}, roadmapText: roadmapWith({}) }),
+    [],
+    "present in one source only is not drift",
+  );
+  const twoSources = comparePointers({
+    state: { arch_04_impl_stage: "STAGE1" },
+    handoff: { arch_04_impl_stage: "STAGE2" },
+    roadmapText: null,
+  });
+  const disagreements = twoSources.filter((issue) => issue.kind === "disagreement");
+  assert.equal(disagreements.length, 1, "STATE and HANDOFF disagreeing is drift even with no roadmap available");
+  assert.deepEqual(disagreements[0].values, { state: "STAGE1", handoff: "STAGE2" }, "both claimed values are reported");
+}
+
+{
+  // An absent *value* is benign; an absent *source* is not. If the ROADMAP
+  // cannot be consulted, STATE and HANDOFF agreeing with each other says
+  // nothing about the third source, and a gate that reported pass there would
+  // be exactly the silent two-source degradation this check exists to prevent.
+  const missingFile = comparePointers({ ...AGREEING_POINTERS, roadmapText: null });
+  assert.equal(missingFile.length, Object.keys(TRACKED_POINTERS).length, "an unreadable ROADMAP is reported for every tracked pointer");
+  assert.ok(missingFile.every((issue) => issue.kind === "source_unavailable" && issue.detail === "roadmap_text_missing"), "each names the missing source");
+
+  // The subtler shape: the file reads fine, but the entry the pointers name is
+  // gone - deleted, renamed, or no longer matching the heading format.
+  const entryGone = comparePointers({
+    ...AGREEING_POINTERS,
+    roadmapText: ["- [ ] TASK-14 — Hardening", "  - impl_branch: feat/TASK-14-hardening"].join("\n"),
+  });
+  assert.ok(
+    entryGone.some((issue) => issue.kind === "source_unavailable" && issue.detail === "entry_not_found:ARCH-04"),
+    `a missing ARCH-04 entry is reported, got ${JSON.stringify(entryGone)}`,
+  );
+
+  // And it must reach the gate, not just the comparison function.
+  const gated = evaluatePreflight(okPreflightInputs({ roadmapText: null }));
+  assert.equal(gated.pass, false, "an unevaluable pointer check fails preflight rather than passing silently");
+  assert.ok(gated.reasons.includes("roadmap_pointers_agree"), "the failing check is named");
+  assert.ok(
+    gated.reasons.some((r) => r.startsWith("pointer_source_unavailable:ARCH-04.impl_branch(roadmap=roadmap_text_missing")),
+    `the reason distinguishes an absent source from a disagreement, got ${JSON.stringify(gated.reasons)}`,
+  );
+}
+
+{
+  // The entry reader must not bleed fields across entry boundaries, or every
+  // comparison would be against the wrong roadmap item.
+  const text = roadmapWith({ impl_branch: "feat/x" });
+  assert.equal(readRoadmapEntryFields(text, "ARCH-04").impl_branch, "feat/x", "reads the requested entry's field");
+  assert.equal(readRoadmapEntryFields(text, "TASK-14").impl_branch, "feat/TASK-14-hardening", "reads a different entry independently");
+  assert.equal(readRoadmapEntryFields(text, "ARCH-05").impl_branch, "none", "stops at the next entry heading");
+  assert.equal(readRoadmapEntryFields(text, "TASK-99").__found, false, "an absent entry is reported as not found");
+  assert.equal(readRoadmapEntryFields(text, "TASK-99").impl_branch, undefined, "an absent entry yields no fields");
+}
+
+{
+  // A checked-off entry's fields are history: STATE/HANDOFF have legitimately
+  // moved on to the next work, and comparing against them would manufacture
+  // drift out of correct bookkeeping.
+  const completed = [
+    "- [x] ARCH-04 — Governança de gatilho de revisão",
+    "  - impl_branch: feat/ARCH-04-secondary-reviewer",
+    "  - next_action: DONE",
+  ].join("\n");
+  assert.deepEqual(
+    comparePointers({
+      state: { arch_04_impl_branch: "feat/TASK-15-something", next_action: "START_TASK_15" },
+      handoff: { arch_04_impl_branch: "feat/TASK-15-something", next_action: "START_TASK_15" },
+      roadmapText: completed,
+    }),
+    [],
+    "a checked-off entry's historical fields are not compared against live pointers",
+  );
+  assert.equal(readRoadmapEntryFields(completed, "ARCH-04").__checked, true, "the reader reports the checkbox state");
+}
+
+{
+  assert.equal(normalizePointerValue("VALUE — prose"), "VALUE", "the value token is taken before the em dash");
+  assert.equal(normalizePointerValue("  VALUE  "), "VALUE", "surrounding whitespace is ignored");
+  assert.equal(normalizePointerValue(null), null, "absent stays absent");
+  assert.equal(normalizePointerValue("— only prose"), null, "a value that is only prose is absent, not empty-string drift");
 }
 
 // --- dispatch decision -------------------------------------------------

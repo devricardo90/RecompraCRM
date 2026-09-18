@@ -20,7 +20,110 @@ export const PREFLIGHT_CHECKS = Object.freeze([
   "pr_not_draft",
   "pr_base_is_default",
   "pr_not_conflicting",
+  "roadmap_pointers_agree",
 ]);
+
+/**
+ * The same fact is written in three places - STATE.md, HANDOFF.md and the
+ * matching ROADMAP entry - and eight separate review rounds across PRs 36, 37
+ * and 38 caught it updated in two of the three. The last one was inside a
+ * commit whose own message said all three had been swept. That is not a
+ * discipline problem any longer; nothing mechanical was looking.
+ *
+ * Each entry maps a logical pointer to the field name used in each source.
+ * ROADMAP entry fields are unprefixed because they already sit under their
+ * entry heading.
+ */
+export const TRACKED_POINTERS = Object.freeze({
+  "ARCH-04.impl_branch": { state: "arch_04_impl_branch", handoff: "arch_04_impl_branch", roadmap: "impl_branch", entry: "ARCH-04" },
+  "ARCH-04.impl_stage": { state: "arch_04_impl_stage", handoff: "arch_04_impl_stage", roadmap: "impl_stage", entry: "ARCH-04" },
+  "ARCH-04.next_action": { state: "next_action", handoff: "next_action", roadmap: "next_action", entry: "ARCH-04" },
+});
+
+/**
+ * ROADMAP prose habitually appends an explanation after an em dash
+ * ("VALUE — porque ..."), which is deliberate and should not count as drift.
+ * Only the value token before it is compared.
+ */
+export function normalizePointerValue(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).split("—")[0].trim();
+  return text === "" ? null : text;
+}
+
+/**
+ * Reads the sub-fields of one `- [ ] <ID> — title` entry in ROADMAP.md.
+ * parseRoadmapPlan deliberately models only depends_on/blocked_by/status/
+ * blocking, so the fields this gate compares are invisible to it.
+ */
+export function readRoadmapEntryFields(text, entryId) {
+  const normalized = String(text ?? "").replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const fields = {};
+  let inside = false;
+  let checked = false;
+  for (const line of lines) {
+    const heading = line.match(/^- \[([ xX])\] ((?:TASK|ARCH)-\d+)\s+—/);
+    if (heading) {
+      if (inside) break;
+      inside = heading[2] === entryId;
+      if (inside) checked = heading[1].toLowerCase() === "x";
+      continue;
+    }
+    if (!inside) continue;
+    const meta = line.match(/^\s{2,}-\s+([a-zA-Z0-9_]+):\s*(.*)$/);
+    if (meta) fields[meta[1]] = meta[2];
+  }
+  return { ...fields, __checked: checked, __found: inside || Object.keys(fields).length > 0 };
+}
+
+/**
+ * A pointer is only compared where it is actually present: a value absent
+ * everywhere is nothing to disagree about, and a value present in only one
+ * source has nothing to disagree with. Two or more present and differing is
+ * the drift this exists to catch.
+ *
+ * Absent *values* are benign that way, but an absent *source* is not. If the
+ * ROADMAP cannot be read, or the entry a pointer names is gone or no longer
+ * matches the heading shape, the third source drops out of the comparison
+ * entirely - and STATE and HANDOFF agreeing with each other is no evidence at
+ * all about the source that vanished. That is reported rather than silently
+ * downgraded to a two-source check, so this check fails closed like the rest
+ * of the module.
+ */
+export function comparePointers({ state = null, handoff = null, roadmapText = null } = {}) {
+  const issues = [];
+  for (const [pointer, spec] of Object.entries(TRACKED_POINTERS)) {
+    const roadmapFields = roadmapText === null ? null : readRoadmapEntryFields(roadmapText, spec.entry);
+    if (roadmapFields === null || roadmapFields.__found !== true) {
+      issues.push({
+        kind: "source_unavailable",
+        pointer,
+        source: "roadmap",
+        detail: roadmapText === null ? "roadmap_text_missing" : `entry_not_found:${spec.entry}`,
+      });
+      // Deliberately no `continue`: STATE and HANDOFF disagreeing is still
+      // worth naming in the same run, rather than surfacing one defect at a
+      // time across repeated preflights.
+    } else if (roadmapFields.__checked === true) {
+      // Once an entry is checked off, its fields are a historical record of
+      // how that item finished, while STATE/HANDOFF have moved on to the next
+      // work. Comparing the two manufactures drift out of correct bookkeeping.
+      continue;
+    }
+    const values = {};
+    const fromState = normalizePointerValue(state?.[spec.state]);
+    const fromHandoff = normalizePointerValue(handoff?.[spec.handoff]);
+    const fromRoadmap = normalizePointerValue(roadmapFields?.[spec.roadmap]);
+    if (fromState !== null) values.state = fromState;
+    if (fromHandoff !== null) values.handoff = fromHandoff;
+    if (fromRoadmap !== null) values.roadmap = fromRoadmap;
+
+    if (Object.keys(values).length < 2) continue;
+    if (new Set(Object.values(values)).size > 1) issues.push({ kind: "disagreement", pointer, values });
+  }
+  return issues;
+}
 
 function isNonEmptyRecord(value) {
   return Boolean(value) && typeof value === "object" && Object.keys(value).length > 0;
@@ -50,9 +153,11 @@ export function evaluatePreflight({
   registerLines = null,
   drift = null,
   pr = null,
+  roadmapText = null,
   defaultBranch = "main",
 } = {}) {
   const jsonl = validateJsonlLines(registerLines);
+  const pointerIssues = comparePointers({ state, handoff, roadmapText });
   const checks = {
     state_parseable: isNonEmptyRecord(state),
     handoff_parseable: isNonEmptyRecord(handoff),
@@ -65,6 +170,9 @@ export function evaluatePreflight({
     // GitHub has not finished computing mergeability, which is not proof of
     // anything and must not pass a gate that exists to be deterministic.
     pr_not_conflicting: pr ? pr.mergeable === "MERGEABLE" : false,
+    // Fails both when the three sources disagree and when one of them could
+    // not be consulted at all - an unevaluable check is never a silent pass.
+    roadmap_pointers_agree: pointerIssues.length === 0,
   };
 
   const reasons = [];
@@ -73,6 +181,18 @@ export function evaluatePreflight({
   }
   if (!jsonl.valid && jsonl.invalidLine !== null) {
     reasons.push(`register_invalid_json_at_line_${jsonl.invalidLine}`);
+  }
+  // Named individually so the log says which pointer disagreed and what each
+  // source claimed, rather than only that something did. An unreadable source
+  // gets its own reason shape: "they disagree" and "one of them is missing"
+  // need different fixes, so the log must not blur them together.
+  for (const issue of pointerIssues) {
+    if (issue.kind === "source_unavailable") {
+      reasons.push(`pointer_source_unavailable:${issue.pointer}(${issue.source}=${issue.detail})`);
+      continue;
+    }
+    const detail = Object.entries(issue.values).map(([source, value]) => `${source}=${value}`).join(" ");
+    reasons.push(`pointer_disagreement:${issue.pointer}(${detail})`);
   }
 
   return { pass: reasons.length === 0, checks, reasons };
@@ -134,7 +254,7 @@ export function collectPreflightInputs(prNumber, { repo = null } = {}) {
       })
     : null;
 
-  return { state, handoff, registerLines, drift, pr, git };
+  return { state, handoff, registerLines, drift, pr, git, roadmapText: readTextOrNull("docs/roadmap/ROADMAP.md") };
 }
 
 function main() {
