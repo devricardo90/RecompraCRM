@@ -116,6 +116,9 @@ jobs:
       - name: Test UI hardening floor
         run: npm run test:ui-hardening
 
+      - name: Test ARCH-04 review dispatch
+        run: npm run test:review-dispatch
+
       - name: Lint
         run: npm run lint
 

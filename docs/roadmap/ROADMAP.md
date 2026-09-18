@@ -228,7 +228,15 @@ autorizam refatoração imediata.
   - subsystem: gatilho de execução de `.github/workflows/claude-pr-review.yml`; dispatch determinístico pelo loop controller
   - blocking: true
   - blocking_rationale: ao contrário de ARCH-01..03, este item bloqueia mecanicamente `depends_on` de TASK-15 — um item registrado apenas em STATE/HANDOFF nunca seria consumido pelo resolver determinístico (`scripts/rick-loop-roadmap.mjs` só modela entradas `TASK-*`/`ARCH-*`), e TASK-15 seria selecionada silenciosamente sem que a mudança de governança fosse feita
-  - status: SPEC_IN_REVIEW
+  - status: SPEC_MERGED_IMPLEMENTING
+  - spec_pr: 36 MERGED_SQUASH
+  - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
+  - spec_review_rounds: 6
+  - impl_branch: feat/ARCH-04-review-dispatch
+  - impl_stage: PR1_SCRIPTS_ONLY_WORKFLOW_FILE_DEFERRED
+  - impl_blocker: anthropics/claude-code-action@v1 recusa rodar quando o próprio arquivo de workflow difere do branch padrão, então a PR que edita claude-pr-review.yml não pode ser revisada por ele; o check fica verde sem veredito nenhum (evidência: run 35258611604; mesmo silêncio nas PRs 27 e 28)
+  - bootstrap_owner_decision: OPTION_1_SECONDARY_REVIEWER_STAGED (owner, 2026-09-17)
+  - bootstrap_stages: STAGE1 adiciona .github/workflows/claude-pr-review-meta.yml em PR isolada revisada pelo reviewer primário; STAGE2 cutover de claude-pr-review.yml revisado pelo reviewer secundário com veredito real no HEAD exato; STAGE3 ativa o dispatch novo e só então remove o gatilho automático; STAGE4 aceitação
   - spec: docs/specs/ARCH-04.md
   - spec_branch: docs/ARCH-04-spec
   - spec_baseline: 6eae01631284742a7c06f47e411f6fa77361ea81
@@ -237,7 +245,7 @@ autorizam refatoração imediata.
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
   - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
-  - next_action: REVIEW_ARCH_04_SPEC_PR_36 — esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
+  - next_action: AWAIT_ARCH_04_PR1_REVIEW_THEN_BOOTSTRAP_STAGE1 — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato; a PR1 (#37) ainda está aberta e em revisão, então a Stage 1 só começa depois do merge dela. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
   - origin: decisão do owner OWNER-02; achado de revisão na spec de ARCH-04 (docs/specs/ARCH-04.md), que apontou que excluí-los sem um item rastreado deixaria ARCH-04 fechar OWNER-02 pela metade
@@ -246,6 +254,7 @@ autorizam refatoração imediata.
   - blocking_rationale: nenhuma task depende deste item; o owner não forneceu uma arquitetura exata para ele, ao contrário de ARCH-04
   - status: OPEN
   - scope: STATE_POINTER_CONSISTENCY e BASELINE_POINTER_CONSISTENCY além do que o preflight de ARCH-04 cobre mecanicamente; integridade completa do LOOP-REGISTER (não só JSONL válido linha a linha); semântica de `current_task` vs `next_eligible_task` além do que `resolveEffectiveTask` já faz; reconciliação remote-first como mecanismo novo; métricas de uso de revisão
+  - recurrence_evidence: a mesma classe de deriva de ponteiro foi encontrada pela revisão independente em quatro rodadas da PR 36 (2, 3, 4) e em três da PR 37 (1, 5, 7) — sempre o mesmo fato escrito em STATE.md, HANDOFF.md e ROADMAP.md e atualizado só em dois dos três. `detectStateDrift` não pega: seu NEXT_ACTION_STALE só casa `START_<current_task>`, e nenhum campo `next_action` por entrada do ROADMAP é modelado pelo parser. É esta a evidência concreta de que o item precisa de mecanismo, não de mais disciplina
   - next_action: SPEC_QUANDO_PRIORIZADO — este item não bloqueia o roadmap; precisa de uma decisão de arquitetura do owner antes de virar spec, do mesmo jeito que ARCH-04 precisou
 
 - [x] ARCH-02 — Consolidar o contrato de data e hora do domínio
