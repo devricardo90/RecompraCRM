@@ -78,7 +78,7 @@ current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 open - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
 branch: feat/ARCH-04-secondary-reviewer
-pr_number: pending_open
+pr_number: 38
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
