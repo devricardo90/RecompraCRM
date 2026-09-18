@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 73
+state_version: 74
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -78,7 +78,7 @@ current_task_status: COMPLETED
 next_eligible_task: none
 next_eligible_task_reason: NO_ELIGIBLE_TASK — TASK-15 depends_on ARCH-04, which is SPEC_MERGED_IMPLEMENTING (spec merged on PR 36; implementation PR 37 merged at 3bb1ec1; Stage 1 PR 38 merged at f83b6686; Stage 1b pointer gate in flight - still not RESOLVED/COMPLETED, so still an unresolved dependency); verified live via scripts/rick-loop-roadmap.mjs resolveNextEligibleTask after checking TASK-14 off in ROADMAP.md
 branch: feat/ARCH-04-pointer-gate
-pr_number: none
+pr_number: 39
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
