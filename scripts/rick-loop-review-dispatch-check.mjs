@@ -9,7 +9,12 @@ import {
   hasVerdictForHead,
   REDISPATCH_COOLDOWN_MS,
 } from "./rick-loop-review-dispatch.mjs";
-import { claudeReviewAction, claudeReviewRetryAction, classifyDispatchOutcome } from "./rick-loop-watcher.mjs";
+import {
+  claudeReviewAction,
+  claudeReviewRetryAction,
+  classifyDispatchOutcome,
+  redispatchFallbackAction,
+} from "./rick-loop-watcher.mjs";
 
 /**
  * ARCH-04 deterministic gate. No network: every case is synthetic, so this
@@ -473,6 +478,39 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
     "pre-checks passed and the gh workflow run call itself failed - the expected bootstrap-window shape, not a block",
   );
   assert.equal(classifyDispatchOutcome(null), "ERROR", "unparseable output is neither blocked nor failed-to-dispatch");
+}
+
+// --- what happens after a failed re-dispatch ----------------------------
+//
+// The rerun fallback exists for exactly one situation: the bootstrap window,
+// where claude-pr-review.yml has no workflow_dispatch trigger yet so the
+// dispatch cannot land. Letting it also fire on a pre-check block would rerun
+// the stale run this mechanism exists to stop trusting, bumping its updatedAt
+// and resetting the cooldown - the same "this HEAD can never be reviewed"
+// failure, reached from a different direction.
+
+{
+  assert.equal(
+    redispatchFallbackAction({ dispatched: true }),
+    "DISPATCHED",
+    "a landed dispatch needs no fallback",
+  );
+  assert.equal(
+    redispatchFallbackAction({ dispatched: false, reason: "DISPATCH_FAILED" }),
+    "RERUN",
+    "pre-checks passed and the dispatch call failed - the bootstrap-window case the fallback exists for",
+  );
+  assert.equal(
+    redispatchFallbackAction({ dispatched: false, reason: "BLOCKED" }),
+    "WAIT",
+    "a transient pre-check block must not rerun the stale run and reset its cooldown",
+  );
+  assert.equal(
+    redispatchFallbackAction({ dispatched: false, reason: "ERROR" }),
+    "WAIT",
+    "an unreadable dispatch result is not evidence that rerunning is safe",
+  );
+  assert.equal(redispatchFallbackAction(null), "WAIT", "no dispatch result at all waits");
 }
 
 console.log("ARCH-04 review dispatch checks: PASS");

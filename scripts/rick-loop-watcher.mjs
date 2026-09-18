@@ -134,6 +134,23 @@ export function classifyDispatchOutcome(report) {
   return report.dispatch === true ? "DISPATCH_FAILED" : "BLOCKED";
 }
 
+/**
+ * What to do after attempting a re-dispatch. Only a genuine dispatch failure
+ * justifies falling back to rerunning the existing run - that is the
+ * bootstrap-window case where claude-pr-review.yml still has no
+ * workflow_dispatch trigger. A BLOCKED result means the dispatcher's own
+ * pre-checks refused (a transient `preflight_failed` from `pr.mergeable`
+ * reading UNKNOWN right after main advances, say), and rerunning then would
+ * re-run the stale run this whole mechanism exists to stop trusting, bumping
+ * its updatedAt and resetting the cooldown - reintroducing the "this HEAD can
+ * never be reviewed" bug from a different direction. A block simply waits for
+ * the next cycle.
+ */
+export function redispatchFallbackAction(dispatch) {
+  if (dispatch?.dispatched === true) return "DISPATCHED";
+  return dispatch?.reason === "DISPATCH_FAILED" ? "RERUN" : "WAIT";
+}
+
 // ARCH-04: no run exists for this HEAD because a push no longer triggers one.
 // The controller owns dispatch now, so NO_RUN is the watcher's cue to act
 // rather than to keep observing. The dispatcher re-verifies CI and preflight
@@ -194,15 +211,18 @@ function retryClaudeReview(identity, now = new Date()) {
 
     if (action === "REDISPATCH") {
       const dispatch = dispatchClaudeReview(identity);
-      if (dispatch.dispatched) return { ...base, dispatch };
-      // Until the cutover lands, claude-pr-review.yml has no workflow_dispatch
-      // trigger, so dispatch cannot succeed. Fall back to the pre-ARCH-04
-      // behaviour rather than losing retry capability during the bootstrap.
-      if (run) {
+      const fallback = redispatchFallbackAction(dispatch);
+      if (fallback === "DISPATCHED") return { ...base, dispatch };
+      // Only a genuine dispatch failure falls back to rerunning: until the
+      // cutover lands there is no workflow_dispatch trigger to dispatch to,
+      // and losing retry capability during the bootstrap would be a
+      // regression. A pre-check block waits instead - see
+      // redispatchFallbackAction.
+      if (fallback === "RERUN" && run) {
         sh("gh", ["run", "rerun", String(run.databaseId)]);
         return { ...base, action: "RERUN_FALLBACK", dispatch };
       }
-      return { ...base, dispatch };
+      return { ...base, action: fallback === "WAIT" ? "REDISPATCH_BLOCKED" : action, dispatch };
     }
 
     return base;
