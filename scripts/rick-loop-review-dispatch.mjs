@@ -34,9 +34,22 @@ export const DISPATCH_BLOCKERS = Object.freeze([
  */
 export const REDISPATCH_COOLDOWN_MS = 10 * 60 * 1000;
 
+/**
+ * A dispatched run executes the default branch's workflow definition, so
+ * GitHub records it against the default branch and its headSha is main's, not
+ * the PR's. The workflow's run-name carries `PR #<n> @ <sha>` for exactly this
+ * reason. headSha is still matched first because the additive `pull_request`
+ * trigger is still live in Stage 2 and those runs are anchored normally.
+ */
+export function reviewRunMatchesHead(run, headSha) {
+  if (!run || !headSha) return false;
+  if (run.headSha === headSha) return true;
+  return typeof run.displayTitle === "string" && run.displayTitle.includes(headSha);
+}
+
 export function findRunForHead(runs, headSha) {
   if (!Array.isArray(runs) || !headSha) return null;
-  return runs.find((run) => run?.headSha === headSha) ?? null;
+  return runs.find((run) => reviewRunMatchesHead(run, headSha)) ?? null;
 }
 
 /**
@@ -154,14 +167,23 @@ export function evaluateDispatch({
 }
 
 /**
- * --ref is not optional: without it `gh workflow run` runs the workflow from
- * the repository's default branch and GitHub records the resulting run against
- * that branch, so neither this script's own idempotency query nor the
- * watcher's selectClaudeReviewRun (both of which filter by the PR branch and
- * match on headSha) would ever find it again.
+ * --ref names the branch whose *version of the workflow file* runs, not just
+ * the code under review. Passing the PR branch would therefore execute the
+ * PR author's own copy of claude-pr-review.yml, with this job's
+ * CLAUDE_CODE_OAUTH_TOKEN and its pull-requests/issues write scopes - and
+ * every validation step in that file is part of what the author can rewrite,
+ * so the checks could simply be deleted. Anyone able to push a same-repo
+ * branch would escalate to reading the review token.
+ *
+ * So the dispatch always runs the default branch's definition, which no PR can
+ * modify, and the PR's HEAD travels as an input that the trusted workflow
+ * checks out after revalidating it. Found by independent review on PR 40
+ * (P1); the earlier design documented here justified --ref <PR branch> purely
+ * by run correlation, which reviewRunMatchesHead now solves without handing
+ * the workflow definition to the author.
  */
-export function buildDispatchArgs({ workflow = CLAUDE_REVIEW_WORKFLOW, branch, prNumber, headSha, repo = null }) {
-  if (!branch) throw new Error("dispatch requires the PR branch for --ref");
+export function buildDispatchArgs({ workflow = CLAUDE_REVIEW_WORKFLOW, defaultBranch, prNumber, headSha, repo = null }) {
+  if (!defaultBranch) throw new Error("dispatch requires the default branch for --ref");
   if (!prNumber) throw new Error("dispatch requires the PR number");
   if (!headSha) throw new Error("dispatch requires the expected head sha");
   return [
@@ -170,7 +192,7 @@ export function buildDispatchArgs({ workflow = CLAUDE_REVIEW_WORKFLOW, branch, p
     workflow,
     ...(repo ? ["--repo", repo] : []),
     "--ref",
-    branch,
+    defaultBranch,
     "-f",
     `pr_number=${prNumber}`,
     "-f",
@@ -215,8 +237,13 @@ function fetchCiForHead(branch, headSha, repo) {
   return Array.isArray(runs) ? runs.find((run) => run.headSha === headSha) ?? null : null;
 }
 
-function fetchReviewRuns(branch, repo) {
-  if (!branch) return null;
+/**
+ * Deliberately not filtered by --branch any more: a dispatched run is recorded
+ * against the default branch, so filtering by the PR branch would hide exactly
+ * the runs this dispatcher creates and it would re-dispatch every cycle.
+ * displayTitle is requested because reviewRunMatchesHead needs it.
+ */
+function fetchReviewRuns(repo) {
   return parseJson(
     sh("gh", [
       "run",
@@ -224,12 +251,10 @@ function fetchReviewRuns(branch, repo) {
       ...(repo ? ["--repo", repo] : []),
       "--workflow",
       CLAUDE_REVIEW_WORKFLOW,
-      "--branch",
-      branch,
       "--limit",
       "20",
       "--json",
-      "databaseId,headSha,status,conclusion",
+      "databaseId,headSha,displayTitle,status,conclusion",
     ]),
   );
 }
@@ -263,7 +288,7 @@ function main() {
   const preflight = evaluatePreflight(inputs);
   const pr = inputs.pr;
   const ci = pr ? fetchCiForHead(pr.headRefName, pr.headRefOid, null) : null;
-  const existingRuns = pr ? fetchReviewRuns(pr.headRefName, null) : null;
+  const existingRuns = pr ? fetchReviewRuns(null) : null;
   const comments = fetchIssueComments(prNumber);
 
   const decision = evaluateDispatch({ pr, ci, preflight, existingRuns, comments });
@@ -281,8 +306,11 @@ function main() {
     return;
   }
 
+  // The PR's base branch is the repository default here (preflight's
+  // pr_base_is_default already refused to dispatch otherwise), so it is the
+  // trusted ref whose workflow definition runs.
   const args = buildDispatchArgs({
-    branch: decision.branch,
+    defaultBranch: pr.baseRefName,
     prNumber,
     headSha: decision.head,
   });

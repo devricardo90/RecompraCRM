@@ -13,6 +13,7 @@ import {
   evaluateDispatch,
   buildDispatchArgs,
   findRunForHead,
+  reviewRunMatchesHead,
   classifyExistingRun,
   hasVerdictForHead,
   REDISPATCH_COOLDOWN_MS,
@@ -458,19 +459,42 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
   assert.equal(findRunForHead([{ headSha: OTHER_HEAD }], HEAD), null, "findRunForHead does not match another sha");
   assert.equal(findRunForHead(null, HEAD), null, "an unreadable list yields no match");
   assert.equal(findRunForHead([{ headSha: HEAD }], null), null, "no head yields no match");
+
+  // A dispatched run executes the default branch's definition, so GitHub
+  // records it against the default branch and its headSha is main's, not the
+  // PR's. The workflow run-name carries the reviewed HEAD instead. Without
+  // this the dispatcher would never see its own runs and would re-dispatch
+  // every cycle - a review per poll, the opposite of this task's purpose.
+  const dispatched = { databaseId: 7, headSha: OTHER_HEAD, displayTitle: `Claude PR Review · PR #40 @ ${HEAD}` };
+  assert.equal(findRunForHead([dispatched], HEAD)?.databaseId, 7, "a default-branch dispatch is matched through its run-name");
+  assert.equal(findRunForHead([dispatched], OTHER_HEAD)?.databaseId, 7, "headSha still matches for pull_request-triggered runs");
+  assert.equal(
+    findRunForHead([{ headSha: OTHER_HEAD, displayTitle: "Claude PR Review · PR #40 @ deadbeef" }], HEAD),
+    null,
+    "a run-name naming another HEAD is not a match",
+  );
+  assert.equal(reviewRunMatchesHead(null, HEAD), false, "no run is not a match");
+  assert.equal(reviewRunMatchesHead({ headSha: HEAD }, null), false, "no head is not a match");
 }
 
 // --- dispatch command --------------------------------------------------
 
+// --ref names the branch whose WORKFLOW FILE runs, not just the code under
+// review. Pointing it at the PR branch would execute the PR author's own copy
+// of claude-pr-review.yml - with the review token and write scopes, and with
+// every validation step in it rewritable by that author. Found as a P1 by
+// independent review on PR 40.
+
 {
-  const args = buildDispatchArgs({ branch: "feat/example", prNumber: 42, headSha: HEAD });
+  const args = buildDispatchArgs({ defaultBranch: "main", prNumber: 42, headSha: HEAD });
   const refIndex = args.indexOf("--ref");
   assert.ok(refIndex !== -1, "the dispatch command must pass --ref");
   assert.equal(
     args[refIndex + 1],
-    "feat/example",
-    "--ref must name the PR branch; without it GitHub records the run against the default branch and neither the idempotency check nor selectClaudeReviewRun can find it",
+    "main",
+    "--ref must name the default branch so the executed workflow definition is one no PR can modify",
   );
+  assert.ok(!args.includes("feat/example"), "the PR branch must never reach --ref");
   assert.ok(args.includes(`pr_number=42`), "the PR number is passed as an input");
   assert.ok(args.includes(`expected_head_sha=${HEAD}`), "the exact head is passed as an input");
   assert.equal(args[0], "workflow", "the command is gh workflow run");
@@ -478,9 +502,9 @@ const passingPreflight = { pass: true, checks: {}, reasons: [] };
 }
 
 {
-  assert.throws(() => buildDispatchArgs({ prNumber: 42, headSha: HEAD }), /--ref/, "a dispatch without a branch must throw");
-  assert.throws(() => buildDispatchArgs({ branch: "b", headSha: HEAD }), /PR number/, "a dispatch without a PR number must throw");
-  assert.throws(() => buildDispatchArgs({ branch: "b", prNumber: 42 }), /head sha/, "a dispatch without a head sha must throw");
+  assert.throws(() => buildDispatchArgs({ prNumber: 42, headSha: HEAD }), /--ref/, "a dispatch without a default branch must throw");
+  assert.throws(() => buildDispatchArgs({ defaultBranch: "main", headSha: HEAD }), /PR number/, "a dispatch without a PR number must throw");
+  assert.throws(() => buildDispatchArgs({ defaultBranch: "main", prNumber: 42 }), /head sha/, "a dispatch without a head sha must throw");
 }
 
 // --- watcher-level decision ------------------------------------------
