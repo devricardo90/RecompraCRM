@@ -152,7 +152,7 @@ owner_decision_02_includes_split: only decide_before resolver gate and mechanica
 owner_decision_02_next_action: NONE — ARCH-04 encerrado; o restante de OWNER-02 é ARCH-05, não bloqueante
 owner_decision_02_roadmap_item: ARCH-04
 owner_decision_02_roadmap_item_remainder: ARCH-05
-owner_decision_02_roadmap_mechanism: TASK-15 depends_on now includes ARCH-04, so the deterministic resolver blocks TASK-15 until ARCH-04's status is RESOLVED/COMPLETED (currently SPEC_MERGED_IMPLEMENTING, previously SPEC_IN_REVIEW and before that AUTHORIZED_NOT_YET_IMPLEMENTED); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
+owner_decision_02_roadmap_mechanism: TASK-15 depends_on includes ARCH-04, so the deterministic resolver blocked TASK-15 until ARCH-04 reached RESOLVED/COMPLETED (it is now COMPLETED, after SPEC_MERGED_IMPLEMENTING, SPEC_IN_REVIEW and AUTHORIZED_NOT_YET_IMPLEMENTED; the gate released and resolveNextEligibleTask returns TASK-15); a bare STATE/HANDOFF note is invisible to scripts/rick-loop-roadmap.mjs, which only models TASK-*/ARCH-* roadmap entries
 task_12_spec_status: SPEC_MERGED
 task_12_spec_review_rounds_source: docs/operations/LOOP-REGISTER.jsonl
 task_12_spec_rereview_status: UNBLOCKED_REVIEWER_CHANGED_TO_CLAUDE_PR_REVIEW
@@ -229,7 +229,7 @@ arch_01_decision: OPTION_A_PERSISTED_SYNCHRONOUS_TRIGGER_OWNED_FORECAST
 arch_01_decision_doc: docs/architecture/ARCH-01-decision.md
 arch_01_schema_impact: NONE
 arch_01_migration_impact: NONE
-open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-04 (tracked: real ROADMAP.md entry, gates TASK-15 via depends_on)
+open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-05 (tracked: real ROADMAP.md entry, non-blocking, carries the six OWNER-02 items ARCH-04 did not own). ARCH-04 is COMPLETED and no longer gates TASK-15
 task_10_status: COMPLETED
 task_10_technical_head: 7d0026f0d1b449d5108ba6c546e4bc83ddc43186
 task_10_branch_ci: 32291165510
