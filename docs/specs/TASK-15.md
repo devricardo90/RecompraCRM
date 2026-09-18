@@ -126,10 +126,26 @@ das duas.
 
 Varia só `soldAt` porque `consumptionDays` é coluna de `Product`, não da
 venda: variá-lo exigiria um segundo produto (contra AC1 e AC3) ou um passo de
-atualização que nenhum AC verifica. E é desnecessário — `classifyRepurchase`
-classifica pelo instante absoluto de `expectedRepurchaseAt` comparado ao
-momento de referência, então duas vendas do mesmo produto com `soldAt`
-suficientemente distantes já caem em faixas diferentes.
+atualização que nenhum AC verifica.
+
+E variar `soldAt` basta, mas o critério precisa ser dito com precisão, porque
+a classificação **não é por instante**. `classifyRepurchase` compara
+`businessDayNumber(expectedRepurchaseAt)` com `businessDayNumber(reference)`
+— números de dia útil em `America/Sao_Paulo`, não instantes. O próprio
+comentário de `businessDayNumber` registra o motivo: duas previsões no mesmo
+dia caem na mesma faixa por mais horas que as separem, e comparar instantes
+colocaria 00:01 e 23:59 do mesmo dia em lados opostos de uma fronteira.
+
+O critério que o teste tem de satisfazer é portanto:
+
+> os dois `soldAt`, depois de somados `quantity × consumptionDays` dias, têm
+> de cair em **números de dia útil** em lados opostos da fronteira da faixa,
+> relativos ao momento de referência que `GET /api/repurchases` usa.
+
+Dizer "instantes suficientemente distantes" seria satisfeito por dois `soldAt`
+separados por algumas horas — instantes diferentes, mesmo dia útil, mesma
+faixa — e AC8 falharia. A margem é escolhida em dias, com folga suficiente
+para que a execução perto da meia-noite não mude o resultado.
 
 Assim o estágio 6 prova classificação e não só presença, e o estágio 5
 exercita a multiplicação da fórmula em vez do caso degenerado `quantity = 1`.
@@ -166,7 +182,10 @@ AC7. `GET /api/repurchases` inclui o cliente criado pela execução.
 
 AC8. A classificação devolvida para esse cliente corresponde à data prevista,
 provada com duas vendas do mesmo cliente e do mesmo produto cujos `soldAt`
-diferentes as colocam em classificações diferentes.
+levam os respectivos `expectedRepurchaseAt` a números de dia útil
+(`businessDayNumber`, `America/Sao_Paulo`) em lados opostos da fronteira da
+faixa, relativos ao momento de referência da rota — não apenas a instantes
+diferentes.
 
 AC9. `GET /api/customers/[id]/sales` inclui a venda criada pela execução.
 
@@ -258,8 +277,13 @@ desenvolvimento.
   previa.
 - **A3**: o contrato de data/hora de ARCH-02 (instante com timezone
   declarado) continua valendo e não é reaberto por esta task.
-- **A4**: a forma das rotas de escrita é lida do código, não da memória. As
-  duas rodadas de revisão desta spec corrigiram quatro divergências desse
-  tipo (`consumptionDays`, ausência de `GET /api/products/[id]`, `items[]` em
-  vez de campos achatados, e `expectedRepurchaseAt` em `SaleItem` e não em
-  `Sale`). A implementação confere cada rota antes de usá-la.
+- **A4**: a forma das rotas **e a semântica das funções de domínio** são
+  lidas do código, não da memória. As rodadas de revisão desta spec
+  corrigiram cinco divergências desse tipo: `consumptionDays` em vez de
+  `repurchaseIntervalDays`, ausência de `GET /api/products/[id]`, `items[]`
+  em vez de campos achatados, `expectedRepurchaseAt` em `SaleItem` e não em
+  `Sale`, e classificação por número de dia útil e não por instante. A
+  quinta foi a mais perigosa das cinco, porque era a justificativa de uma
+  decisão de design tomada na rodada anterior — uma premissa errada sustentando
+  uma conclusão que por acaso continuava certa. A implementação confere cada
+  rota e cada função de domínio antes de depender dela.
