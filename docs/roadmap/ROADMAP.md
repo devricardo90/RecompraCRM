@@ -232,7 +232,7 @@ autorizam refatoração imediata.
   - spec_pr: 36 MERGED_SQUASH
   - spec_merge_main_head: 2f5c687b56e7dc48791d9323fd47f8ade842c4b0
   - spec_review_rounds: 6
-  - impl_branch: feat/ARCH-04-review-dispatch
+  - impl_branch: feat/ARCH-04-secondary-reviewer
   - impl_stage: STAGE1_SECONDARY_REVIEWER
   - pr1: 37 MERGED_SQUASH (10 rodadas de revisão), merge head 3bb1ec1432911e6f35e71e49b8c2c415d5ca0fce, pós-merge Validate 35307171971 SUCCESS
   - impl_blocker: anthropics/claude-code-action@v1 recusa rodar quando o próprio arquivo de workflow difere do branch padrão, então a PR que edita claude-pr-review.yml não pode ser revisada por ele; o check fica verde sem veredito nenhum (evidência: run 35258611604; mesmo silêncio nas PRs 27 e 28)
@@ -246,6 +246,7 @@ autorizam refatoração imediata.
   - forbids: enfraquecer o gate obrigatório de revisão independente limpa no HEAD exato antes do merge; qualquer comando manual `@claude review` como substituto do disparo automático
   - includes: gate do resolver `decide_before` (fechado nas PRs #33/#35 via depends_on) e checagens mecânicas antes da revisão por LLM (rick-loop-preflight.mjs); os outros seis itens de owner_decision_02_includes foram movidos para ARCH-05, não bloqueante, para não deixar ARCH-04 fechar OWNER-02 fechando só uma fração do que foi autorizado
   - bootstrap: duas PRs — PR1 aditiva (workflow_dispatch coexiste com pull_request), PR2 remove o gatilho automático e roda o teste de aceitação ao vivo
+  - pointer_gate: ARCH-04 owns "checagens mecânicas antes da revisão por LLM"; a deriva de ponteiro já custou oito rodadas de revisão, então antes da Stage 2 entra uma PR própria e pequena adicionando ao rick-loop-preflight.mjs uma checagem que compara os campos compartilhados de ARCH-04 (impl_branch, impl_stage, next_action) entre STATE.md, HANDOFF.md e esta entrada, falhando quando discordam. Disciplina manual já falhou oito vezes; o gate é a correção
   - next_action: REVIEW_ARCH_04_STAGE1_SECONDARY_REVIEWER — mesmo valor que STATE.md e HANDOFF.md carregam para este mesmo fato; a PR1 (#37) está mergeada e validada, e a Stage 1 (PR #38, claude-pr-review-meta.yml) está em revisão. Esta entrada some do estado pendente (status RESOLVED/COMPLETED) somente depois que a spec, a revisão independente e o merge da mudança de mecanismo estiverem concluídos
 
 - [ ] ARCH-05 — Itens de governança OWNER-02 remanescentes
@@ -255,7 +256,7 @@ autorizam refatoração imediata.
   - blocking_rationale: nenhuma task depende deste item; o owner não forneceu uma arquitetura exata para ele, ao contrário de ARCH-04
   - status: OPEN
   - scope: STATE_POINTER_CONSISTENCY e BASELINE_POINTER_CONSISTENCY além do que o preflight de ARCH-04 cobre mecanicamente; integridade completa do LOOP-REGISTER (não só JSONL válido linha a linha); semântica de `current_task` vs `next_eligible_task` além do que `resolveEffectiveTask` já faz; reconciliação remote-first como mecanismo novo; métricas de uso de revisão
-  - recurrence_evidence: a mesma classe de deriva de ponteiro foi encontrada pela revisão independente em três rodadas da PR 36 (2, 3, 4), três da PR 37 (1, 5, 7) e de novo na PR 38 (rodada 1), sete ocorrências no total — sempre o mesmo fato escrito em STATE.md, HANDOFF.md e ROADMAP.md e atualizado só em dois dos três. `detectStateDrift` não pega: seu NEXT_ACTION_STALE só casa `START_<current_task>`, e nenhum campo `next_action` por entrada do ROADMAP é modelado pelo parser. É esta a evidência concreta de que o item precisa de mecanismo, não de mais disciplina
+  - recurrence_evidence: a mesma classe de deriva de ponteiro foi encontrada pela revisão independente em três rodadas da PR 36 (2, 3, 4), três da PR 37 (1, 5, 7) e de novo na PR 38 (rodada 1), e mais uma na própria rodada 2 da PR 38 (o campo impl_branch, deixado de fora da varredura que a rodada 1 dizia ter feito nos três arquivos), oito ocorrências no total — sempre o mesmo fato escrito em STATE.md, HANDOFF.md e ROADMAP.md e atualizado só em dois dos três. `detectStateDrift` não pega: seu NEXT_ACTION_STALE só casa `START_<current_task>`, e nenhum campo `next_action` por entrada do ROADMAP é modelado pelo parser. É esta a evidência concreta de que o item precisa de mecanismo, não de mais disciplina
   - next_action: SPEC_QUANDO_PRIORIZADO — este item não bloqueia o roadmap; precisa de uma decisão de arquitetura do owner antes de virar spec, do mesmo jeito que ARCH-04 precisou
 
 - [x] ARCH-02 — Consolidar o contrato de data e hora do domínio
