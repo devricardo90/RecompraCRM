@@ -326,8 +326,8 @@ arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition 
 arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
-updated_at: "2026-09-19T15:20:00Z"
-updated_by: Claude Code (Rick Loop, TASK-15 closure)
+updated_at: "2026-09-19T17:05:00Z"
+updated_by: Claude Code (Rick Loop, TASK-16 spec round 2)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
