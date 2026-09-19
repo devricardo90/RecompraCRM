@@ -138,11 +138,10 @@ restart_command: git switch main && git pull --ff-only && npm install
    `COMPLETED`, so the gate has released. This was verified live by running
    `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
    `docs/roadmap/ROADMAP.md` after checking TASK-15 off, not asserted from
-   memory. TASK-16 is started: its spec is in review on PR #46, which is
-   its spec merged at `40c35c5`. The environment-independent half — the
-   credentials guard, the remote smoke and the `/api/version` route — is in
-   review on PR #47, which is what `next_action: REVIEW_TASK_16_GUARDS`
-   means. Resume by carrying that review to a clean verdict and merging.
+   memory. TASK-16 is started: its spec merged at `40c35c5`. The
+   environment-independent half — the credentials guard, the remote smoke and
+   the `/api/version` route — is in review on PR #47, which is what
+   `next_action: REVIEW_TASK_16_GUARDS` means. Resume by carrying that review to a clean verdict and merging.
    **TASK-16 does not become COMPLETED at that point**: `done_when` requires
    staging available and the smoke approved against it, and neither can happen
    without the owner provisioning a Vercel project, a staging database and
