@@ -128,15 +128,25 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains TASK-14 at `c990654d32e2acda56faead8b28b1b8da33ce644` and post-merge Validate `35231964035` is SUCCESS.
-2. TASK-14 is completed and merged: spec PR #32, implementation PR #34 (2
-   review rounds), clean Claude review on exact head `b17c5b5`.
+1. Confirm `main` contains TASK-15 at `2b2878f` and post-merge Validate
+   `35444246358` is SUCCESS.
+2. TASK-14 and TASK-15 are completed and merged. TASK-15: spec PR #43 (5
+   review rounds, merge `097b023`), implementation PR #44 (2 rounds, clean
+   review on exact head `b6d3249`).
 3. The deterministic resolver reports `ELIGIBLE_TASK_FOUND` for
-   **TASK-15**. TASK-15 `depends_on` names `ARCH-04`, which is now
+   **TASK-16**. TASK-16 `depends_on` names TASK-15, which is now
    `COMPLETED`, so the gate has released. This was verified live by running
    `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
-   `docs/roadmap/ROADMAP.md` after checking ARCH-04 off, not asserted from
-   memory. Resume by starting TASK-15; do not stop here.
+   `docs/roadmap/ROADMAP.md` after checking TASK-15 off, not asserted from
+   memory. Resume by starting TASK-16; do not stop here.
+
+   TASK-16 is `Deploy de homologação`, and part of it cannot be done from
+   this repository alone: `done_when` requires a reachable staging
+   environment, and no hosting target, staging database or deploy credential
+   exists here. The spec, the secrets-hygiene guard and the remote smoke
+   script are all buildable without one; provisioning the environment is an
+   owner decision with cost and account implications, and is the one step to
+   raise rather than assume.
 4. ARCH-04 is OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`), authorized 2026-09-17:
    replace the automatic per-push Claude review trigger with a
    controller-dispatched one fired once `READY_FOR_INDEPENDENT_REVIEW`. The
@@ -161,8 +171,11 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Why the loop stopped at ARCH-04 before TASK-15
 
-TASK-12, TASK-13 and TASK-14 are completed and merged. Three of the
-seventeen `TASK-*` entries remain (TASK-15/16/17) — the "17" in TASK-17's
+Historical: this section explains a gate that has since released. TASK-15 is
+now `COMPLETED` and the resolver returns TASK-16.
+
+TASK-12, TASK-13, TASK-14 and TASK-15 are completed and merged. Two of the
+seventeen `TASK-*` entries remain (TASK-16/17) — the "17" in TASK-17's
 `17/17 tasks verificadas` closure criterion counts tasks only. `ARCH-04` was
 open until this closure, and unlike `ARCH-03` it exists as a real
 `ROADMAP.md` entry with
@@ -184,8 +197,8 @@ asserts this ("all-blocked roadmap must not invent a task") as a
 deliberate safety invariant, not a gap. Resuming past it requires a human
 or an agent reading this handoff to drive the ARCH-04 spec/implementation
 by hand — that work is now finished (PRs #36, #37, #38, #39, #40, #41, all
-merged and post-merge validated), which is why the resolver now returns
-TASK-15 instead of `NO_ELIGIBLE_TASK` — the same way OWNER-01 and
+merged and post-merge validated), which is why the resolver released TASK-15
+instead of reporting `NO_ELIGIBLE_TASK` — the same way OWNER-01 and
 OWNER-02 themselves required an explicit owner decision the loop could not
 make on its own. Giving the controller a
 mechanical way to select and execute an open `ARCH-*` item was one
