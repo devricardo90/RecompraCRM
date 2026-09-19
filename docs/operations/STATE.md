@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 81
+state_version: 82
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -79,7 +79,7 @@ current_task_status: COMPLETED
 next_eligible_task: TASK-16
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
 branch: docs/TASK-15-closure
-pr_number: none
+pr_number: 45
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d

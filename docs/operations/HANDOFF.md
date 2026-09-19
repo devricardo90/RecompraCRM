@@ -12,7 +12,7 @@ current_task_status: COMPLETED
 next_eligible_task: TASK-16
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
 current_branch: docs/TASK-15-closure
-current_pr: none
+current_pr: 45
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
