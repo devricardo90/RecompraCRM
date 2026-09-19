@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 82
+state_version: 83
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -74,12 +74,12 @@ completed_tasks:
 last_completed_task: TASK-15
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
-current_task: TASK-15
-current_task_status: COMPLETED
+current_task: TASK-16
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-16
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
-branch: docs/TASK-15-closure
-pr_number: 45
+branch: docs/TASK-16-spec
+pr_number: 46
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -272,7 +272,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: START_TASK-16
+next_action: REVIEW_TASK_16_SPEC
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH

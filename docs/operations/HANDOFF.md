@@ -4,15 +4,15 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-013
 loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
-status: TASK_15_CLOSED_READY_FOR_TASK_16
+status: TASK_16_SPEC_IN_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_5
-current_task: TASK-15
-current_task_status: COMPLETED
+current_task: TASK-16
+current_task_status: SPEC_IN_REVIEW
 next_eligible_task: TASK-16
 next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
-current_branch: docs/TASK-15-closure
-current_pr: 45
+current_branch: docs/TASK-16-spec
+current_pr: 46
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
@@ -88,7 +88,7 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-05 (tracked: real ROADMAP.md entry, non-blocking, carries the six OWNER-02 items ARCH-04 did not own). ARCH-04 is COMPLETED and no longer gates TASK-15
-next_action: START_TASK-16
+next_action: REVIEW_TASK_16_SPEC
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
