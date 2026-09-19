@@ -38,6 +38,12 @@ const ALLOWLIST = [
     matched: false,
   },
   {
+    file: "docs/operations/LOOP-REGISTER.jsonl",
+    literal: "hunter2",
+    reason: "the register entry describing the fixture reproduced its password; LOOP-REGISTER is append-only, so a published line cannot be rewritten to remove it. Future entries should describe a credential fixture without reproducing it",
+    matched: false,
+  },
+  {
     file: "scripts/task-16-guards-check.mjs",
     // Deliberately the password fragment alone, not the whole URL: a full
     // connection string here would itself match the pattern this entry
