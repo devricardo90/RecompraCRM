@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 import { classifyLeak, evaluateRevision } from "./remote-smoke-check.mjs";
 
@@ -75,6 +76,40 @@ import { classifyLeak, evaluateRevision } from "./remote-smoke-check.mjs";
   assert.ok(
     output.includes("all matched"),
     "the guard must confirm every allowlist entry still matches; a stale entry is a failure, not a silent pass",
+  );
+}
+
+// --- the two holes independent review found in the guard -------------------
+//
+// Both were silent: the guard passed while failing to see the case. Asserting
+// the patterns directly is the only way a regression shows up as a failure
+// rather than as continued false assurance.
+{
+  const source = readFileSync("scripts/secrets-hygiene-check.mjs", "utf8");
+
+  const assignmentLine = /^const ASSIGNMENT = \/(.+)\/[a-z]*;$/m.exec(source);
+  assert.ok(assignmentLine, "the ASSIGNMENT pattern must be findable in the guard source");
+  const assignment = new RegExp(assignmentLine[1], "g");
+
+  // A deploy token in a JSON config is the single most likely way a real
+  // credential gets committed, and the original pattern matched none of it.
+  //
+  // The fixture's value is a placeholder the guard already recognises, so this
+  // file does not become another tracked occurrence of a credential-shaped
+  // string. That matters: the first version used a realistic value and tripped
+  // the guard, which would have meant a fifth allowlist entry. The assertion
+  // is about the *key* being seen, and the pattern matches it either way.
+  const jsonMatches = [...'{ "VERCEL_TOKEN": "<example-token>" }'.matchAll(assignment)].map((m) => m[2]);
+  assert.ok(
+    jsonMatches.includes("VERCEL_TOKEN"),
+    `a quoted JSON key must be recognised as an assignment, got ${JSON.stringify(jsonMatches)}`,
+  );
+
+  // Containment must run one way only. The reverse direction exempted any
+  // value that was merely a substring of an approved placeholder.
+  assert.ok(
+    !source.includes("entry.literal.includes(found)"),
+    "allowlist containment must not run in reverse; that exempts any substring of an approved placeholder",
   );
 }
 

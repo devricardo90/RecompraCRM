@@ -78,7 +78,12 @@ const NON_SECRET_VALUE = /^(write|read|read-all|write-all|none|true|false|null|a
 
 const CONNECTION_URL_WITH_PASSWORD = /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@"']+:[^\s:/@"']+@/gi;
 const PEM_PRIVATE_KEY = /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/;
-const ASSIGNMENT = /(^|[\s"'{,])([A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]\s*["']?([^"'\s,}]{4,})["']?/g;
+// The optional quote before the separator matters: a JSON config writes
+// `"VERCEL_TOKEN": "..."`, and without it the pattern consumed the opening
+// quote as its delimiter and then found a closing quote where it expected the
+// colon — so the single most likely place for a deploy token to be committed
+// produced no match at all. Found by independent review on PR 47.
+const ASSIGNMENT = /(^|[\s"'{,])["']?([A-Za-z_][A-Za-z0-9_.-]*)["']?\s*[:=]\s*["']?([^"'\s,}]{4,})["']?/g;
 
 function trackedFiles() {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
@@ -87,14 +92,19 @@ function trackedFiles() {
     .filter(Boolean);
 }
 
-// The found string and the allowlisted literal may be different slices of the
-// same secret: the URL pattern stops at the `@`, while the allowlist names the
-// password itself. Containment either way is a match, so the allowlist can name
-// the smallest identifying fragment rather than a whole connection string.
+// The allowlist names the smallest identifying fragment of a secret, and the
+// found string contains it: the URL pattern stops at the `@` while the entry
+// names the password itself, so `found.includes(literal)` matches.
+//
+// Containment runs one way only. The reverse direction looked symmetrical and
+// was not: it exempted any value that happened to be a substring of an
+// approved placeholder, so an unrelated `API_TOKEN=local_dev` passed purely
+// because `recompra_local_dev_only` contains `local_dev`. Found by independent
+// review on PR 47.
 function isAllowed(file, found) {
   for (const entry of ALLOWLIST) {
     if (entry.file !== file) continue;
-    if (found.includes(entry.literal) || entry.literal.includes(found)) {
+    if (found.includes(entry.literal)) {
       entry.matched = true;
       return true;
     }
