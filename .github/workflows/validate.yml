@@ -124,6 +124,14 @@ jobs:
       - name: Test TASK-15 end-to-end chain
         run: npm run test:e2e-chain
 
+      # Mechanical proof of "sem credenciais expostas". Runs against the
+      # tracked tree, so it needs no environment of its own.
+      - name: Test secrets hygiene
+        run: npm run test:secrets-hygiene
+
+      - name: Test TASK-16 guards
+        run: npm run test:task-16-guards
+
       - name: Lint
         run: npm run lint
 
