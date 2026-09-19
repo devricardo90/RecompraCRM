@@ -4,15 +4,15 @@
 schema_version: "1.1"
 run_id: RCRM-MVP01-RUN-013
 loop_id: RCRM-V14-TASK14-RECOVERY-AFTER-SHUTDOWN
-status: TASK_15_IMPLEMENTATION_IN_REVIEW
+status: TASK_15_CLOSED_READY_FOR_TASK_16
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_5
 current_task: TASK-15
-current_task_status: IMPLEMENTED_AWAITING_REVIEW
-next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED liberou o depends_on de TASK-15; a spec foi mergeada na PR 43 (merge 097b023, pós-merge Validate 35377720405 SUCCESS) e a implementação está em revisão na PR 44
-current_branch: feat/TASK-15-e2e
-current_pr: 44
+current_task_status: COMPLETED
+next_eligible_task: TASK-16
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
+current_branch: docs/TASK-15-closure
+current_pr: 45
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_14_implementation_pr: 34 MERGED_SQUASH
@@ -88,7 +88,7 @@ arch_02_status: RESOLVED
 arch_02_decision: OPTION_A_INSTANT_WITH_DECLARED_TIMEZONE_A3_ISOLATED
 arch_02_decision_doc: docs/architecture/ARCH-02-decision.md
 open_architecture_items: ARCH-03 (untracked: STATE-only reference, no ROADMAP.md entry, invisible to the resolver), ARCH-05 (tracked: real ROADMAP.md entry, non-blocking, carries the six OWNER-02 items ARCH-04 did not own). ARCH-04 is COMPLETED and no longer gates TASK-15
-next_action: REVIEW_TASK_15_IMPLEMENTATION
+next_action: START_TASK-16
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -128,15 +128,25 @@ restart_command: git switch main && git pull --ff-only && npm install
 
 ## Resume order
 
-1. Confirm `main` contains TASK-14 at `c990654d32e2acda56faead8b28b1b8da33ce644` and post-merge Validate `35231964035` is SUCCESS.
-2. TASK-14 is completed and merged: spec PR #32, implementation PR #34 (2
-   review rounds), clean Claude review on exact head `b17c5b5`.
+1. Confirm `main` contains TASK-15 at `2b2878f` and post-merge Validate
+   `35444246358` is SUCCESS.
+2. TASK-14 and TASK-15 are completed and merged. TASK-15: spec PR #43 (5
+   review rounds, merge `097b023`), implementation PR #44 (2 rounds, clean
+   review on exact head `b6d3249`).
 3. The deterministic resolver reports `ELIGIBLE_TASK_FOUND` for
-   **TASK-15**. TASK-15 `depends_on` names `ARCH-04`, which is now
+   **TASK-16**. TASK-16 `depends_on` names TASK-15, which is now
    `COMPLETED`, so the gate has released. This was verified live by running
    `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
-   `docs/roadmap/ROADMAP.md` after checking ARCH-04 off, not asserted from
-   memory. Resume by starting TASK-15; do not stop here.
+   `docs/roadmap/ROADMAP.md` after checking TASK-15 off, not asserted from
+   memory. Resume by starting TASK-16; do not stop here.
+
+   TASK-16 is `Deploy de homologação`, and part of it cannot be done from
+   this repository alone: `done_when` requires a reachable staging
+   environment, and no hosting target, staging database or deploy credential
+   exists here. The spec, the secrets-hygiene guard and the remote smoke
+   script are all buildable without one; provisioning the environment is an
+   owner decision with cost and account implications, and is the one step to
+   raise rather than assume.
 4. ARCH-04 is OWNER-02 (`REVIEW_TRIGGER_ECONOMICS`), authorized 2026-09-17:
    replace the automatic per-push Claude review trigger with a
    controller-dispatched one fired once `READY_FOR_INDEPENDENT_REVIEW`. The
@@ -159,42 +169,47 @@ restart_command: git switch main && git pull --ff-only && npm install
 6. Review round detail is read from `docs/operations/LOOP-REGISTER.jsonl`,
    never from a status label.
 
-## Why the loop stopped at ARCH-04 before TASK-15
+## Historical — why the loop stopped at ARCH-04 before TASK-15
 
-TASK-12, TASK-13 and TASK-14 are completed and merged. Three of the
-seventeen `TASK-*` entries remain (TASK-15/16/17) — the "17" in TASK-17's
-`17/17 tasks verificadas` closure criterion counts tasks only. `ARCH-04` was
-open until this closure, and unlike `ARCH-03` it exists as a real
-`ROADMAP.md` entry with
-`depends_on` wired onto TASK-15: it is deliberately a mechanical blocker,
-not just a `decide_before` note in prose, because a bare STATE/HANDOFF
-mention (which is all `ARCH-03` has — it has no `ROADMAP.md` entry) is
-invisible to the deterministic resolver, which only models `TASK-*`/`ARCH-*`
-roadmap entries. Without that wiring the loop would silently select TASK-15
-next and the owner-authorized review-trigger change would never get done.
-`ARCH-03` remains exactly the untracked, resolver-invisible reference this
-paragraph is warning against — it is not fixed by this closure. The wiring
-worked as intended: the loop did stop, ARCH-04 was decided and built, and
-only then did TASK-15 become selectable.
+> **This section is a closed record, not current state.** The gate it
+> describes released on 2026-09-18. Current state is at the top of this file:
+> TASK-15 is `COMPLETED` and the resolver returns **TASK-16**. Nothing below
+> should be read as describing what to do next.
 
-`NO_ELIGIBLE_TASK` is one of `rick-loop-controller.mjs`'s
-`TERMINAL_TRANSITIONS`: a fresh, unattended run of the controller stops
-here rather than inventing work — `scripts/rick-loop-controller-check.mjs`
-asserts this ("all-blocked roadmap must not invent a task") as a
-deliberate safety invariant, not a gap. Resuming past it requires a human
-or an agent reading this handoff to drive the ARCH-04 spec/implementation
-by hand — that work is now finished (PRs #36, #37, #38, #39, #40, #41, all
-merged and post-merge validated), which is why the resolver now returns
-TASK-15 instead of `NO_ELIGIBLE_TASK` — the same way OWNER-01 and
-OWNER-02 themselves required an explicit owner decision the loop could not
-make on its own. Giving the controller a
-mechanical way to select and execute an open `ARCH-*` item was one
-of the items `ARCH-04`'s scope listed (`decide_before resolver gate`), and
-it is closed: the gate is the `depends_on` wiring itself, which held TASK-15
-until ARCH-04 completed and then released it. What remains unautomated is an
-`ARCH-*` item having its *spec and implementation* driven without a human
-decision, which is deliberately out of scope — an architecture item exists
-precisely because the loop cannot decide it alone.
+Two of the seventeen `TASK-*` entries remain, TASK-16 and TASK-17. The "17" in
+TASK-17's `17/17 tasks verificadas` criterion counts tasks only.
+
+**What happened.** `ARCH-04` was wired as a real `ROADMAP.md` entry with
+`depends_on` onto TASK-15, making it a mechanical blocker rather than a
+`decide_before` note in prose. That mattered because the deterministic
+resolver models only `TASK-*`/`ARCH-*` roadmap entries, so a bare STATE or
+HANDOFF mention is invisible to it. Without the wiring the loop would have
+selected TASK-15 straight away and the owner-authorized review-trigger change
+would never have been done.
+
+The wiring worked as designed: the loop stopped, ARCH-04 was decided and built
+across PRs #36, #37, #38, #39, #40 and #41 — all merged and post-merge
+validated — and only then did TASK-15 become selectable.
+
+**Why stopping was correct, not a gap.** `NO_ELIGIBLE_TASK` is one of
+`rick-loop-controller.mjs`'s `TERMINAL_TRANSITIONS`, and
+`scripts/rick-loop-controller-check.mjs` asserts it ("all-blocked roadmap must
+not invent a task") as a deliberate safety invariant. An unattended controller
+stops there rather than inventing work. Getting past it required a human, or
+an agent reading this handoff, to drive the ARCH-04 spec and implementation by
+hand — exactly as OWNER-01 and OWNER-02 each required an owner decision the
+loop could not make alone.
+
+**What ARCH-04 closed, and what it did not.** The `decide_before` resolver gate
+listed in ARCH-04's scope is closed: the gate *is* the `depends_on` wiring,
+which held TASK-15 until ARCH-04 completed and then released it. What remains
+unautomated is an `ARCH-*` item having its spec and implementation driven
+without a human decision, which is deliberately out of scope — an architecture
+item exists precisely because the loop cannot decide it alone.
+
+`ARCH-03` is still the untracked, resolver-invisible reference this section
+warns about: it has no `ROADMAP.md` entry, so nothing mechanical can select it.
+That was not fixed by ARCH-04's closure.
 
 ## Contracts TASK-14 leaves behind
 

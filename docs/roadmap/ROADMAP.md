@@ -208,9 +208,16 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
   - evidence: docs/evidence/TASK-14-validation.md
   - playwright: PASS_8_EPHEMERAL_RETRIES_0
   - done_when: erros, loading, empty states, acessibilidade e responsividade sem bloqueios.
-- [ ] TASK-15 — Validação final do roadmap
+- [x] TASK-15 — Validação final do roadmap
   - depends_on: TASK-14, ARCH-04
   - done_when: cliente → produto → venda → estoque → previsão → dashboard passa ponta a ponta.
+  - status: COMPLETED
+  - spec: docs/specs/TASK-15.md (PR 43, 5 rodadas, merge 097b023, pós-merge Validate 35377720405 SUCCESS)
+  - impl: PR 44 (2 rodadas), HEAD revisado limpo b6d3249d828c2b86ef70c0e697fad095b249a091, merge 2b2878f, pós-merge Validate 35444246358 SUCCESS
+  - evidence: docs/evidence/TASK-15-validation.md
+  - guard: scripts/task-15-e2e-check.mjs, em npm test e em validate.yml
+  - finding: a limpeza das verificações de integração existentes nunca funcionou — prisma.sale.delete com catch vazio engole a exceção de Sale_deletion_blocked e reporta sucesso sem apagar nada; registrado na evidência, fora de escopo desta task
+  - resolved_at: "2026-09-19"
 - [ ] TASK-16 — Deploy de homologação
   - depends_on: TASK-15
   - done_when: homologação disponível, smoke remoto aprovado e sem credenciais expostas.

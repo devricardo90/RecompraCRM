@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 80
+state_version: 82
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -70,15 +70,16 @@ completed_tasks:
   - TASK-12
   - TASK-13
   - TASK-14
-last_completed_task: TASK-14
+  - TASK-15
+last_completed_task: TASK-15
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-15
-current_task_status: IMPLEMENTED_AWAITING_REVIEW
-next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED liberou o depends_on de TASK-15; a spec foi mergeada na PR 43 (merge 097b023, pós-merge Validate 35377720405 SUCCESS) e a implementação está em revisão na PR 44
-branch: feat/TASK-15-e2e
-pr_number: 44
+current_task_status: COMPLETED
+next_eligible_task: TASK-16
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
+branch: docs/TASK-15-closure
+pr_number: 45
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -113,6 +114,17 @@ task_09_round3_migration: prisma/migrations/20260819140000_serialize_forecast_lo
 task_09_round3_regression_test: scripts/sale-forecast-lock-order-check.mjs
 task_09_evidence: docs/evidence/TASK-09-validation.md
 task_spec: docs/specs/TASK-15.md
+task_15_status: COMPLETED
+task_15_spec_pr: 43 MERGED_SQUASH
+task_15_impl_pr: 44 MERGED_SQUASH
+task_15_reviewed_head: b6d3249d828c2b86ef70c0e697fad095b249a091
+task_15_merge_main_head: 2b2878f
+task_15_main_ci_run: 35444246358
+task_15_main_ci_status: SUCCESS
+task_15_evidence: docs/evidence/TASK-15-validation.md
+task_15_guard: scripts/task-15-e2e-check.mjs
+task_15_playwright: PASS_6_EPHEMERAL_RETRIES_0
+task_15_finding: existing integration checks swallow their cleanup failures and delete nothing; recorded in the evidence doc, out of scope to fix here
 arch_02_status: RESOLVED_MERGED
 arch_02_pr: 31 MERGED_SQUASH
 arch_02_merge_main_head: 51bfacf5e809c937de212a463f15a2c1d454ac81
@@ -260,7 +272,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_TASK_15_IMPLEMENTATION
+next_action: START_TASK-16
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -314,8 +326,8 @@ arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition 
 arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
-updated_at: "2026-09-19T09:30:00Z"
-updated_by: Claude Code (Rick Loop, TASK-15 implementation)
+updated_at: "2026-09-19T15:20:00Z"
+updated_by: Claude Code (Rick Loop, TASK-15 closure)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
