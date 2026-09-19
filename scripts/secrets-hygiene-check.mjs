@@ -37,6 +37,16 @@ const ALLOWLIST = [
     reason: "password for the ephemeral Postgres service container CI creates and destroys per run",
     matched: false,
   },
+  {
+    file: "scripts/task-16-guards-check.mjs",
+    // Deliberately the password fragment alone, not the whole URL: a full
+    // connection string here would itself match the pattern this entry
+    // exists to allow, and the allowlist would need an entry for its own
+    // entry. Naming the smallest identifying fragment avoids that.
+    literal: "hunter2",
+    reason: "deliberate fixture proving this guard rejects a credential-bearing URL; removing it would remove the proof that the guard can fail",
+    matched: false,
+  },
 ];
 
 // Keys whose value is a secret by virtue of the key's name.
@@ -44,6 +54,14 @@ const SENSITIVE_KEY = /(^|[_.-])(TOKEN|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|PASSWO
 
 // Values that are obviously not real secrets.
 const PLACEHOLDER_VALUE = /^(|<[^>]*>|changeme\w*|\w*_local_dev_only|\w*_ci_only|xxx+|\*+|placeholder|example|dummy|test)$/i;
+
+// A value that is source code rather than data: a regex literal, an
+// expression, an arrow function. This guard's own pattern definitions are
+// named CONNECTION_URL_WITH_PASSWORD and PEM_PRIVATE_KEY, so the key matches
+// on "PASSWORD" and "PRIVATE_KEY" and the value is the pattern itself. Found
+// when CI ran the guard against a tree where its own source was tracked;
+// locally it had passed only because these files were still untracked.
+const CODE_VALUE = /^([/(\[{]|new\s|function|async|\(.*\)\s*=>)/;
 
 // Values that are configuration keywords rather than credentials. Without
 // this, `id-token: write` in a workflow permissions block reads as a token
@@ -116,7 +134,7 @@ for (const file of files) {
 
   for (const [, , key, value] of body.matchAll(ASSIGNMENT)) {
     if (!SENSITIVE_KEY.test(key)) continue;
-    if (PLACEHOLDER_VALUE.test(value) || NON_SECRET_VALUE.test(value)) continue;
+    if (PLACEHOLDER_VALUE.test(value) || NON_SECRET_VALUE.test(value) || CODE_VALUE.test(value)) continue;
     // `${{ secrets.X }}` and `process.env.X` are references, not literals.
     if (/\$\{\{|process\.env\.|\$\{?[A-Z_]+\}?/.test(value)) continue;
     if (isAllowed(file, value)) continue;
@@ -130,7 +148,7 @@ for (const file of files.filter((f) => f.startsWith(".github/workflows/"))) {
   if (body === null) continue;
   for (const [, , key, value] of body.matchAll(ASSIGNMENT)) {
     if (!SENSITIVE_KEY.test(key)) continue;
-    if (value.includes("${{") || PLACEHOLDER_VALUE.test(value) || NON_SECRET_VALUE.test(value) || isAllowed(file, value)) continue;
+    if (value.includes("${{") || PLACEHOLDER_VALUE.test(value) || NON_SECRET_VALUE.test(value) || CODE_VALUE.test(value) || isAllowed(file, value)) continue;
     fail(file, `${key} is inlined in a workflow; use \${{ secrets.* }}`);
   }
 }
