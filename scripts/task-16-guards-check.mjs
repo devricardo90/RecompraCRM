@@ -162,4 +162,126 @@ import { classifyLeak, evaluateRevision } from "./remote-smoke-check.mjs";
   );
 }
 
+// --- the smoke against a healthy instance ----------------------------------
+//
+// Everything above proves the smoke FAILS correctly. The spec's test strategy
+// promises the other half too: "provando que passa contra uma instância sadia
+// e reprova contra uma URL morta". Without it, a regression that swapped the
+// env-var precedence in /api/version, or made evaluateRevision reject a
+// legitimately matching revision, would pass every other test here.
+//
+// Runs in a schema of its own and drops it, for the same reason TASK-15 does:
+// Sale_deletion_blocked makes per-row cleanup impossible.
+{
+  const { createServer } = await import("node:net");
+  const { spawn } = await import("node:child_process");
+  const { setTimeout: delay } = await import("node:timers/promises");
+  const { resolve } = await import("node:path");
+  const { PrismaClient } = await import("@prisma/client");
+
+  const base = process.env.DATABASE_URL;
+  assert.ok(base, "DATABASE_URL is required to prove the smoke passes against a healthy instance");
+
+  const suffix = `${Date.now()}_${process.pid}`;
+  const schema = `task16_${suffix}`;
+  const scoped = (() => {
+    const url = new URL(base);
+    url.searchParams.set("schema", schema);
+    return url.toString();
+  })();
+  const revision = `testrev${suffix}`;
+
+  const admin = new PrismaClient({ datasources: { db: { url: base } } });
+  let created = false;
+  let server;
+  try {
+    await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+    created = true;
+    execFileSync(process.execPath, [resolve("node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
+      env: { ...process.env, DATABASE_URL: scoped },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const probe = createServer();
+    await new Promise((done, reject) => {
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", done);
+    });
+    const port = probe.address().port;
+    await new Promise((done, reject) => probe.close((e) => (e ? reject(e) : done())));
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    server = spawn(
+      process.execPath,
+      [resolve("node_modules", "next", "dist", "bin", "next"), "dev", "--port", String(port), "--hostname", "127.0.0.1"],
+      {
+        cwd: process.cwd(),
+        // APP_REVISION exercises the fallback branch of the route's
+        // VERCEL_GIT_COMMIT_SHA ?? APP_REVISION ?? null precedence.
+        env: { ...process.env, DATABASE_URL: scoped, APP_REVISION: revision },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    // 120 attempts x 500ms was not enough: the first run of this suite failed
+    // readiness and the second passed, which is a flake, and a flaky test
+    // proves nothing. A cold `next dev` compiles the route on first request,
+    // and on a cold cache that exceeds a minute. The budget is raised rather
+    // than the failure tolerated.
+    let ready = false;
+    for (let attempt = 0; attempt < 600 && !ready; attempt += 1) {
+      if (server.exitCode !== null) throw new Error(`Next exited early (${server.exitCode})`);
+      try {
+        const response = await fetch(`${baseUrl}/api/version`, { signal: AbortSignal.timeout(2_000) });
+        if (response.status === 200) ready = true;
+      } catch {
+        /* not listening yet */
+      }
+      if (!ready) await delay(500);
+    }
+    assert.ok(ready, "the local instance never became ready within 5 minutes");
+
+    // The route serves APP_REVISION when VERCEL_GIT_COMMIT_SHA is absent.
+    const served = await (await fetch(`${baseUrl}/api/version`)).json();
+    assert.equal(served.revision, revision, `GET /api/version must serve APP_REVISION when VERCEL_GIT_COMMIT_SHA is unset, got ${JSON.stringify(served)}`);
+
+    // Warm the remaining routes so dev-mode compilation is not charged to the
+    // smoke's own timeouts.
+    for (const path of ["/", "/api/products", "/api/customers", "/api/repurchases"]) {
+      await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(180_000) }).catch(() => {});
+    }
+
+    const output = execFileSync(process.execPath, ["scripts/remote-smoke-check.mjs"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, SMOKE_BASE_URL: baseUrl, SMOKE_EXPECTED_REVISION: revision },
+      timeout: 180_000,
+    });
+    assert.ok(output.includes("PASS"), `the smoke must pass against a healthy instance, got: ${output}`);
+    assert.ok(output.includes(revision), `the smoke must confirm the expected revision, got: ${output}`);
+
+    // And it must reject a mismatched revision against that same healthy
+    // instance — the stale-deploy case, where every route answers correctly.
+    let rejected = false;
+    let stderr = "";
+    try {
+      execFileSync(process.execPath, ["scripts/remote-smoke-check.mjs"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, SMOKE_BASE_URL: baseUrl, SMOKE_EXPECTED_REVISION: "a-different-revision" },
+        timeout: 180_000,
+      });
+    } catch (error) {
+      rejected = true;
+      stderr = String(error.stderr ?? "");
+    }
+    assert.ok(rejected, "a healthy instance serving the wrong revision must still fail the smoke");
+    assert.ok(stderr.includes("/api/version"), `the failure must name the version route, got: ${stderr}`);
+  } finally {
+    server?.kill("SIGTERM");
+    if (created) await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);
+    await admin.$disconnect();
+  }
+}
+
 console.log("TASK-16 guards: PASS");
