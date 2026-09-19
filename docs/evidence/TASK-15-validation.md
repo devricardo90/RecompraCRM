@@ -25,8 +25,8 @@ reais:
 | cliente | `POST /api/customers` | 201 e registro devolvido |
 | produto | `POST /api/products` | 201, `consumptionDays` round-trip |
 | venda | `POST /api/sales` (×2) | 201, `items: [{ productId, quantity }]` |
-| estoque | `GET /api/products` | `currentStock === 100 − 2 − 1 === 97`, valor exato |
-| previsão | `SaleItem.expectedRepurchaseAt` | `soldAt + quantity × consumptionDays`, ao segundo |
+| estoque | `GET /api/products` | `currentStock === 100 − 2×2 === 96`, valor exato |
+| previsão | `sale.items[].expectedRepurchaseAt` da resposta, cruzado com a linha | `soldAt + quantity × consumptionDays`, ao segundo |
 | dashboard | `GET /api/repurchases` | 2 linhas do cliente criado, em faixas diferentes |
 | volta | `GET /api/customers/[id]/sales` | as duas vendas no histórico |
 
@@ -36,13 +36,18 @@ O estoque é conferido contra o valor exato, não contra "menor que o inicial":
 uma asserção de desigualdade passaria mesmo se o decremento fosse do tamanho
 errado.
 
-A previsão é lida de `SaleItem`, não de `Sale` — o campo é coluna do item.
-Uma das vendas usa `quantity = 2` para que a multiplicação da fórmula seja
-exercida em vez do caso degenerado `quantity = 1`.
+A previsão é conferida primeiro **na resposta de `POST /api/sales`**
+(`sale.items[].expectedRepurchaseAt`, que é onde AC6 diz que ela é lida) e só
+então cruzada com a linha persistida. Ler apenas o banco deixaria o teste
+passar se a rota parasse de devolver a previsão ou devolvesse uma defasada —
+exatamente a costura que esta task existe para cobrir.
 
-As duas vendas diferem **apenas em `soldAt`** (`−40 dias` e `−7 dias`), com
-margem em dias suficiente para que a classificação por número de dia útil não
-mude conforme a hora da execução.
+As duas vendas diferem **apenas em `soldAt`** (`−40` e `−17` dias). Ambas usam
+`quantity = 2`: maior que 1 para exercitar a multiplicação da fórmula, e
+*igual* nas duas porque a quantidade também move a data prevista — variá-la
+significaria que `soldAt` não era a única variável e a classificação não
+poderia ser atribuída a ele. A margem em dias é suficiente para que a
+classificação por número de dia útil não mude conforme a hora da execução.
 
 ## Segurança dos dados: estrutural, não por disciplina
 
@@ -88,13 +93,15 @@ para que a próxima pessoa não reinvente a investigação.
 
 ## Playwright — efêmero
 
-6 cenários, `retries: 0`, **PASS**, 19,0s.
+6 cenários, `retries: 0`, **PASS**, 5,7s. Semeado exatamente como o teste de
+API — mesmo cliente, mesmo produto, duas vendas de `quantity = 2` diferindo só
+em `soldAt` — para que a evidência visual descreva a mesma cadeia.
 
 | Cenário | Verifica |
 | --- | --- |
 | dashboard | o cliente da cadeia aparece, 2 linhas, produto visível |
 | inventory | `inventory-summary` renderiza |
-| products | o estoque exato restante (97) aparece na tela |
+| products | o estoque exato restante (96) aparece na tela |
 | home | o cliente da cadeia está listado |
 | histórico | `history-sale` × 2, título com o nome do cliente, item com o produto |
 | 320px | sem rolagem horizontal no dashboard |
@@ -108,10 +115,12 @@ forte que mock: os pixels vêm das mesmas linhas que o teste de API exercita.
 Spec temporário, config e `test-results` removidos após o PASS; nada
 relacionado a Playwright ficou versionado ou no diretório de trabalho.
 
-### Três correções antes do PASS — e por que não são FLAKY
+### Três correções na primeira passagem — e por que não são FLAKY
 
 A política manda tratar retry necessário como FLAKY. Nenhuma das três foi
-retry: foram defeitos no meu próprio código de teste, corrigidos na origem.
+retry: foram defeitos no meu próprio código de teste, corrigidos na origem. A
+passagem final, já com as três correções e com a semeadura alinhada ao teste
+de API, passou de primeira em 5,7s.
 
 1. **`/customers` não existe.** O teste navegava para uma rota inventada; as
    rotas de página são `/`, `/products`, `/sales`, `/inventory`,
@@ -144,10 +153,10 @@ Nenhum teste foi reexecutado na esperança de passar.
 | AC2 | 201 + registro devolvido em `POST /api/customers` |
 | AC3 | `currentStock`/`minimumStock`/`consumptionDays` explícitos, round-trip conferido |
 | AC4 | `customerId` + `items: [{ productId, quantity }]` |
-| AC5 | `GET /api/products`, seleção por id, valor exato |
-| AC6 | `SaleItem.expectedRepurchaseAt` vs `soldAt + quantity × consumptionDays`, com `quantity = 2` numa venda |
+| AC5 | `GET /api/products`, seleção por id, valor exato (96) |
+| AC6 | `sale.items[].expectedRepurchaseAt` da resposta vs `soldAt + quantity × consumptionDays`, cruzado com a linha persistida, `quantity = 2` nas duas vendas |
 | AC7 | o cliente criado aparece em `GET /api/repurchases` |
-| AC8 | duas vendas do mesmo cliente/produto em faixas diferentes, por `soldAt` |
+| AC8 | duas vendas do mesmo cliente/produto, mesma `quantity`, em faixas diferentes só por `soldAt` |
 | AC9 | as duas vendas em `GET /api/customers/[id]/sales` |
 | AC10 | schema próprio por execução; `public` nunca tocado |
 | AC11 | `DROP SCHEMA CASCADE` no `finally`, falha não engolida |

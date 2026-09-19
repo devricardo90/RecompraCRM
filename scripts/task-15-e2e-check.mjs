@@ -92,8 +92,12 @@ function daysFrom(reference, days) {
 // midnight must not move either one across its bucket boundary.
 const CONSUMPTION_DAYS = 10;
 const INITIAL_STOCK = 100;
-const OVERDUE_QUANTITY = 2; // > 1 so the quantity x consumptionDays product is actually exercised
-const UPCOMING_QUANTITY = 1;
+// The same quantity on both sales, and greater than one. Greater than one so
+// the quantity x consumptionDays product is exercised rather than the
+// degenerate quantity = 1; the *same* on both because quantity also moves the
+// forecast date, so varying it would mean soldAt was not the only variable and
+// the classification could not be attributed to soldAt alone.
+const SALE_QUANTITY = 2;
 
 let nextProcess;
 let prisma;
@@ -166,16 +170,18 @@ try {
   // --- stage 3: vendas --------------------------------------------------
   // Only soldAt varies between the two: consumptionDays belongs to Product,
   // and this chain deliberately uses a single product.
+  // Both forecasts are soldAt + 2 x 10 = 20 days out, so only soldAt decides
+  // the bucket: -40 lands ~20 days in the past, -17 lands ~3 days ahead.
   const now = new Date();
-  const overdueSoldAt = daysFrom(now, -40); // forecast lands ~20 days in the past
-  const upcomingSoldAt = daysFrom(now, -7); // forecast lands ~3 days ahead
+  const overdueSoldAt = daysFrom(now, -40);
+  const upcomingSoldAt = daysFrom(now, -17);
 
   const overdueSale = (await postJson(
     baseUrl,
     "/api/sales",
     {
       customerId: customer.id,
-      items: [{ productId: product.id, quantity: OVERDUE_QUANTITY }],
+      items: [{ productId: product.id, quantity: SALE_QUANTITY }],
       soldAt: overdueSoldAt.toISOString(),
     },
     "venda",
@@ -187,7 +193,7 @@ try {
     "/api/sales",
     {
       customerId: customer.id,
-      items: [{ productId: product.id, quantity: UPCOMING_QUANTITY }],
+      items: [{ productId: product.id, quantity: SALE_QUANTITY }],
       soldAt: upcomingSoldAt.toISOString(),
     },
     "venda",
@@ -200,32 +206,58 @@ try {
   const productsAfter = await getJson(baseUrl, "/api/products", "estoque");
   const productAfter = (productsAfter?.products ?? []).find((entry) => entry.id === product.id);
   assert(productAfter, "estoque", "the created product is missing from GET /api/products");
-  const expectedStock = INITIAL_STOCK - OVERDUE_QUANTITY - UPCOMING_QUANTITY;
+  const expectedStock = INITIAL_STOCK - 2 * SALE_QUANTITY;
   assert(
     productAfter.currentStock === expectedStock,
     "estoque",
-    `stock is ${productAfter.currentStock}, expected exactly ${expectedStock} (${INITIAL_STOCK} - ${OVERDUE_QUANTITY} - ${UPCOMING_QUANTITY})`,
+    `stock is ${productAfter.currentStock}, expected exactly ${expectedStock} (${INITIAL_STOCK} - 2 x ${SALE_QUANTITY})`,
   );
 
   // --- stage 5: previsão ------------------------------------------------
-  // expectedRepurchaseAt is a column on SaleItem, not on Sale.
-  for (const [label, sale, soldAt, quantity] of [
-    ["overdue", overdueSale, overdueSoldAt, OVERDUE_QUANTITY],
-    ["upcoming", upcomingSale, upcomingSoldAt, UPCOMING_QUANTITY],
+  // expectedRepurchaseAt is a column on SaleItem, not on Sale, and AC6 names
+  // where it is read: `sale.items[].expectedRepurchaseAt` in the POST
+  // response. Asserting only the database row would let this pass even if the
+  // route stopped returning the forecast, or returned a stale one, which is
+  // precisely the seam this task exists to cover.
+  for (const [label, sale, soldAt] of [
+    ["overdue", overdueSale, overdueSoldAt],
+    ["upcoming", upcomingSale, upcomingSoldAt],
   ]) {
-    const items = await prisma.saleItem.findMany({ where: { saleId: sale.id } });
-    assert(items.length === 1, "previsao", `${label} sale should have exactly one item, found ${items.length}`);
-    const forecast = items[0].expectedRepurchaseAt;
+    const expected = daysFrom(soldAt, SALE_QUANTITY * CONSUMPTION_DAYS);
+
+    const returnedItems = Array.isArray(sale.items) ? sale.items : [];
     assert(
-      forecast instanceof Date,
+      returnedItems.length === 1,
       "previsao",
-      `${label}: expectedRepurchaseAt is ${forecast}; the persisted trigger should have filled it synchronously`,
+      `${label}: POST /api/sales returned ${returnedItems.length} items, expected 1`,
     );
-    const expected = daysFrom(soldAt, quantity * CONSUMPTION_DAYS);
+    const returned = returnedItems[0]?.expectedRepurchaseAt;
     assert(
-      Math.abs(forecast.getTime() - expected.getTime()) < 1000,
+      typeof returned === "string" && !Number.isNaN(Date.parse(returned)),
       "previsao",
-      `${label}: expectedRepurchaseAt is ${forecast.toISOString()}, expected ${expected.toISOString()} (soldAt + ${quantity} x ${CONSUMPTION_DAYS} days)`,
+      `${label}: the sales route did not return expectedRepurchaseAt on the item (got ${JSON.stringify(returned)})`,
+    );
+    assert(
+      Math.abs(Date.parse(returned) - expected.getTime()) < 1000,
+      "previsao",
+      `${label}: the route returned ${returned}, expected ${expected.toISOString()} (soldAt + ${SALE_QUANTITY} x ${CONSUMPTION_DAYS} days)`,
+    );
+
+    // The persisted row is then cross-checked against what the route said, so
+    // a route that computes its own answer instead of reading the trigger's
+    // would still fail here.
+    const rows = await prisma.saleItem.findMany({ where: { saleId: sale.id } });
+    assert(rows.length === 1, "previsao", `${label} sale should have exactly one item row, found ${rows.length}`);
+    const persisted = rows[0].expectedRepurchaseAt;
+    assert(
+      persisted instanceof Date,
+      "previsao",
+      `${label}: persisted expectedRepurchaseAt is ${persisted}; the trigger should have filled it synchronously`,
+    );
+    assert(
+      Math.abs(persisted.getTime() - Date.parse(returned)) < 1000,
+      "previsao",
+      `${label}: the route returned ${returned} but the row holds ${persisted.toISOString()}`,
     );
   }
 

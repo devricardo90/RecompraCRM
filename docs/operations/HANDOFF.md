@@ -10,7 +10,7 @@ loop_version: RICK_LOOP_V1_5
 current_task: TASK-15
 current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED (merge 82018d3, pós-merge Validate 35373493515 SUCCESS) liberou o depends_on de TASK-15; supervisor retorna TASK_ADVANCE para TASK-15 e a spec está em revisão na PR 43
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED liberou o depends_on de TASK-15; a spec foi mergeada na PR 43 (merge 097b023, pós-merge Validate 35377720405 SUCCESS) e a implementação está em revisão na PR 44
 current_branch: feat/TASK-15-e2e
 current_pr: 44
 task_14_spec_pr: 32 MERGED_SQUASH

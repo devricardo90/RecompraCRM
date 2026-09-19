@@ -76,7 +76,7 @@ task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-15
 current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED (merge 82018d3, pós-merge Validate 35373493515 SUCCESS) liberou o depends_on de TASK-15; supervisor retorna TASK_ADVANCE para TASK-15 e a spec está em revisão na PR 43
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED liberou o depends_on de TASK-15; a spec foi mergeada na PR 43 (merge 097b023, pós-merge Validate 35377720405 SUCCESS) e a implementação está em revisão na PR 44
 branch: feat/TASK-15-e2e
 pr_number: 44
 task_14_spec_pr: 32 MERGED_SQUASH
@@ -314,7 +314,7 @@ arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition 
 arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
-updated_at: "2026-09-18T19:30:00Z"
+updated_at: "2026-09-19T09:30:00Z"
 updated_by: Claude Code (Rick Loop, TASK-15 implementation)
 ```
 
