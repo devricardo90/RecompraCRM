@@ -388,7 +388,8 @@ independent review before merge is unchanged and is not weakened by this
 decision. It is tracked as `ARCH-04` in `docs/roadmap/ROADMAP.md`, and
 TASK-15's `depends_on` names it, so until ARCH-04 reached `COMPLETED` the
 deterministic resolver reported `NO_ELIGIBLE_TASK` rather than silently
-selecting TASK-15; it now reports `ELIGIBLE_TASK_FOUND` for TASK-15 —
-verified live against `scripts/rick-loop-roadmap.mjs` after TASK-14 was
-checked off. No prior record of this decision existed in this repository
+selecting TASK-15. That gate released when ARCH-04 completed; TASK-15 has
+since been completed too, and the resolver now reports
+`ELIGIBLE_TASK_FOUND` for **TASK-16** — verified live against
+`scripts/rick-loop-roadmap.mjs`. No prior record of this decision existed in this repository
 before this entry.

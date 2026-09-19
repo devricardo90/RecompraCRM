@@ -9,46 +9,76 @@ roadmap é literal:
 
 Nada aqui reabre TASK-01..TASK-15.
 
+## O provedor já está decidido: Vercel
+
+`docs/product/PROJECT-SDD.md` (linha 26) define a stack canônica e termina
+com **"deploy em homologação na Vercel"**. Escolher provedor **não** é uma
+decisão em aberto, e uma versão anterior desta spec errou ao tratá-la como
+tal: auditei a árvore procurando configuração de deploy e não li a spec de
+produto do próprio projeto. É a mesma classe de erro que a revisão da spec da
+TASK-15 pegou cinco vezes — supor em vez de ler — um nível acima.
+
+Portanto o alvo é Vercel, e o contrato abaixo descreve o que **este
+repositório** precisa satisfazer para rodar lá, não uma comparação de
+fornecedores.
+
 ## A dependência que esta spec não pode resolver sozinha
 
-**"Homologação disponível" exige um ambiente remoto que não existe neste
-repositório.** Não há alvo de hospedagem, banco de homologação, nem
-credencial de deploy em lugar nenhum da árvore — verificado: nenhum
-`vercel.json`/`vercel.ts`, nenhum `Dockerfile`, nenhum workflow de deploy, e
-o único segredo referenciado em `.github/workflows/` é
-`CLAUDE_CODE_OAUTH_TOKEN`.
+O que falta não é a decisão de provedor, é o **provisionamento**: não existe
+projeto Vercel conectado, nem banco de homologação, nem credencial de deploy
+em lugar nenhum da árvore. Verificado: nenhum `vercel.json`/`vercel.ts`,
+nenhum workflow de deploy, e o único segredo referenciado em
+`.github/workflows/` é `CLAUDE_CODE_OAUTH_TOKEN`.
 
-Provisionar isso é decisão do owner: envolve escolher provedor, criar conta,
-assumir custo e emitir credenciais. Não é uma decisão que o loop tome
-sozinho, e o deploy em si é uma ação para fora.
+Criar o projeto Vercel, provisionar o Postgres de homologação e emitir as
+credenciais são ações do owner: envolvem conta, custo e acesso. O deploy em
+si é uma ação para fora.
 
 Então a task é deliberadamente dividida:
 
 | Parte | Quem faz | Bloqueado? |
 | --- | --- | --- |
 | Spec, guard de credenciais, script de smoke remoto | o loop | não |
-| Contrato que qualquer alvo precisa satisfazer | o loop | não |
-| Provisionar ambiente e credenciais | owner | **sim** |
+| Contrato que o repositório precisa satisfazer | o loop | não |
+| Criar projeto Vercel, banco de homologação e credenciais | owner | **sim** |
 | Executar o deploy e o smoke contra ele | o loop, depois | sim |
 
-A spec é escrita **agnóstica de provedor**: define o contrato, não o
-fornecedor. Quando o ambiente existir, o deploy é um passo, não um projeto.
+## Contrato do deploy na Vercel
 
-## Contrato do alvo de homologação
-
-Qualquer alvo serve se satisfizer:
-
-1. runtime Node compatível com o `next build` deste repositório;
-2. `DATABASE_URL` injetada como variável de ambiente do processo, nunca
+1. `next build` roda sem configuração extra — o `next.config.ts` atual não
+   tem nada específico de plataforma;
+2. `DATABASE_URL` chega como variável de ambiente do projeto Vercel, nunca
    versionada;
-3. migrações aplicadas no deploy (`prisma migrate deploy`) contra o banco de
-   homologação, não contra `public` de desenvolvimento;
-4. URL HTTPS alcançável publicamente ou pelo executor do smoke;
-5. logs acessíveis o suficiente para diagnosticar um smoke reprovado.
+3. `prisma migrate deploy` roda contra o banco de homologação no build ou em
+   passo de deploy, nunca contra o `public` de desenvolvimento;
+4. a URL de homologação é HTTPS e alcançável pelo executor do smoke;
+5. a revisão implantada é identificável em tempo de execução — ver
+   "Verificação de revisão" abaixo, que é o que impede aprovar um deploy que
+   falhou e deixou a revisão anterior no ar.
 
-O que o alvo **não** precisa: CDN, domínio próprio, réplica, autoscaling.
-Homologação aqui é "uma instância alcançável rodando este commit contra um
-banco próprio".
+O que **não** é escopo: domínio próprio, CDN, réplica, autoscaling,
+observabilidade.
+
+## Verificação de revisão
+
+Um smoke que só confere rotas não distingue "o deploy funcionou" de "o deploy
+falhou e a revisão anterior continua servindo". As quatro rotas passariam nos
+dois casos.
+
+Portanto o app expõe o SHA do commit implantado, e o smoke compara com o SHA
+esperado:
+
+- a aplicação lê `VERCEL_GIT_COMMIT_SHA` (injetada pela própria Vercel) ou
+  `APP_REVISION` como alternativa, e serve o valor em `GET /api/version`
+  como `{ revision: "<sha>" }`;
+- quando nenhuma das duas existe, a rota devolve `{ revision: null }` — em
+  desenvolvimento isso é o normal, e o smoke trata `null` como falha apenas
+  quando um SHA esperado foi informado;
+- o smoke recebe `SMOKE_EXPECTED_REVISION` e **reprova** se o valor servido
+  não for exatamente esse.
+
+Sem isso, `done_when` — "smoke remoto aprovado" — pode ser satisfeito por
+código velho.
 
 ## Auditoria da baseline: o que já está certo
 
@@ -83,16 +113,26 @@ Regras:
    `.env.example`.
 2. Nenhum arquivo versionado contém URL de conexão com senha embutida, exceto
    as entradas de uma allowlist explícita.
-3. A allowlist é um literal por entrada — caminho e o valor exato tolerado —
+3. **Nenhum arquivo versionado contém credencial que não seja URL**: token de
+   provedor, chave privada PEM, ou atribuição a chave de nome sensível
+   (`*_TOKEN`, `*_SECRET`, `*_API_KEY`, `*_PRIVATE_KEY`, `*_PASSWORD`) com
+   valor literal não-placeholder. Sem esta regra um `vercel.json` ou um
+   `.ts` de deploy com token passaria: não é `.env`, não é URL com senha, e
+   não é workflow. `sem credenciais expostas` não se limita a URLs.
+4. A allowlist é um literal por entrada — caminho e o valor exato tolerado —
    com uma linha dizendo por que é seguro. Nada de regex amplo: uma allowlist
    por padrão vira uma exceção que engole o caso que importava.
-4. Uma entrada da allowlist que não casa mais nada é **falha**, não sucesso
+5. Uma entrada da allowlist que não casa mais nada é **falha**, não sucesso
    silencioso. Allowlist obsoleta é dívida que ninguém vê.
-5. Workflows referenciam segredo só via `secrets.*`; um valor literal onde se
+6. Workflows referenciam segredo só via `secrets.*`; um valor literal onde se
    espera `secrets.*` é falha.
-6. `.env.example` não pode conter valor que não seja placeholder óbvio: cada
-   valor precisa casar um padrão declarado (`*_local_dev_only`, `*_ci_only`,
-   vazio, ou `changeme*`).
+7. Em `.env.example`, a exigência de placeholder vale **apenas para chaves de
+   nome sensível** (a mesma lista da regra 3) e para valores que sejam URL com
+   credencial. Chaves de configuração comum ficam livres: o arquivo hoje traz
+   `POSTGRES_USER=recompra`, `POSTGRES_DB=recompra` e `POSTGRES_PORT=5432`,
+   que não são segredo e não casariam nenhum padrão de placeholder. Exigir
+   padrão de todo valor reprovaria a baseline no primeiro dia — o mesmo modo
+   de falha que a allowlist ingênua.
 
 Roda em `npm test` e em `validate.yml`, como os outros guards.
 
@@ -114,11 +154,17 @@ Verifica:
 4. `GET /api/repurchases` responde 200 com `generatedAt`, `counts` e `items`
    — o que prova que a aplicação alcançou o banco, porque essa rota consulta
    `saleItem` e aplica `businessDayEndUtc`;
-5. nenhuma resposta traz `DATABASE_URL`, string de conexão, ou stack trace;
-6. cada falha nomeia a rota e o status recebido.
+5. `GET /api/version` devolve a revisão implantada, e ela bate com
+   `SMOKE_EXPECTED_REVISION` quando esse valor é informado;
+6. nenhuma resposta traz `DATABASE_URL`, string de conexão, ou stack trace;
+7. cada falha nomeia a causa: rota **e** status quando houve resposta HTTP;
+   rota e o erro de rede quando não houve; e o nome da variável faltando
+   quando a falha é de configuração. Exigir status sempre seria impossível de
+   cumprir — uma URL morta falha antes de existir resposta.
 
 O item 4 é a prova real de conectividade: uma instância no ar com banco
-inacessível devolve 503 nessa rota, e o smoke reprova.
+inacessível devolve **500** nessa rota (`app/api/repurchases/route.ts` captura
+a falha da consulta e responde 500, não 503), e o smoke reprova.
 
 Falha com mensagem acionável e `exitCode` não zero, para que um passo de CI
 de deploy possa depender dele.
@@ -147,27 +193,42 @@ fora da allowlist.
 AC4. A allowlist é explícita por caminho e valor, com justificativa por
 entrada, e cobre exatamente `.env.example` e `.github/workflows/validate.yml`.
 
+AC18. O guard reprova credencial que não seja URL em arquivo versionado:
+token de provedor, chave privada PEM, ou atribuição a chave de nome sensível
+com valor literal não-placeholder.
+
 AC5. Uma entrada de allowlist que não casa mais nada faz o guard falhar.
 
 AC6. O guard reprova valor literal onde um workflow deveria usar `secrets.*`.
 
 AC7. O guard reprova valor em `.env.example` que não case um padrão de
-placeholder declarado.
+placeholder declarado **apenas para chaves de nome sensível e para URLs com
+credencial**; `POSTGRES_USER`, `POSTGRES_DB` e `POSTGRES_PORT` continuam
+passando com seus valores atuais.
 
 AC8. Cada falha do guard nomeia arquivo e motivo.
 
 AC9. `scripts/remote-smoke-check.mjs` existe e exige `SMOKE_BASE_URL`,
 falhando explicitamente quando ausente.
 
-AC10. O smoke verifica as quatro rotas acima, incluindo a forma da resposta,
+AC10. O smoke verifica as cinco rotas acima, incluindo a forma da resposta,
 não só o status.
+
+AC19. O smoke reprova quando a revisão servida por `GET /api/version` não é
+exatamente `SMOKE_EXPECTED_REVISION`, quando esse valor é informado.
+
+AC20. `GET /api/version` existe, devolve `{ revision }` lido de
+`VERCEL_GIT_COMMIT_SHA` ou `APP_REVISION`, e devolve `null` quando nenhuma
+das duas está definida.
 
 AC11. O smoke reprova se qualquer resposta contiver string de conexão ou
 stack trace.
 
 AC12. O smoke é somente leitura: não emite `POST`, `PUT` nem `DELETE`.
 
-AC13. Cada falha do smoke nomeia rota e status.
+AC13. Cada falha do smoke nomeia a causa: rota e status quando houve
+resposta HTTP; rota e erro de rede quando não houve; nome da variável quando
+a falha é de configuração.
 
 AC14. `npm run test:secrets-hygiene` existe e entra no agregado `npm test`.
 
@@ -188,7 +249,7 @@ do owner, não como item concluído.
 
 ## Definition of Done
 
-- AC1 a AC17 provados por teste, não por inspeção;
+- AC1 a AC20 provados por teste, não por inspeção;
 - todos os gates determinísticos verdes no HEAD exato do PR;
 - preflight determinístico passando antes de qualquer revisão despachada;
 - revisão independente publicada para esse HEAD exato, sem findings em
@@ -227,10 +288,14 @@ critério de fechamento da TASK-17, que conta tasks verificadas.
 
 ## Assumptions explícitas
 
-- **A1**: o alvo de homologação, quando existir, aceita `DATABASE_URL` por
-  variável de ambiente e roda `prisma migrate deploy` no deploy. Se não
-  aceitar, o contrato acima muda e esta spec é corrigida antes da
-  implementação.
+- **A1**: o projeto Vercel, quando existir, aceita `DATABASE_URL` por
+  variável de ambiente e roda `prisma migrate deploy` no build ou em passo de
+  deploy. Se não aceitar, o contrato acima muda e esta spec é corrigida antes
+  da implementação.
+- **A4**: a Vercel injeta `VERCEL_GIT_COMMIT_SHA` no runtime do deploy. Se
+  não injetar, `APP_REVISION` é definida manualmente no projeto e a
+  verificação de revisão continua valendo — o que não é aceitável é ficar sem
+  nenhuma das duas, porque aí o smoke aprova código velho.
 - **A2**: a forma das rotas e das funções de domínio é lida do código, não
   da memória — cinco divergências desse tipo foram corrigidas na spec da
   TASK-15 antes de existir implementação.

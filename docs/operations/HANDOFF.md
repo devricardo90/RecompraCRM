@@ -138,7 +138,10 @@ restart_command: git switch main && git pull --ff-only && npm install
    `COMPLETED`, so the gate has released. This was verified live by running
    `scripts/rick-loop-roadmap.mjs`'s `resolveNextEligibleTask` against
    `docs/roadmap/ROADMAP.md` after checking TASK-15 off, not asserted from
-   memory. Resume by starting TASK-16; do not stop here.
+   memory. TASK-16 is started: its spec is in review on PR #46, which is
+   what `next_action: REVIEW_TASK_16_SPEC` means. Resume by carrying that
+   review to a clean verdict and merging; do not stop here, and do not open a
+   second TASK-16 spec.
 
    TASK-16 is `Deploy de homologação`, and part of it cannot be done from
    this repository alone: `done_when` requires a reachable staging
