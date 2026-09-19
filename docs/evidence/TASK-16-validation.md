@@ -70,6 +70,32 @@ rotas.
 | revision divergente | falha nomeando a rota |
 | vazamento em resposta | `classifyLeak` detecta string de conexão, `DATABASE_URL` e stack trace |
 
+### Cobertura das regras do guard
+
+Cada regra tem fixture que ela **precisa reprovar** e, onde faz sentido, uma
+que precisa aceitar:
+
+| Regra | Reprova | Aceita |
+| --- | --- | --- |
+| 1 | `.env`, `.env.production` versionados | `.env.example` |
+| 2 | URL de conexão com senha fora da allowlist | — |
+| 3 | bloco PEM; `"VERCEL_TOKEN": "..."` em JSON | placeholder; referência `secrets.*` |
+| 5 | entrada de allowlist que não casa mais nada | — |
+| 6 | segredo literal em workflow | — |
+| 7 | senha real em `.env.example` | `POSTGRES_USER`, `POSTGRES_PORT` |
+
+Isso só é testável porque `scan` é função pura sobre lista de arquivos e
+leitor injetados. A versão anterior lia `git ls-files` inline e só rodava
+contra a árvore real — cinco das sete regras não tinham **nenhuma** asserção
+de falha, e uma regressão em qualquer uma delas passaria verde. Achado por
+revisão independente na PR #47, e é exatamente o problema que este guard
+existe para evitar, virado contra ele mesmo.
+
+As fixtures vivem em `scripts/fixtures/secrets-hygiene-fixtures.mjs`, o
+**único** caminho excluído do scan. A suíte afirma que a lista de exclusão tem
+exatamente uma entrada: exclusão que alarga silenciosamente seria pior que o
+crescimento de allowlist que ela substituiu.
+
 ### Regressões fechadas por revisão independente
 
 Duas falhas **silenciosas** do guard, encontradas na PR #47 e agora asseguradas
@@ -99,16 +125,16 @@ direta sobre cada uma: uma regressão falha em vez de restaurar garantia falsa.
 
 | AC | Estado |
 | --- | --- |
-| AC1–AC8 | **PROVADO** — guard e suas regras, com asserção sobre falha |
+| AC1–AC8 | **PROVADO** — cada uma das sete regras exercitada contra fixture que ela precisa reprovar, mais os casos que precisa aceitar |
 | AC9 | **PROVADO** — smoke exige `SMOKE_BASE_URL` e falha nomeando-a |
 | AC10 | **PROVADO** — cinco rotas, forma da resposta e não só status |
-| AC11 | **PROVADO** — `classifyLeak` sobre três formas de vazamento |
+| AC11 | **PROVADO** — `classifyLeak` sobre três formas de vazamento, e classificação roda em **qualquer** resposta, não só 200: uma página de erro 500 que vaze stack trace é reportada como vazamento e não apenas como status ruim |
 | AC12 | **PROVADO** — o smoke não emite `POST`/`PUT`/`DELETE` |
 | AC13 | **PROVADO** — falhas nomeiam status, erro de rede ou variável, conforme o caso |
 | AC14–AC15 | **PROVADO** — em `npm test` e em `validate.yml` |
 | AC16 | **PROVADO** — este documento |
 | AC17 | **PROVADO** — a dependência de ambiente está nomeada aqui e na spec como pendência do owner |
-| AC18 | **PROVADO** — regra 3 mais a asserção de regressão sobre chave JSON citada |
+| AC18 | **PROVADO** — regra 3 com fixture PEM e fixture de token JSON citado, mais a asserção de regressão sobre o padrão |
 | AC19–AC20 | **PROVADO** — contra instância local sadia, incluindo o ramo de fallback e a rejeição de revisão divergente |
 
 **Nenhum AC cobre o deploy em si**, porque a spec deliberadamente não o

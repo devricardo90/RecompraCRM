@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 import { classifyLeak, evaluateRevision } from "./remote-smoke-check.mjs";
+import { scan, EXCLUDED_PATHS } from "./secrets-hygiene-check.mjs";
+import { REJECT_FIXTURES as F, KEEPER } from "./fixtures/secrets-hygiene-fixtures.mjs";
 
 /**
  * TASK-16: proves the two guards by exercising them, including the cases they
@@ -77,6 +79,71 @@ import { classifyLeak, evaluateRevision } from "./remote-smoke-check.mjs";
     output.includes("all matched"),
     "the guard must confirm every allowlist entry still matches; a stale entry is a failure, not a silent pass",
   );
+}
+
+// --- every guard rule, against a fixture that must be rejected -------------
+//
+// Previously only two of seven rules had any failing-case assertion, because
+// the guard read `git ls-files` inline and could only run against the real
+// tree. A regression dropping PASSWORD from SENSITIVE_KEY, or breaking the
+// staleness loop, would have left every test green — the exact "a guard that
+// has only ever passed" problem this suite exists to prevent, turned on the
+// guard itself. Found by independent review on PR 47.
+//
+// The fixtures live in their own file because they must be credential-shaped
+// to be meaningful, and the guard scans tracked files. That file is the single
+// excluded path.
+{
+  // The keeper file must contain a violation that the allowlist then excuses:
+  // entries are only marked matched when a rule fires and consults the
+  // allowlist, so a keeper with clean content would leave the entry unmatched
+  // and trip the staleness rule in every test. That is what happened on the
+  // first run of this block.
+  const allow = () => [{ file: KEEPER.path, literal: KEEPER.literal, reason: "fixture", matched: false }];
+  const run = (fixtures, allowlist) => {
+    const contents = { [KEEPER.path]: KEEPER.body };
+    for (const f of fixtures) contents[f.path] = f.body;
+    return scan({
+      files: [...fixtures.map((f) => f.path), KEEPER.path],
+      read: (file) => contents[file] ?? null,
+      allowlist: allowlist ?? allow(),
+    });
+  };
+  const has = (failures, fragment) => failures.some((f) => f.includes(fragment));
+
+  // The exclusion must exist and must stay narrow. An exclusion that widened
+  // silently would be worse than the allowlist growth it replaced.
+  assert.ok(Array.isArray(EXCLUDED_PATHS), "the guard must expose its exclusion list");
+  assert.equal(EXCLUDED_PATHS.length, 1, `exactly one path may be excluded, got ${JSON.stringify(EXCLUDED_PATHS)}`);
+  assert.equal(EXCLUDED_PATHS[0], "scripts/fixtures/secrets-hygiene-fixtures.mjs", "only the fixtures file may be excluded");
+
+  // Rule 1 — tracked .env files.
+  assert.ok(has(run([F.trackedEnvFile]), "only .env.example"), "rule 1 must reject a tracked .env file");
+  assert.ok(has(run([F.trackedEnvVariant]), "only .env.example"), "rule 1 must reject .env.<something>");
+  assert.equal(run([F.allowedEnvExample]).length, 0, "rule 1 must allow .env.example");
+
+  // Rule 2 — an unallowlisted connection URL.
+  assert.ok(has(run([F.connectionUrl]), "not allowlisted"), "rule 2 must reject a credential-bearing URL");
+
+  // Rule 3 — PEM keys and sensitive keys with literal values.
+  assert.ok(has(run([F.pemKey]), "PEM private key"), "rule 3 must reject a PEM private key block");
+  assert.ok(has(run([F.jsonToken]), "VERCEL_TOKEN"), "rule 3 must reject a quoted JSON credential");
+  assert.equal(run([F.placeholderToken]).length, 0, "rule 3 must allow an obvious placeholder");
+  assert.equal(run([F.secretReference]).length, 0, "rule 3 must allow a secret reference");
+
+  // Rule 5 — a stale allowlist entry.
+  const stale = [{ file: "gone.txt", literal: "no-longer-present", reason: "fixture", matched: false }];
+  assert.ok(
+    has(scan({ files: [], read: () => null, allowlist: stale }), "no longer matches anything"),
+    "rule 5 must fail on an allowlist entry that matches nothing",
+  );
+
+  // Rule 6 — a secret inlined in a workflow.
+  assert.ok(has(run([F.inlinedWorkflowSecret]), "inlined in a workflow"), "rule 6 must reject an inlined workflow secret");
+
+  // Rule 7 — real-looking secrets rejected in .env.example, ordinary config allowed.
+  assert.ok(has(run([F.envExampleRealSecret]), "POSTGRES_PASSWORD"), "rule 7 must reject a real-looking secret in .env.example");
+  assert.equal(run([F.envExampleOrdinary]).length, 0, "rule 7 must allow ordinary configuration values");
 }
 
 // --- the two holes independent review found in the guard -------------------

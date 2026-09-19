@@ -66,12 +66,19 @@ async function read(baseUrl, path) {
     return null;
   }
   const body = await response.text().catch(() => "");
+
+  // Leak classification runs before the status check, and regardless of it.
+  // An error page is the single most likely place for a stack trace or a
+  // connection string to surface, and reporting only "expected 200, received
+  // 500" would hide the more security-relevant fact. AC11 says *any*
+  // response. Found by independent review on PR 47.
+  const leak = classifyLeak(body);
+  if (leak) fail(path, `response body exposes a ${leak}`);
+
   if (response.status !== 200) {
     fail(path, `expected 200, received ${response.status}`);
     return null;
   }
-  const leak = classifyLeak(body);
-  if (leak) fail(path, `response body exposes a ${leak}`);
   return { body, response };
 }
 
