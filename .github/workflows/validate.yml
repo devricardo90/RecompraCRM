@@ -119,6 +119,11 @@ jobs:
       - name: Test ARCH-04 review dispatch
         run: npm run test:review-dispatch
 
+      # Runs in a schema of its own, created and dropped by the check itself,
+      # so it never reads or writes the schema the other steps use.
+      - name: Test TASK-15 end-to-end chain
+        run: npm run test:e2e-chain
+
       - name: Lint
         run: npm run lint
 

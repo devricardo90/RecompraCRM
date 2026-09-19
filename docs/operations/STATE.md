@@ -2,7 +2,7 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 79
+state_version: 80
 project: RecompraCRM
 roadmap: MVP-01
 global_status: RUNNING
@@ -74,11 +74,11 @@ last_completed_task: TASK-14
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-15
-current_task_status: SPEC_IN_REVIEW
+current_task_status: IMPLEMENTED_AWAITING_REVIEW
 next_eligible_task: TASK-15
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED (merge 82018d3, pós-merge Validate 35373493515 SUCCESS) liberou o depends_on de TASK-15; supervisor retorna TASK_ADVANCE para TASK-15 e a spec está em revisão na PR 43
-branch: docs/TASK-15-spec
-pr_number: 43
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND — ARCH-04 COMPLETED liberou o depends_on de TASK-15; a spec foi mergeada na PR 43 (merge 097b023, pós-merge Validate 35377720405 SUCCESS) e a implementação está em revisão na PR 44
+branch: feat/TASK-15-e2e
+pr_number: 44
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -260,7 +260,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_TASK_15_SPEC
+next_action: REVIEW_TASK_15_IMPLEMENTATION
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
@@ -314,8 +314,8 @@ arch_04_stage2_p1_finding: dispatch ran the PR author's own workflow definition 
 arch_04_stage2_gate_proof: evaluateMergeAllowed returned allowed:false on the first HEAD with zeroUnresolvedFindings:false while the secondary verdict said clean - the gate, not the reviewer, blocked the merge
 arch_04_stage2_draft_first: the PR opened as a draft so its own pr_number could be recorded without triggering a review, then marked ready, producing one review on the final HEAD instead of two
 next_action_authorized: true
-updated_at: "2026-09-18T19:30:00Z"
-updated_by: Claude Code (Rick Loop, TASK-15 spec)
+updated_at: "2026-09-19T09:30:00Z"
+updated_by: Claude Code (Rick Loop, TASK-15 implementation)
 ```
 
 TASK-01 through TASK-11 are completed and integrated into `main`.
