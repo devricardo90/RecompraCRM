@@ -139,8 +139,9 @@ recorded under many different names. The dominant recurring class is:
 > describing the prior state.**
 
 Counted semantically: **8 occurrences** during ARCH-04 (recorded in ARCH-05's
-`recurrence_evidence`), plus **5 more** in the TASK-15/16 sequence (PRs #42,
-#43, #45, #46 round 1, #46 round 2) — **13 total**. Every one was found by
+`recurrence_evidence`), **5 more** in the TASK-15/16 sequence (PRs #42, #43,
+#45, #46 round 1, #46 round 2), and **3 inside this audit's own PR** —
+**16 total**. Every one was found by
 independent review or by `detectStateDrift`; **none** by a check that reads
 narrative, because no such check exists.
 
@@ -152,6 +153,28 @@ entry written one commit after the lesson warning against it, and finally the
 per-rule reject fixtures. Six were answered with allowlist entries or
 rewording; the seventh was answered structurally, with a single excluded
 fixtures path whose narrowness the suite asserts.
+
+### The audit reproduced the class three times while documenting it
+
+This document's own PR drifted three times, each caught by independent review,
+each with every gate green:
+
+1. `next_eligible_task` recorded as `none` in STATE and HANDOFF while the
+   resolver returned TASK-16 — contradicting a register entry *in the same
+   commit* that said the resolver returns TASK-16.
+2. Two "41 merges" figures surviving the pass that corrected the others, so
+   the document contradicted its own section 3.
+3. The PR description still quoting "41 merged PRs" after the file content was
+   corrected to 43 — in the artifact a reader sees first.
+
+That is better evidence for this section's claim than the thirteen prior
+occurrences it catalogues. A document arguing *no gate reads prose, so prose
+drifts* drifted in prose three times while `roadmap_pointers_agree`,
+`detectStateDrift`, `Validate` and preflight all stayed green throughout.
+
+The third instance is the sharpest: PR descriptions are not files, so **no
+conceivable file-based gate would have caught it**, and it is the first thing
+a human reads.
 
 A third class is the most uncomfortable, and it only became visible because
 PR #47 ran to five rounds: **the loop's self-assessment artifacts were less
