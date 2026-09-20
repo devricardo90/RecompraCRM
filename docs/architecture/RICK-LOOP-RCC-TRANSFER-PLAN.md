@@ -23,7 +23,7 @@ produced no evidence, the item says so rather than guessing.
 `evaluateMergeAllowed`, `isCleanReviewResult`, `countUnresolvedFindings`,
 `selectMergeResult`, `buildAnchoredResults`, `filterAnchoredCleanComments`.
 
-**Evidence:** unmodified across 41 merged PRs. Outranked judgement three times:
+**Evidence:** unmodified across 43 merged PRs. Outranked judgement three times:
 refused a HEAD whose top-level verdict said clean because another reviewer had
 an unresolved P1 (#40); refused on `no_state_drift` with CI green and review
 clean (#39); refused a verdict I had demonstrated was spurious (#45).

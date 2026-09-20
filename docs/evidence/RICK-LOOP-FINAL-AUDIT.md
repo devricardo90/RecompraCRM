@@ -85,11 +85,15 @@ start/stop timestamps, so time-per-task cannot be derived without inventing it.
 
 | Metric | Value |
 | --- | --- |
-| PRs merged | 41 |
+| PRs merged | **43** |
 | PRs closed unmerged | 2 |
-| PRs open at experiment end | 1 (#48, this audit) |
-| Review rounds (register-derived total) | **83** |
-| Review rounds (max-per-PR sum, 25 PRs with rounds recorded) | **104** |
+| PRs open at experiment end | 2 — #48 (this audit) and **#21**, a loop fix opened 2026-08-20 and never merged or closed |
+| Review rounds (register-derived total) | **89** |
+| Review rounds (max-per-PR sum, 24 PRs with rounds recorded) | **103** |
+
+`#21` is worth naming rather than folding into a count: it has sat open since
+August, is not referenced by any later work, and nothing in the loop surfaced
+it. An abandoned PR is invisible to every gate here.
 
 The two totals differ because `rick-loop-stats.mjs` counts `review_round`
 events while the per-PR tally takes the highest round reached on each PR;
@@ -104,16 +108,19 @@ Heaviest PRs by rounds: **#17 (10)**, **#37 (10)**, **#14 (9)**, **#24 (7)**,
 
 **PARTIALLY PROVEN.** Severity is only partially recoverable.
 
-- Finding fields recorded: **174**
-- Explicitly `P1_`-prefixed: **21**
-- Explicitly `P2_`-prefixed: **37**
-- Recorded without a severity prefix: **116**
+- Finding fields recorded: **182**
+- Explicitly `P1_`-prefixed: **22**
+- Explicitly `P2_`-prefixed: **40**
+- Recorded without a severity prefix: **120**
 
-The 116 unprefixed findings carry descriptive class names but no severity, so
+The 120 unprefixed findings carry descriptive class names but no severity, so
 **no severity distribution can be computed for the majority of findings**. That
 is a defect in the register's own schema, not a gap to be filled by guessing.
 
-Distinct finding classes: **165** (`rick-loop-stats.mjs`).
+Findings counted by `rick-loop-stats.mjs`: **186** across **165+** distinct
+classes. The two totals (182 by field scan, 186 by the stats script) differ
+because the script counts some composite fields the scan treats as one; both
+are reported rather than picking whichever reads better.
 
 ### Recurring classes
 
@@ -281,7 +288,7 @@ misleading to code against.
 
 `evaluateMergeAllowed`, `isCleanReviewResult`, `countUnresolvedFindings`,
 `selectMergeResult`, `buildAnchoredResults` and `filterAnchoredCleanComments`
-were **not modified by any of the 41 merged PRs**.
+were **not modified by any of the 43 merged PRs**.
 
 Three live demonstrations that the gate outranks judgement:
 
