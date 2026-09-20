@@ -178,7 +178,27 @@ badly. A clean register is either a perfect run or an untrustworthy one.
 
 ---
 
-## 12. Allowlists must be able to shrink
+## 12. The self-assessment artifacts were the least reliable part
+
+**Evidence:** PR #47 ran five rounds. Three found defects in tests and
+evidence rather than in shipped behaviour: a guard whose rejection rules had
+no failing-case test for five of seven rules; an evidence document asserting
+"PROVADO — com asserção sobre falha" where no such assertion existed; and
+smoke coverage proving only the failure paths when the spec had promised the
+healthy-instance path too.
+
+All three were produced by the same process meant to be checking the work, and
+all three were caught by independent review. **No gate caught any of them, and
+none could** — they are claims about whether evidence is adequate, which is
+not something a script can compare.
+
+**Rule:** treat tests and evidence documents as the *least* trustworthy
+artifacts an autonomous loop produces, not the most. They are where
+self-assessment is structurally weakest.
+
+---
+
+## 13. Allowlists must be able to shrink
 
 **Evidence:** the secrets guard allowlist reached four entries, each with a
 stated reason, and a rule that fails any entry which stops matching. When a

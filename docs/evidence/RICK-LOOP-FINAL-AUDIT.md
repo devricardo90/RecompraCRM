@@ -30,7 +30,7 @@ no quality ratings.
 | Range | Status |
 | --- | --- |
 | TASK-01 … TASK-15 | Completed, merged, post-merge validated |
-| TASK-16 | **BLOCKED_AWAITING_STAGING** — partial delivery in PR #47 (see below for its state at audit time), `done_when` not met |
+| TASK-16 | **BLOCKED_AWAITING_STAGING** — partial delivery merged (#47, `bce05ba`), `done_when` not met |
 | TASK-17 | Pending; out of experiment scope by owner decision |
 
 Checked-off `TASK-*` entries: 15. Unchecked: 2 (TASK-16, TASK-17).
@@ -50,11 +50,14 @@ smoke remoto aprovado e sem credenciais expostas"*.
 | homologação disponível | **NOT TESTED** — no Vercel project, staging database, or deploy credential exists |
 | smoke remoto aprovado | **NOT TESTED** — `scripts/remote-smoke-check.mjs` exists and its failure paths are proven, but it has never run against a deployment |
 
-PR #47 carries the environment-independent half: the credentials guard, the
-read-only remote smoke, `GET /api/version`, and a test suite exercising their
-rejection paths. Its state at the time this audit was written is recorded in
-`docs/operations/LOOP-REGISTER.jsonl`; this document does not assert a merge
-that may not have happened.
+PR #47 delivered the environment-independent half and merged at `bce05ba`
+after **5 review rounds**: the credentials guard, the read-only remote smoke,
+`GET /api/version`, and a suite exercising every guard rule's rejection path.
+
+The roadmap entry stays **unchecked** on purpose. Checking it would make
+`resolveNextEligibleTask` advance to TASK-17, contradicting both the stop
+condition and the task's real state. Verified after reconciliation: the
+resolver returns TASK-16, not TASK-17.
 
 The provider was never an open question: `docs/product/PROJECT-SDD.md:26`
 mandates Vercel. What is missing is provisioning, which requires an account,
@@ -84,9 +87,9 @@ start/stop timestamps, so time-per-task cannot be derived without inventing it.
 | --- | --- |
 | PRs merged | 41 |
 | PRs closed unmerged | 2 |
-| PRs open at experiment end | 2 (#47 in review, #48 audit) |
+| PRs open at experiment end | 1 (#48, this audit) |
 | Review rounds (register-derived total) | **83** |
-| Review rounds (max-per-PR sum, 24 PRs with rounds recorded) | **99** |
+| Review rounds (max-per-PR sum, 25 PRs with rounds recorded) | **104** |
 
 The two totals differ because `rick-loop-stats.mjs` counts `review_round`
 events while the per-PR tally takes the highest round reached on each PR;
@@ -136,9 +139,30 @@ narrative, because no such check exists.
 
 A second class emerged in TASK-16 and is worth separating: **a guard that
 scans tracked files turns every document quoting a credential shape into
-another occurrence.** One test fixture produced five failures — the guard's own
-pattern constants, its test file, its changelog entry, a regression fixture,
-and a register entry written one commit after the lesson warning against it.
+another occurrence.** Seven self-references resulted — the guard's own pattern
+constants, its test file, its changelog entry, a regression fixture, a register
+entry written one commit after the lesson warning against it, and finally the
+per-rule reject fixtures. Six were answered with allowlist entries or
+rewording; the seventh was answered structurally, with a single excluded
+fixtures path whose narrowness the suite asserts.
+
+A third class is the most uncomfortable, and it only became visible because
+PR #47 ran to five rounds: **the loop's self-assessment artifacts were less
+reliable than its implementation.** Three of those five rounds found defects in
+tests and evidence rather than in shipped behaviour —
+
+1. a guard whose rejection rules had no failing-case test for five of seven
+   rules, in a suite whose own header says a guard that has only ever passed
+   is indistinguishable from one that cannot fail;
+2. an evidence document claiming ACs were "PROVADO — com asserção sobre falha"
+   when no such assertion existed for five of them;
+3. smoke coverage that proved only the failure paths, while the spec had
+   promised the healthy-instance path too.
+
+Each was written by the same process that was supposed to be checking the
+work. Independent review caught all three; no gate did, and no gate could —
+they are claims about whether evidence is adequate, not facts a script can
+compare.
 
 ---
 

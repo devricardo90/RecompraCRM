@@ -221,6 +221,13 @@ Uma task por loop. A próxima task só inicia após baseline verde, task spec de
 - [ ] TASK-16 — Deploy de homologação
   - depends_on: TASK-15
   - done_when: homologação disponível, smoke remoto aprovado e sem credenciais expostas.
+  - status: BLOCKED_AWAITING_STAGING
+  - blocked_by: provisionamento de ambiente — projeto Vercel, banco de homologação e credenciais de deploy não existem; são ações do owner
+  - provider: Vercel, já decidido por docs/product/PROJECT-SDD.md linha 26; não é decisão em aberto
+  - delivered: spec (PR 46, merge 40c35c5); guard de credenciais, smoke remoto, rota /api/version e suíte de rejeição (PR 47, merge bce05ba, 5 rodadas)
+  - not_delivered: o deploy em si e o smoke contra homologação — duas das três cláusulas do done_when
+  - evidence: docs/evidence/TASK-16-validation.md
+  - nao_marcar_concluida: a entrada fica desmarcada de propósito. Marcá-la faria resolveNextEligibleTask avançar para TASK-17, contra a condição de parada do experimento e contra o estado real da task
 - [ ] TASK-17 — Fechamento do roadmap MVP-01
   - depends_on: TASK-16
   - done_when: 17/17 tasks verificadas e estado ROADMAP_COMPLETED_WAITING_HUMAN.

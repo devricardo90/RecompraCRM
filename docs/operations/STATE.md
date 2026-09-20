@@ -2,10 +2,10 @@
 
 ```yaml
 schema_version: "1.1"
-state_version: 84
+state_version: 85
 project: RecompraCRM
 roadmap: MVP-01
-global_status: RUNNING
+global_status: EXPERIMENT_COMPLETED_WAITING_OWNER_REVIEW
 mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_5
 loop_upgrade_01b_status: MERGED
@@ -75,11 +75,11 @@ last_completed_task: TASK-15
 task_12_closure_pr: 30 MERGED_SQUASH
 task_12_closure_merge_main_head: a7734f4fc270db11933b7b0461625b4c00e6263b
 current_task: TASK-16
-current_task_status: PARTIAL_IMPLEMENTATION_IN_REVIEW
-next_eligible_task: TASK-16
-next_eligible_task_reason: ELIGIBLE_TASK_FOUND — TASK-15 COMPLETED (merge 2b2878f, pós-merge Validate 35444246358 SUCCESS) liberou o depends_on de TASK-16
-branch: feat/TASK-16-guards
-pr_number: 47
+current_task_status: BLOCKED_AWAITING_STAGING
+next_eligible_task: none — experimento encerrado em TASK-16 por decisão do owner
+next_eligible_task_reason: EXPERIMENT_STOPPED_AT_TASK_16 — TASK-16 fica BLOCKED_AWAITING_STAGING e desmarcada no ROADMAP, então o resolver não avança para TASK-17. TASK-17 permanece pendente e fora do escopo do experimento
+branch: docs/rick-loop-final-audit
+pr_number: 48
 task_14_spec_pr: 32 MERGED_SQUASH
 task_14_spec_merge_main_head: ffdf8f9a994464e472bc92e4cb9b68e69bb44086
 task_09_last_reviewed_head: e3be67a1d1cff634798ddaa59de6be16038be23d
@@ -272,7 +272,7 @@ external_gate: none
 max_stagnant_attempts: 3
 stagnant_attempt: 0
 working_tree: clean_except_preserved_untracked_claude_settings
-next_action: REVIEW_TASK_16_GUARDS
+next_action: NONE — EXPERIMENT_COMPLETED_WAITING_OWNER_REVIEW; não iniciar TASK-17, não criar novas tasks
 arch_04_spec_status: SPEC_MERGED
 arch_04_spec: docs/specs/ARCH-04.md
 arch_04_spec_pr: 36 MERGED_SQUASH
