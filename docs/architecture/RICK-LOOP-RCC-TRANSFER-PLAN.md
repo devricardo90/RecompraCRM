@@ -107,11 +107,18 @@ behind. Two were in the HANDOFF resume path and would have misdirected a
 recovery.
 
 **Fix before porting, in order of cost:**
-1. `updated_at` freshness — compare the trailer against the file's own last
+1. **Cross-check recorded pointers against computed truth, not only against
+   each other.** `detectStateDrift` compares STATE's `next_eligible_task` to
+   HANDOFF's; the audit PR set both to `none` while the resolver returned
+   TASK-16, so the two agreed with each other, disagreed with reality, and the
+   gate passed. The controller already computes the real value and exposes it
+   as `roadmap_next_eligible_task`. This is the cheapest high-value fix in the
+   list and it is not implemented.
+2. `updated_at` freshness — compare the trailer against the file's own last
    commit timestamp. Mechanically checkable, identified during this run,
    **not implemented**.
-2. Status-field consistency — `current_task_status` is compared by nothing.
-3. Prose staleness — hardest; at minimum, require historical sections to carry
+3. Status-field consistency — `current_task_status` is compared by nothing.
+4. Prose staleness — hardest; at minimum, require historical sections to carry
    an explicit marker and check that current-state claims appear only above it.
 
 ### B3. Secrets hygiene guard — **fix the self-reference properly**

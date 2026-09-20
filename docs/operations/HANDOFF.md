@@ -9,8 +9,8 @@ mode: CONTROLLED_AUTONOMOUS
 loop_version: RICK_LOOP_V1_5
 current_task: TASK-16
 current_task_status: BLOCKED_AWAITING_STAGING
-next_eligible_task: none — experimento encerrado em TASK-16 por decisão do owner
-next_eligible_task_reason: EXPERIMENT_STOPPED_AT_TASK_16 — TASK-16 fica BLOCKED_AWAITING_STAGING e desmarcada no ROADMAP, então o resolver não avança para TASK-17. TASK-17 permanece pendente e fora do escopo do experimento
+next_eligible_task: TASK-16
+next_eligible_task_reason: ELIGIBLE_TASK_FOUND para TASK-16 — este é o resultado real de resolveNextEligibleTask, verificado contra o ROADMAP atual. TASK-16 continua BLOCKED_AWAITING_STAGING e não é retomável sem provisionamento do owner; o experimento está encerrado e nada deve reiniciar automaticamente. Registrar "none" aqui afirmaria uma saída do resolver que não ocorre
 current_branch: docs/rick-loop-final-audit
 current_pr: 48
 task_14_spec_pr: 32 MERGED_SQUASH

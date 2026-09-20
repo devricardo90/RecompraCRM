@@ -399,12 +399,22 @@ that, every instance was caught by a human reviewer.
 2. **Narrative and metadata drift** — 13 occurrences, no mechanical coverage.
    `updated_at` staleness is checkable against the file's own commit timestamp
    and remains unimplemented.
-3. **ARCH-03** — untracked, resolver-invisible. Cannot be selected by the loop.
-4. **Severity taxonomy** — the register has no enforced severity field, which
+3. **A check comparing two documents to each other, but not to computed
+   truth, can pass while both are wrong.** `detectStateDrift`'s
+   `HANDOFF_NEXT_ELIGIBLE_STALE` compares STATE's `next_eligible_task` against
+   HANDOFF's for mutual agreement. This audit's own PR set both to `none`
+   while the resolver actually returned TASK-16: the two files agreed with
+   each other and disagreed with reality, and the gate passed. The controller
+   already computes the real answer and exposes it as
+   `roadmap_next_eligible_task`; nothing cross-checks the recorded pointer
+   against it. Found by independent review of this audit, and mechanically
+   fixable.
+4. **ARCH-03** — untracked, resolver-invisible. Cannot be selected by the loop.
+5. **Severity taxonomy** — the register has no enforced severity field, which
    is why §4 cannot report a distribution.
-5. **Spec coverage for TASK-01…08** — retroactive specs do not exist and were
+6. **Spec coverage for TASK-01…08** — retroactive specs do not exist and were
    not attempted.
-6. **The green-check gap** (§11) — a human reading the PR UI after ARCH-04 sees
+7. **The green-check gap** (§11) — a human reading the PR UI after ARCH-04 sees
    only `quality` and cannot tell whether a review happened.
 
 ---
@@ -415,7 +425,7 @@ that, every instance was caught by a human reviewer.
 
 | Component | Why |
 | --- | --- |
-| `evaluateMergeAllowed` and its helpers | Never weakened across 41 merges; demonstrably outranked reviewer judgement three times |
+| `evaluateMergeAllowed` and its helpers | Never weakened across 43 merges; demonstrably outranked reviewer judgement three times |
 | `rick-loop-preflight.mjs` | Nine fail-closed checks; blocked real merges, including its own PR |
 | `rick-loop-review-dispatch.mjs` | Dispatch economics with measured effect; idempotent in both in-flight and reviewed states |
 | Exact-head verdict contract | `Reviewed commit: <sha>` + explicit clean phrase + independent author + zero unresolved findings |
@@ -438,7 +448,7 @@ that, every instance was caught by a human reviewer.
 
 ## Summary of what this experiment demonstrated
 
-**PROVEN:** a deterministic, fail-closed merge gate held for 41 merges without
+**PROVEN:** a deterministic, fail-closed merge gate held for 43 merges without
 being weakened, including against the agent's own judgement. Review-trigger
 economics produced a measurable reduction in wasted model invocations. A spec
 gate, where present, caught defects before implementation at a rate that
