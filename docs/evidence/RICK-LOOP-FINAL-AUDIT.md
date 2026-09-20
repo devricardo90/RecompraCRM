@@ -140,8 +140,8 @@ recorded under many different names. The dominant recurring class is:
 
 Counted semantically: **8 occurrences** during ARCH-04 (recorded in ARCH-05's
 `recurrence_evidence`), **5 more** in the TASK-15/16 sequence (PRs #42, #43,
-#45, #46 round 1, #46 round 2), and **3 inside this audit's own PR** —
-**16 total**. Every one was found by
+#45, #46 round 1, #46 round 2), and **4 inside this audit's own PR** —
+**17 total**. Every one was found by
 independent review or by `detectStateDrift`; **none** by a check that reads
 narrative, because no such check exists.
 
@@ -166,15 +166,24 @@ each with every gate green:
    the document contradicted its own section 3.
 3. The PR description still quoting "41 merged PRs" after the file content was
    corrected to 43 — in the artifact a reader sees first.
+4. The rewritten description quoting "104 review runs" where the files say 99,
+   introduced while correcting instance 3.
 
 That is better evidence for this section's claim than the thirteen prior
 occurrences it catalogues. A document arguing *no gate reads prose, so prose
 drifts* drifted in prose three times while `roadmap_pointers_agree`,
 `detectStateDrift`, `Validate` and preflight all stayed green throughout.
 
-The third instance is the sharpest: PR descriptions are not files, so **no
-conceivable file-based gate would have caught it**, and it is the first thing
-a human reads.
+A fourth followed, in the description again, while writing the correction for
+the third: "104 review runs" where the files say 99. The cause was a units
+conflation — 104 sat near the review-*rounds* figure of 103, while review
+*runs* are 81 + 18 = 99.
+
+The third and fourth are the sharpest: PR descriptions are not files, so **no
+conceivable file-based gate would have caught them**, and they are the first
+thing a human reads. The fourth is worse than the third, because it was
+introduced *by the act of fixing* the third — the correction pass is itself an
+opportunity for the defect it corrects.
 
 A third class is the most uncomfortable, and it only became visible because
 PR #47 ran to five rounds: **the loop's self-assessment artifacts were less
