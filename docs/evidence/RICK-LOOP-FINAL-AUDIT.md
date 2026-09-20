@@ -169,7 +169,7 @@ each with every gate green:
 4. The rewritten description quoting "104 review runs" where the files say 99,
    introduced while correcting instance 3.
 
-That is better evidence for this section's claim than the thirteen prior
+That is better evidence for this section's claim than the thirteen prior repository
 occurrences it catalogues. A document arguing *no gate reads prose, so prose
 drifts* drifted in prose three times while `roadmap_pointers_agree`,
 `detectStateDrift`, `Validate` and preflight all stayed green throughout.
@@ -410,7 +410,7 @@ with no evidence behind it, so it is not done here.
 ## 13. Measured improvement, before versus after governance changes
 
 **PROVEN for review economics** (§11). **NOT TESTED for defect rate**: findings
-are not severity-classified for 116 of 174 records, so a before/after defect
+are not severity-classified for 120 of 182 records, so a before/after defect
 comparison cannot be computed honestly.
 
 One improvement is measurable beyond cost: after `roadmap_pointers_agree`
@@ -428,7 +428,7 @@ that, every instance was caught by a human reviewer.
    own: full pointer consistency, register integrity beyond line-level JSON,
    `current_task`/`next_eligible_task` semantics, remote-first reconciliation,
    review usage metrics.
-2. **Narrative and metadata drift** — 13 occurrences, no mechanical coverage.
+2. **Narrative and metadata drift** — 17 occurrences, no mechanical coverage.
    `updated_at` staleness is checkable against the file's own commit timestamp
    and remains unimplemented.
 3. **A check comparing two documents to each other, but not to computed
@@ -468,7 +468,7 @@ that, every instance was caught by a human reviewer.
 
 | Component | Required correction |
 | --- | --- |
-| `LOOP-REGISTER` schema | Add an enforced severity field; 116 of 174 findings are unclassifiable |
+| `LOOP-REGISTER` schema | Add an enforced severity field; 120 of 182 findings are unclassifiable |
 | Narrative/metadata consistency | No gate reads prose. At minimum, implement the `updated_at` freshness check |
 | `secrets-hygiene-check.mjs` | Works, but produced five self-references; needs a principled exclusion for its own fixtures rather than allowlist growth |
 | Existing integration checks | `prisma.sale.delete(...)` with an empty `catch` reports cleanup success having deleted nothing — the cause of accumulated dev data |
@@ -495,5 +495,5 @@ exists to guide.
 of cost and severity accounting.
 
 The single most repeated defect was not in code. It was **a pointer advancing
-while the prose explaining it stayed behind** — thirteen times, never caught by
+while the prose explaining it stayed behind** — seventeen times, never caught by
 a gate, because no gate reads prose.

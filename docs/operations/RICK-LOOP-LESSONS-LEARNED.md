@@ -55,19 +55,32 @@ mechanical check or it will be repeated by the same person who wrote it.
 
 ## 4. The dominant defect class was prose, not code
 
-**Evidence:** 13 occurrences of *a pointer advancing while the prose explaining
+**Evidence:** 17 occurrences of *a pointer advancing while the prose explaining
 it stayed behind* — 8 during ARCH-04 (ARCH-05's `recurrence_evidence`), 5 more
 across PRs #42, #43, #45, #46. Two of them were in the HANDOFF **resume path**,
 which would have told a recovering operator to redo finished work — the exact
 scenario that began this run after a power-off.
 
 `roadmap_pointers_agree` compares tracked fields. `detectStateDrift` compares a
-fixed field list. **Neither reads narrative**, which is why every one of the 13
+fixed field list. **Neither reads narrative**, which is why every one of the 17
 was caught by a human reviewer or not at all.
 
 **Rule:** if a document's purpose is guiding recovery, its prose is load-bearing
 and needs mechanical coverage. `updated_at` staleness is checkable against the
 file's own commit timestamp — identified, not implemented.
+
+**The mechanism, finally isolated in PR #48 round 4.** Five correction passes
+in that PR each fixed the occurrence the reviewer cited and missed the others,
+because each pass was a targeted string replacement rather than an exhaustive
+search for the changed figure. Round 4 found six surviving occurrences of three
+superseded numbers across two documents, after four rounds of "correcting" them.
+
+That is the operative cause of most of the seventeen occurrences, and it is
+not a concentration failure. **A figure repeated in n places needs a sweep for
+all n, not an edit at the place someone pointed to.** The fix is mechanical:
+grep for the old value before claiming the correction is done. Every earlier
+pass in this run skipped that step, including the one whose commit message was
+"recompute the audit's own numbers from the repository".
 
 ---
 

@@ -93,7 +93,7 @@ remains tracked.
 
 ### B1. LOOP-REGISTER schema — **add enforced severity**
 
-**Defect:** 116 of 174 finding records carry no severity. The final audit
+**Defect:** 120 of 182 finding records carry no severity. The final audit
 therefore **cannot report a severity distribution**, and no before/after defect
 comparison is possible.
 
@@ -102,7 +102,7 @@ Without it the register produces narrative but not metrics.
 
 ### B2. Narrative and metadata consistency — **no gate reads prose**
 
-**Defect:** 13 occurrences of a pointer advancing while its explanation stayed
+**Defect:** 17 occurrences of a pointer advancing while its explanation stayed
 behind. Two were in the HANDOFF resume path and would have misdirected a
 recovery.
 
